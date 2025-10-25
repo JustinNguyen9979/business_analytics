@@ -67,3 +67,23 @@ def create_revenue_entry(db: Session, revenue_data: dict, brand_id: int):
     db.commit()
     db.refresh(new_revenue)
     return new_revenue
+
+# --- CÁC HÀM MỚI CHO VIỆC XÓA DỮ LIỆU ---
+def delete_orders_in_date_range(db: Session, brand_id: int, start_date, end_date):
+    db.query(models.Order).filter(models.Order.brand_id == brand_id, models.Order.order_date.between(start_date, end_date)).delete()
+    db.commit()
+
+def delete_ads_in_date_range(db: Session, brand_id: int, start_date, end_date):
+    db.query(models.ShopeeAd).filter(models.ShopeeAd.brand_id == brand_id, models.ShopeeAd.start_date.between(start_date, end_date)).delete()
+    db.commit()
+
+def delete_revenues_in_date_range(db: Session, brand_id: int, start_date, end_date):
+    db.query(models.ShopeeRevenue).filter(models.ShopeeRevenue.brand_id == brand_id, models.ShopeeRevenue.payment_completed_date.between(start_date, end_date)).delete()
+    db.commit()
+
+def delete_data_by_type(db: Session, brand_id: int, data_type: str):
+    if data_type == 'orders': db.query(models.Order).filter(models.Order.brand_id == brand_id).delete()
+    elif data_type == 'ads': db.query(models.ShopeeAd).filter(models.ShopeeAd.brand_id == brand_id).delete()
+    elif data_type == 'revenues': db.query(models.ShopeeRevenue).filter(models.ShopeeRevenue.brand_id == brand_id).delete()
+    elif data_type == 'products': db.query(models.Product).filter(models.Product.brand_id == brand_id).delete()
+    db.commit()

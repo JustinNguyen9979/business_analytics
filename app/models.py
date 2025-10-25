@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Date
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Date, Float
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -6,11 +6,11 @@ class Brand(Base):
     __tablename__ = "brands"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
-
-    # Một brand có thể có nhiều sản phẩm, khách hàng, đơn hàng
-    products = relationship("Product", back_populates="owner_brand")
-    customers = relationship("Customer", back_populates="owner_brand")
-    orders = relationship("Order", back_populates="owner_brand")
+    products = relationship("Product", back_populates="owner_brand", cascade="all, delete-orphan")
+    customers = relationship("Customer", back_populates="owner_brand", cascade="all, delete-orphan")
+    orders = relationship("Order", back_populates="owner_brand", cascade="all, delete-orphan")
+    shopee_ads = relationship("ShopeeAd", cascade="all, delete-orphan")
+    shopee_revenues = relationship("ShopeeRevenue", cascade="all, delete-orphan")
 
 class Product(Base):
     __tablename__ = "products"

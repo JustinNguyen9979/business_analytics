@@ -37,18 +37,23 @@ async def upload_shopee_data(brand_id: int, db: Session = Depends(get_db),
     
     if not crud.get_brand(db, brand_id): raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
     results = {}
-    
-    if cost_file:
-        content = await cost_file.read()
-        results['cost_file'] = shopee_parser.process_cost_file(db, content, brand_id)
-    if order_file:
-        content = await order_file.read()
-        results['order_file'] = shopee_parser.process_order_file(db, content, brand_id)
-    if ad_file:
-        content = await ad_file.read()
-        results['ad_file'] = shopee_parser.process_ad_file(db, content, brand_id)
-    if revenue_file:
-        content = await revenue_file.read()
-        results['revenue_file'] = shopee_parser.process_revenue_file(db, content, brand_id)
-        
+    if cost_file: results['cost_file'] = shopee_parser.process_cost_file(db, await cost_file.read(), brand_id)
+    if order_file: results['order_file'] = shopee_parser.process_order_file(db, await order_file.read(), brand_id)
+    if ad_file: results['ad_file'] = shopee_parser.process_ad_file(db, await ad_file.read(), brand_id)
+    if revenue_file: results['revenue_file'] = shopee_parser.process_revenue_file(db, await revenue_file.read(), brand_id)
     return {"message": "Xử lý hoàn tất!", "results": results}
+
+# --- API MỚI ĐỂ XÓA DỮ LIỆU ---
+class DataToDelete(BaseModel):
+    data_types: List[str]
+
+@app.post("/brands/{brand_id}/delete-data")
+def delete_brand_data(brand_id: int, data: DataToDelete, db: Session = Depends(get_db)):
+    if not crud.get_brand(db, brand_id): raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+    
+    deleted_types = []
+    for data_type in data.data_types:
+        crud.delete_data_by_type(db, brand_id, data_type)
+        deleted_types.append(data_type)
+    
+    return {"message": f"Đã xóa thành công dữ liệu cho các loại: {', '.join(deleted_types)}"}
