@@ -119,13 +119,9 @@ def process_ad_file(db: Session, file_content: bytes, brand_id: int):
 def process_revenue_file(db: Session, file_content: bytes, brand_id: int):
     try:
         buffer = io.BytesIO(file_content)
-        # Thêm 'Ngày đặt hàng' vào danh sách parse_dates
         df = pd.read_excel(buffer, header=2, parse_dates=['Ngày hoàn thành thanh toán', 'Ngày đặt hàng'])
-        
-        # Chỉ lấy những dòng có "Order"
         df_orders = df[df['Đơn hàng / Sản phẩm'] == 'Order'].copy()
         
-        # Logic xóa dữ liệu cũ trong khoảng thời gian của file mới
         if not df_orders.empty:
             start_date = df_orders["Ngày hoàn thành thanh toán"].min()
             end_date = df_orders["Ngày hoàn thành thanh toán"].max()
@@ -134,12 +130,15 @@ def process_revenue_file(db: Session, file_content: bytes, brand_id: int):
         
         count = 0
         for _, row in df_orders.iterrows():
-            # Ánh xạ toàn bộ cột từ file Excel vào dictionary
+            # XỬ LÝ CHỈ LẤY NGÀY
+            order_date_val = row.get('Ngày đặt hàng').date() if pd.notna(row.get('Ngày đặt hàng')) else None
+            payment_date_val = row.get('Ngày hoàn thành thanh toán').date() if pd.notna(row.get('Ngày hoàn thành thanh toán')) else None
+
             revenue_data = {
                 "order_code": row.get('Mã đơn hàng'),
                 "refund_request_code": row.get('Mã yêu cầu hoàn tiền'),
-                "order_date": row.get('Ngày đặt hàng'),
-                "payment_completed_date": row.get('Ngày hoàn thành thanh toán'),
+                "order_date": order_date_val, # Đã sửa
+                "payment_completed_date": payment_date_val, # Đã sửa
                 "total_payment": to_float(row.get('Tổng tiền đã thanh toán')),
                 "product_price": to_float(row.get('Giá sản phẩm')),
                 "refund_amount": to_float(row.get('Số tiền hoàn lại')),
@@ -153,10 +152,8 @@ def process_revenue_file(db: Session, file_content: bytes, brand_id: int):
                 "payment_fee": to_float(row.get('Phí thanh toán')),
                 "commission_fee": to_float(row.get('Phí hoa hồng')),
                 "affiliate_marketing_fee": to_float(row.get('Tiếp thị liên kết')),
-                "buyer_username": row.get('Người Mua')
+                "buyer_username": row.get('Người mua')
             }
-            # Dùng .get() để tránh lỗi nếu một cột nào đó không tồn tại
-            
             crud.create_revenue_entry(db, revenue_data=revenue_data, brand_id=brand_id)
             count += 1
         return {"status": "success", "message": f"Đã xử lý {count} dòng doanh thu."}

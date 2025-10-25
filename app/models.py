@@ -9,8 +9,8 @@ class Brand(Base):
     products = relationship("Product", back_populates="owner_brand", cascade="all, delete-orphan")
     customers = relationship("Customer", back_populates="owner_brand", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="owner_brand", cascade="all, delete-orphan")
-    shopee_ads = relationship("ShopeeAd", cascade="all, delete-orphan")
-    shopee_revenues = relationship("ShopeeRevenue", cascade="all, delete-orphan")
+    shopee_ads = relationship("ShopeeAd", back_populates="owner_brand", cascade="all, delete-orphan")
+    shopee_revenues = relationship("ShopeeRevenue", back_populates="owner_brand", cascade="all, delete-orphan")
 
 class Product(Base):
     __tablename__ = "products"

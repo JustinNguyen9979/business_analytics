@@ -32,8 +32,13 @@ def create_brand(name):
         else: st.error(f"Lỗi: {res.json().get('detail')}"); return None
     except: st.error("Lỗi kết nối backend."); return None
 def get_brand_details(brand_id):
-    try: return requests.get(f"{BACKEND_URL}/brands/{brand_id}").json()
-    except: return None
+    try:
+        response = requests.get(f"{BACKEND_URL}/brands/{brand_id}")
+        response.raise_for_status() # Sẽ báo lỗi nếu status code là 4xx hoặc 5xx
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Lỗi khi tải chi tiết brand: {e}")
+        return None
 
 st.set_page_config(layout="wide", page_title="CEO Dashboard")
 if 'page' not in st.session_state: st.session_state.page = 'brand_lobby'
@@ -335,3 +340,26 @@ elif st.session_state.page == 'dashboard':
                             hide_index=True, column_order=list(column_config_revenue.keys()))
             else:
                 st.info("Chưa có dữ liệu doanh thu.")
+        
+        st.write("---")
+        st.subheader("Xóa dữ liệu cũ")
+        st.warning("Hành động này sẽ xóa vĩnh viễn dữ liệu đã chọn của brand này. Hãy cẩn thận.")
+        
+        # Form xóa dữ liệu
+        data_types_to_delete = st.multiselect(
+            "Chọn loại dữ liệu cần xóa:",
+            options=['products', 'orders', 'ads', 'revenues'],
+            key=f"delete_multiselect_{brand_id}"
+        )
+        
+        if st.button("Xóa Dữ liệu đã chọn", key=f"delete_button_{brand_id}"):
+            if data_types_to_delete:
+                with st.spinner("Đang xóa..."):
+                    response = requests.post(f"{BACKEND_URL}/brands/{brand_id}/delete-data", json={"data_types": data_types_to_delete})
+                    if response.status_code == 200:
+                        st.success(response.json().get('message'))
+                        st.rerun() # Tải lại trang để cập nhật
+                    else:
+                        st.error(f"Lỗi khi xóa dữ liệu: {response.text}")
+            else:
+                st.warning("Vui lòng chọn ít nhất một loại dữ liệu để xóa.")
