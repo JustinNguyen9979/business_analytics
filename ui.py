@@ -34,7 +34,7 @@ if st.session_state.page == 'brand_lobby':
         if st.button("Đi đến Dashboard"):
             st.session_state.selected_brand_id = brand_names[selected_brand_name]
             st.session_state.page = 'dashboard'
-            st.experimental_rerun()
+            st.rerun()
     else:
         st.info("Chưa có brand nào.")
     
@@ -42,7 +42,7 @@ if st.session_state.page == 'brand_lobby':
     with st.form("new_brand_form"):
         new_brand_name = st.text_input("Hoặc tạo Brand mới")
         if st.form_submit_button("Tạo Brand") and new_brand_name:
-            if create_brand(new_brand_name): st.experimental_rerun()
+            if create_brand(new_brand_name): st.rerun()
 
 # --- TRANG DASHBOARD ---
 elif st.session_state.page == 'dashboard':
@@ -52,7 +52,7 @@ elif st.session_state.page == 'dashboard':
     if brand_data:
         st.title(f"Dashboard cho Brand: {brand_data['name']}")
         if st.button("◀️ Quay lại danh sách Brand"):
-            st.session_state.page = 'brand_lobby'; st.experimental_rerun()
+            st.session_state.page = 'brand_lobby'; st.rerun()
         
         # --- KHU VỰC UPLOAD MỚI ---
         with st.expander("⬆️ Upload Dữ liệu Mới cho Brand này"):
