@@ -46,6 +46,7 @@ def create_order_entry(db: Session, order_data: dict, brand_id: int):
         status=final_status,
         sku=order_data.get("SKU phân loại hàng"),
         quantity=int(order_data.get("Số lượng", 0)),
+        username=order_data.get("Người Mua"),
         brand_id=brand_id
     )
     db.add(new_order)

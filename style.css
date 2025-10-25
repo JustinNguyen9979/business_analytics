@@ -1,0 +1,70 @@
+/* --- Font chữ và màu nền chung --- */
+body {
+    color: #E0E0E0; /* Màu chữ xám nhạt */
+    background-color: #0E1117; /* Màu nền đen tuyền của Streamlit */
+    font-size: 14px !important;
+}
+
+/* --- Tùy chỉnh Header chính (nơi có các tab) - HIỆU ỨNG KÍNH MỜ --- */
+.stTabs [data-baseweb="tab-list"] {
+    position: sticky;
+    top: 55px; /* Giữ header cách top 55px khi cuộn */
+    z-index: 999;
+    
+    /* Hiệu ứng Glassmorphism */
+    background-color: rgba(40, 43, 54, 0.7); /* Màu xám đen trong suốt */
+    backdrop-filter: blur(10px); /* Hiệu ứng mờ nền */
+    -webkit-backdrop-filter: blur(10px); /* Hỗ trợ trình duyệt Safari */
+    
+    border-radius: 20px; /* Bo tròn các góc */
+    padding: 10px;
+    margin: 10px auto; /* Căn giữa và tạo khoảng cách */
+    border: 1px solid rgba(255, 255, 255, 0.18); /* Viền mờ */
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37); /* Đổ bóng */
+}
+
+/* --- Tùy chỉnh các tab khi được chọn --- */
+.stTabs [data-baseweb="tab-list"] button[aria-selected="true"] {
+    background-color: #8A2BE2; /* Màu tím xanh (Blue Violet) nổi bật */
+    color: #FFFFFF;
+    border-radius: 15px;
+    font-weight: bold;
+}
+
+/* --- Tùy chỉnh các tab khi không được chọn --- */
+.stTabs [data-baseweb="tab-list"] button {
+    border-radius: 15px;
+    color: #A0A0A0; /* Màu chữ xám mờ */
+}
+
+/* --- Tùy chỉnh các khối Metric (KPI) --- */
+[data-testid="stMetric"] {
+    background-color: rgba(28, 31, 40, 0.8);
+    border-radius: 15px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-testid="stMetricLabel"] {
+    color: #A0A0A0; /* Màu nhãn KPI */
+}
+
+/* --- Tùy chỉnh các Expander (khu vực upload) --- */
+[data-testid="stExpander"] {
+    background-color: rgba(28, 31, 40, 0.8);
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* --- Nút bấm chính --- */
+.stButton>button {
+    background-color: #8A2BE2;
+    color: white;
+    border-radius: 10px;
+    border: none;
+}
+
+/* --- Tùy chỉnh màu sắc cho biểu đồ Plotly --- */
+.js-plotly-plot .plotly, .js-plotly-plot .plotly-graph-div {
+    background-color: transparent !important;
+}

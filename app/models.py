@@ -40,6 +40,7 @@ class Order(Base):
     status = Column(String)                         # Từ 'Trạng Thái Đơn Hàng'
     sku = Column(String)                            # Từ 'SKU phân loại hàng'
     quantity = Column(Integer)                      # Từ 'Số lượng'
+    username = Column(String, index=True, nullable=True)
     brand_id = Column(Integer, ForeignKey("brands.id"))
 
     owner_brand = relationship("Brand", back_populates="orders")
