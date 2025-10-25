@@ -1,6 +1,6 @@
 volumes/
 .git
-docker-compose.yml
+# docker-compose.yml
 *.log
 *.tmp
 .venv
