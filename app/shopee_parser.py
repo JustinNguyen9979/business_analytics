@@ -58,3 +58,54 @@ def process_order_file(db: Session, file_content: bytes, brand_id: int):
         return {"status": "error", "message": f"Không tìm thấy cột cần thiết trong file: {e}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
+    
+# --- HÀM MỚI XỬ LÝ FILE ADS ---
+def process_ad_file(db: Session, file_content: bytes, brand_id: int):
+    try:
+        buffer = io.BytesIO(file_content)
+        # Bỏ qua 7 dòng đầu, dùng dòng thứ 8 làm header
+        df = pd.read_csv(buffer, skiprows=7, thousands=',')
+        
+        count = 0
+        for _, row in df.iterrows():
+            ad_data = {
+                "campaign_name": row['Tên Dịch vụ Hiển thị'],
+                "start_date": pd.to_datetime(row['Ngày bắt đầu'], format='%d/%m/%Y %H:%M:%S', errors='coerce'),
+                "impressions": to_int(row['Số lượt xem']),
+                "clicks": to_int(row['Số lượt click']),
+                "ctr": to_percent_float(row['Tỷ Lệ Click']),
+                "conversions": to_int(row['Lượt chuyển đổi']),
+                "items_sold": to_int(row['Sản phẩm đã bán']),
+                "gmv": to_float(row['GMV']),
+                "expense": to_float(row['Chi phí']),
+                "roas": to_float(row['ROAS'])
+            }
+            crud.create_ad_entry(db, ad_data=ad_data, brand_id=brand_id)
+            count += 1
+        return {"status": "success", "message": f"Đã xử lý {count} dòng quảng cáo."}
+    except Exception as e: return {"status": "error", "message": str(e)}
+
+# --- HÀM MỚI XỬ LÝ FILE DOANH THU ---
+def process_revenue_file(db: Session, file_content: bytes, brand_id: int):
+    try:
+        buffer = io.BytesIO(file_content)
+        # Bỏ qua 2 dòng đầu, dùng dòng thứ 3 làm header
+        df = pd.read_excel(buffer, header=2)
+        
+        # Chỉ lấy những dòng có "Order"
+        df_orders = df[df['Đơn hàng / Sản phẩm'] == 'Order'].copy()
+        
+        count = 0
+        for _, row in df_orders.iterrows():
+            revenue_data = {
+                "order_code": row['Mã đơn hàng'],
+                "payment_completed_date": pd.to_datetime(row['Ngày hoàn thành thanh toán'], errors='coerce'),
+                "total_payment": to_float(row['Tổng tiền đã thanh toán']),
+                "fixed_fee": to_float(row['Phí cố định']),
+                "service_fee": to_float(row['Phí Dịch Vụ']),
+                "payment_fee": to_float(row['Phí thanh toán'])
+            }
+            crud.create_revenue_entry(db, revenue_data=revenue_data, brand_id=brand_id)
+            count += 1
+        return {"status": "success", "message": f"Đã xử lý {count} dòng doanh thu."}
+    except Exception as e: return {"status": "error", "message": str(e)}

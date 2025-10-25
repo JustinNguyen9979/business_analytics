@@ -14,7 +14,7 @@ def get_or_create_product(db: Session, sku: str, brand_id: int):
 def update_product_cost_price(db: Session, product_id: int, cost_price: int): # Nhận vào int
     db.query(models.Product).filter(models.Product.id == product_id).update({"cost_price": cost_price}); db.commit()
 
-# --- HÀM CUSTOMER ĐƯỢC TINH GỌN ---
+# --- HÀM GHI DỮ LIỆU CUSTOMER ---
 def get_or_create_customer(db: Session, customer_data: dict, brand_id: int):
     username = customer_data.get('Người Mua')
     if not username: return None
@@ -34,7 +34,7 @@ def get_or_create_customer(db: Session, customer_data: dict, brand_id: int):
         db.refresh(db_customer)
     return db_customer
 
-# --- HÀM TẠO ORDER MỚI, ĐƠN GIẢN HƠN ---
+# --- HÀM GHI DỮ LIỆU ORDER ---
 def create_order_entry(db: Session, order_data: dict, brand_id: int):
     status = order_data.get('Trạng Thái Đơn Hàng')
     final_status = 'Đã hủy' if status == 'Đã hủy' else 'Đang giao'
@@ -51,3 +51,19 @@ def create_order_entry(db: Session, order_data: dict, brand_id: int):
     db.commit()
     db.refresh(new_order)
     return new_order
+
+# --- HÀM GHI DỮ LIỆU QUẢNG CÁO ---
+def create_ad_entry(db: Session, ad_data: dict, brand_id: int):
+    new_ad = models.ShopeeAd(**ad_data, brand_id=brand_id)
+    db.add(new_ad)
+    db.commit()
+    db.refresh(new_ad)
+    return new_ad
+
+# --- HÀM GHI DỮ LIỆU DOANH THU ---
+def create_revenue_entry(db: Session, revenue_data: dict, brand_id: int):
+    new_revenue = models.ShopeeRevenue(**revenue_data, brand_id=brand_id)
+    db.add(new_revenue)
+    db.commit()
+    db.refresh(new_revenue)
+    return new_revenue

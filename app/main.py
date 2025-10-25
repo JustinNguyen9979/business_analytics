@@ -1,73 +1,54 @@
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List
-
+from typing import List, Optional
 from . import crud, models, schemas, shopee_parser
 from .database import SessionLocal, engine
 
 models.Base.metadata.create_all(bind=engine)
-
 app = FastAPI(title="CEO Dashboard API by Julice")
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
+def get_db(): 
+    db = SessionLocal(); 
+    try: 
+        yield db 
+    finally: 
         db.close()
 
 @app.get("/")
-def read_root():
-    return {"message": "Chào mừng anh đến với CEO Dashboard API!"}
+def read_root(): return {"message": "Chào mừng anh đến với CEO Dashboard API!"}
 
-# === API cho Brand ===
+@app.get("/brands/", response_model=List[schemas.Brand])
+def read_brands(db: Session = Depends(get_db)): return db.query(models.Brand).all()
+
 @app.post("/brands/", response_model=schemas.Brand)
 def create_brand_api(brand: schemas.BrandCreate, db: Session = Depends(get_db)):
-    db_brand = crud.get_brand_by_name(db, name=brand.name)
-    if db_brand:
-        raise HTTPException(status_code=400, detail="Brand đã tồn tại")
+    if crud.get_brand_by_name(db, name=brand.name): raise HTTPException(status_code=400, detail="Brand đã tồn tại")
     return crud.create_brand(db=db, brand=brand)
 
 @app.get("/brands/{brand_id}", response_model=schemas.Brand)
 def read_brand(brand_id: int, db: Session = Depends(get_db)):
     db_brand = crud.get_brand(db, brand_id=brand_id)
-    if db_brand is None:
-        raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+    if not db_brand: raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
     return db_brand
 
-# === API Upload cho Shopee (Chế độ Hoạt động chính thức) ===
-# Thêm vào file app/main.py
-
-@app.get("/brands/", response_model=List[schemas.Brand])
-def read_brands(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    brands = db.query(models.Brand).offset(skip).limit(limit).all()
-    return brands
-
-async def upload_shopee_data(
-    brand_id: int, 
-    cost_file: UploadFile = File(...),
-    order_file: UploadFile = File(...),
-    db: Session = Depends(get_db)
-):
-    brand = crud.get_brand(db, brand_id)
-    if not brand:
-        raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+@app.post("/upload/shopee/{brand_id}")
+async def upload_shopee_data(brand_id: int, db: Session = Depends(get_db),
+    cost_file: Optional[UploadFile] = File(None), order_file: Optional[UploadFile] = File(None),
+    ad_file: Optional[UploadFile] = File(None), revenue_file: Optional[UploadFile] = File(None)):
     
-    cost_content = await cost_file.read()
-    order_content = await order_file.read()
+    if not crud.get_brand(db, brand_id): raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+    results = {}
     
-    # Xử lý file giá vốn
-    cost_result = shopee_parser.process_cost_file(db, cost_content, brand_id)
-    if cost_result["status"] == "error":
-        raise HTTPException(status_code=500, detail=f"Lỗi xử lý file giá vốn: {cost_result['message']}")
+    if cost_file:
+        content = await cost_file.read()
+        results['cost_file'] = shopee_parser.process_cost_file(db, content, brand_id)
+    if order_file:
+        content = await order_file.read()
+        results['order_file'] = shopee_parser.process_order_file(db, content, brand_id)
+    if ad_file:
+        content = await ad_file.read()
+        results['ad_file'] = shopee_parser.process_ad_file(db, content, brand_id)
+    if revenue_file:
+        content = await revenue_file.read()
+        results['revenue_file'] = shopee_parser.process_revenue_file(db, content, brand_id)
         
-    # Xử lý file đơn hàng với logic mới và chính xác
-    order_result = shopee_parser.process_order_file(db, order_content, brand_id)
-    if order_result["status"] == "error":
-        raise HTTPException(status_code=500, detail=f"Lỗi xử lý file đơn hàng: {order_result['message']}")
-
-    return {
-        "brand_name": brand.name,
-        "cost_file_result": cost_result,
-        "order_file_result": order_result
-    }
+    return {"message": "Xử lý hoàn tất!", "results": results}

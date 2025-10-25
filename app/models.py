@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Date
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -16,7 +16,7 @@ class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True, index=True)
     sku = Column(String, index=True)
-    cost_price = Column(Integer, default=0) # SỬA LỖI: Chuyển sang Integer để không có .0
+    cost_price = Column(Integer, default=0) 
     brand_id = Column(Integer, ForeignKey("brands.id"))
     
     owner_brand = relationship("Brand", back_populates="products")
@@ -43,3 +43,30 @@ class Order(Base):
     brand_id = Column(Integer, ForeignKey("brands.id"))
 
     owner_brand = relationship("Brand", back_populates="orders")
+
+class ShopeeAd(Base):
+    __tablename__ = "shopee_ads"
+    id = Column(Integer, primary_key=True, index=True)
+    campaign_name = Column(String)
+    start_date = Column(DateTime, nullable=True)
+    impressions = Column(Integer, default=0)
+    clicks = Column(Integer, default=0)
+    ctr = Column(Float, default=0.0) # Tỷ Lệ Click
+    conversions = Column(Integer, default=0)
+    items_sold = Column(Integer, default=0)
+    gmv = Column(Float, default=0.0) # Gross Merchandise Value
+    expense = Column(Float, default=0.0) # Chi phí
+    roas = Column(Float, default=0.0) # Return on Ad Spend
+    brand_id = Column(Integer, ForeignKey("brands.id"))
+
+# --- BẢNG MỚI CHO DỮ LIỆU DOANH THU ---
+class ShopeeRevenue(Base):
+    __tablename__ = "shopee_revenues"
+    id = Column(Integer, primary_key=True, index=True)
+    order_code = Column(String, index=True)
+    payment_completed_date = Column(Date, nullable=True)
+    total_payment = Column(Float, default=0.0) # Tổng tiền đã thanh toán
+    fixed_fee = Column(Float, default=0.0) # Phí cố định
+    service_fee = Column(Float, default=0.0) # Phí Dịch Vụ
+    payment_fee = Column(Float, default=0.0) # Phí thanh toán
+    brand_id = Column(Integer, ForeignKey("brands.id"))
