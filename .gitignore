@@ -1,0 +1,13 @@
+volumes/
+.git
+docker-compose.yml
+*.log
+*.tmp
+.venv
+venv
+*.pyc
+.vscode/
+.idea/
+__pycache__/
+.DS_Store
+.dockerignore
