@@ -58,15 +58,30 @@ class ShopeeAd(Base):
     expense = Column(Float, default=0.0) # Chi phí
     roas = Column(Float, default=0.0) # Return on Ad Spend
     brand_id = Column(Integer, ForeignKey("brands.id"))
+    owner_brand = relationship("Brand", back_populates="shopee_ads")
 
 # --- BẢNG MỚI CHO DỮ LIỆU DOANH THU ---
 class ShopeeRevenue(Base):
     __tablename__ = "shopee_revenues"
     id = Column(Integer, primary_key=True, index=True)
     order_code = Column(String, index=True)
+    refund_request_code = Column(String, nullable=True)
+    order_date = Column(Date, nullable=True)
     payment_completed_date = Column(Date, nullable=True)
-    total_payment = Column(Float, default=0.0) # Tổng tiền đã thanh toán
-    fixed_fee = Column(Float, default=0.0) # Phí cố định
-    service_fee = Column(Float, default=0.0) # Phí Dịch Vụ
-    payment_fee = Column(Float, default=0.0) # Phí thanh toán
+    total_payment = Column(Float, default=0.0)
+    product_price = Column(Float, default=0.0)
+    refund_amount = Column(Float, default=0.0)
+    shipping_fee = Column(Float, default=0.0)
+    buyer_paid_shipping_fee = Column(Float, default=0.0)
+    actual_shipping_fee = Column(Float, default=0.0)
+    shopee_subsidized_shipping_fee = Column(Float, default=0.0)
+    seller_voucher_code = Column(String, nullable=True)
+    fixed_fee = Column(Float, default=0.0)
+    service_fee = Column(Float, default=0.0)
+    payment_fee = Column(Float, default=0.0)
+    commission_fee = Column(Float, default=0.0)
+    affiliate_marketing_fee = Column(Float, default=0.0)
+    buyer_username = Column(String, nullable=True)
+    
     brand_id = Column(Integer, ForeignKey("brands.id"))
+    owner_brand = relationship("Brand", back_populates="shopee_revenues")
