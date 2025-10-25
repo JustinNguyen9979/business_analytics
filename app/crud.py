@@ -1,0 +1,53 @@
+from sqlalchemy.orm import Session
+from . import models, schemas
+from datetime import datetime
+import pandas as pd
+
+# (Các hàm của Brand, Product không đổi)
+def get_brand(db: Session, brand_id: int): return db.query(models.Brand).filter(models.Brand.id == brand_id).first()
+def get_brand_by_name(db: Session, name: str): return db.query(models.Brand).filter(models.Brand.name == name).first()
+def create_brand(db: Session, brand: schemas.BrandCreate): db_brand = models.Brand(name=brand.name); db.add(db_brand); db.commit(); db.refresh(db_brand); return db_brand
+def get_or_create_product(db: Session, sku: str, brand_id: int):
+    db_product = db.query(models.Product).filter(models.Product.sku == sku, models.Product.brand_id == brand_id).first()
+    if not db_product: db_product = models.Product(sku=sku, brand_id=brand_id); db.add(db_product); db.commit(); db.refresh(db_product)
+    return db_product
+def update_product_cost_price(db: Session, product_id: int, cost_price: int): # Nhận vào int
+    db.query(models.Product).filter(models.Product.id == product_id).update({"cost_price": cost_price}); db.commit()
+
+# --- HÀM CUSTOMER ĐƯỢC TINH GỌN ---
+def get_or_create_customer(db: Session, customer_data: dict, brand_id: int):
+    username = customer_data.get('Người Mua')
+    if not username: return None
+
+    db_customer = db.query(models.Customer).filter(models.Customer.username == username, models.Customer.brand_id == brand_id).first()
+    
+    if not db_customer:
+        db_customer = models.Customer(
+            username=username,
+            city=customer_data.get('Tỉnh/Thành phố'),
+            district_1=customer_data.get('TP / Quận / Huyện'),
+            district_2=customer_data.get('Quận'),
+            brand_id=brand_id
+        )
+        db.add(db_customer)
+        db.commit()
+        db.refresh(db_customer)
+    return db_customer
+
+# --- HÀM TẠO ORDER MỚI, ĐƠN GIẢN HƠN ---
+def create_order_entry(db: Session, order_data: dict, brand_id: int):
+    status = order_data.get('Trạng Thái Đơn Hàng')
+    final_status = 'Đã hủy' if status == 'Đã hủy' else 'Đang giao'
+
+    new_order = models.Order(
+        order_code=order_data.get("Mã đơn hàng"),
+        order_date=datetime.strptime(str(order_data.get("Ngày đặt hàng")), '%Y-%m-%d %H:%M'),
+        status=final_status,
+        sku=order_data.get("SKU phân loại hàng"),
+        quantity=int(order_data.get("Số lượng", 0)),
+        brand_id=brand_id
+    )
+    db.add(new_order)
+    db.commit()
+    db.refresh(new_order)
+    return new_order
