@@ -41,7 +41,8 @@ def create_order_entry(db: Session, order_data: dict, brand_id: int):
 
     new_order = models.Order(
         order_code=order_data.get("Mã đơn hàng"),
-        order_date=datetime.strptime(str(order_data.get("Ngày đặt hàng")), '%Y-%m-%d %H:%M'),
+        # Bỏ strptime, nhận trực tiếp đối tượng datetime từ Pandas
+        order_date=order_data.get("Ngày đặt hàng"),
         status=final_status,
         sku=order_data.get("SKU phân loại hàng"),
         quantity=int(order_data.get("Số lượng", 0)),

@@ -38,10 +38,14 @@ def process_cost_file(db: Session, file_content: bytes, brand_id: int): # Giữ 
 
 def process_order_file(db: Session, file_content: bytes, brand_id: int):
     try:
-        buffer = io.BytesIO(file_content); df = pd.read_excel(buffer, header=0, parse_dates=["Ngày đặt hàng"])
+        buffer = io.BytesIO(file_content)
+        # Để Pandas tự động xử lý ngày tháng một cách linh hoạt
+        df = pd.read_excel(buffer, header=0, parse_dates=["Ngày đặt hàng"])
+        
         if not df.empty:
             start_date = df["Ngày đặt hàng"].min(); end_date = df["Ngày đặt hàng"].max()
-            crud.delete_orders_in_date_range(db, brand_id, start_date, end_date)
+            if pd.notna(start_date) and pd.notna(end_date):
+                 crud.delete_orders_in_date_range(db, brand_id, start_date, end_date)
         
         count = 0
         for _, row in df.iterrows():
@@ -54,16 +58,59 @@ def process_order_file(db: Session, file_content: bytes, brand_id: int):
 
 def process_ad_file(db: Session, file_content: bytes, brand_id: int):
     try:
-        buffer = io.BytesIO(file_content); df = pd.read_csv(buffer, skiprows=7, thousands=',', parse_dates=['Ngày bắt đầu'], dayfirst=True)
-        if not df.empty:
-            start_date = df["Ngày bắt đầu"].min(); end_date = df["Ngày bắt đầu"].max()
-            crud.delete_ads_in_date_range(db, brand_id, start_date, end_date)
+        buffer = io.BytesIO(file_content)
+        df = pd.read_csv(buffer, skiprows=7, thousands=',')
+        df.replace('-', 0, inplace=True)
+
+        if not df.empty and 'Ngày bắt đầu' in df.columns:
+            # Chuyển đổi ngày tháng, nếu lỗi thì thành NaT
+            df['Ngày bắt đầu'] = pd.to_datetime(df['Ngày bắt đầu'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
+            df['Ngày kết thúc'] = pd.to_datetime(df['Ngày kết thúc'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
+
+            start_date = df['Ngày bắt đầu'].min()
+            end_date = df['Ngày bắt đầu'].max() # Logic xóa dựa trên ngày bắt đầu
+            if pd.notna(start_date) and pd.notna(end_date):
+                crud.delete_ads_in_date_range(db, brand_id, start_date, end_date)
         
         count = 0
         for _, row in df.iterrows():
-            ad_data = { "campaign_name": row['Tên Dịch vụ Hiển thị'], "start_date": row['Ngày bắt đầu'], "impressions": int(row['Số lượt xem']), "clicks": int(row['Số lượt click']),
-                "ctr": float(str(row['Tỷ Lệ Click']).strip('%'))/100, "conversions": int(row['Lượt chuyển đổi']), "items_sold": int(row['Sản phẩm đã bán']),
-                "gmv": float(row['GMV']), "expense": float(row['Chi phí']), "roas": float(row['ROAS']) }
+            # XỬ LÝ NaT và CHỈ LẤY NGÀY
+            start_date_val = row.get('Ngày bắt đầu').date() if pd.notna(row.get('Ngày bắt đầu')) else None
+            end_date_val = row.get('Ngày kết thúc').date() if pd.notna(row.get('Ngày kết thúc')) else None
+
+            ad_data = {
+                "campaign_name": row.get('Tên Dịch vụ Hiển thị'),
+                "status": row.get('Trạng thái'),
+                "ad_type": row.get('Loại Dịch vụ Hiển thị'),
+                "product_id": str(row.get('Mã sản phẩm')),
+                "target_audience_settings": row.get('Cài đặt Đối tượng'),
+                "ad_content": row.get('Nội dung Dịch vụ Hiển thị'),
+                "bidding_method": row.get('Phương thức đấu thầu'),
+                "location": row.get('Vị trí'),
+                "start_date": start_date_val, # Đã xử lý
+                "end_date": end_date_val,     # Đã xử lý
+                "impressions": to_int(row.get('Số lượt xem')),
+                "clicks": to_int(row.get('Số lượt click')),
+                "ctr": to_percent_float(row.get('Tỷ Lệ Click')),
+                "conversions": to_int(row.get('Lượt chuyển đổi')),
+                "direct_conversions": to_int(row.get('Lượt chuyển đổi trực tiếp')),
+                "conversion_rate": to_percent_float(row.get('Tỷ lệ chuyển đổi')),
+                "direct_conversion_rate": to_percent_float(row.get('Tỷ lệ chuyển đổi trực tiếp')),
+                "cost_per_conversion": to_float(row.get('Chi phí cho mỗi lượt chuyển đổi')),
+                "cost_per_direct_conversion": to_float(row.get('Chi phí cho mỗi lượt chuyển đổi trực tiếp')),
+                "items_sold": to_int(row.get('Sản phẩm đã bán')),
+                "direct_items_sold": to_int(row.get('Sản phẩm đã bán trực tiếp')),
+                "gmv": to_float(row.get('GMV')),
+                "direct_gmv": to_float(row.get('GMV trực tiếp')),
+                "expense": to_float(row.get('Chi phí')),
+                "roas": to_float(row.get('ROAS')),
+                "direct_roas": to_float(row.get('ROAS trực tiếp')),
+                "acos": to_percent_float(row.get('ACOS')),
+                "direct_acos": to_percent_float(row.get('ACOS trực tiếp')),
+                "product_impressions": to_int(row.get('Lượt xem Sản phẩm')),
+                "product_clicks": to_int(row.get('Lượt clicks Sản phẩm')),
+                "product_ctr": to_percent_float(row.get('Tỷ lệ Click Sản phẩm'))
+            }
             crud.create_ad_entry(db, ad_data=ad_data, brand_id=brand_id)
             count += 1
         return {"status": "success", "message": f"Đã xử lý {count} dòng quảng cáo."}
