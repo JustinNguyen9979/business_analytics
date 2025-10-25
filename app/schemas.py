@@ -10,6 +10,13 @@ class Product(ProductBase):
     id: int; brand_id: int
     class Config: { 'orm_mode': True }
 
+class BrandInfo(BaseModel):
+    id: int
+    name: str
+
+    class Config:
+        orm_mode = True
+
 # --- Customer Schema ---
 class CustomerBase(BaseModel):
     username: str
@@ -27,6 +34,7 @@ class OrderBase(BaseModel):
     status: str
     sku: str
     quantity: int
+    username: Optional[str] = None
 class Order(OrderBase):
     id: int; brand_id: int
     class Config: { 'orm_mode': True }

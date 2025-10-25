@@ -1,13 +1,30 @@
 import streamlit as st
 import requests
 import pandas as pd
+import plotly.express as px
 
 BACKEND_URL = "http://backend:8000"
 
-# (Các hàm API giữ nguyên)
+def load_css(file_name):
+    """
+    Hàm này đọc file CSS và nhúng vào ứng dụng Streamlit.
+    """
+    try:
+        with open(file_name) as f:
+            st.markdown(f'<style>{f.read()}</style>', unsafe_allow_html=True)
+    except FileNotFoundError:
+        st.error(f"File CSS '{file_name}' không tìm thấy. Giao diện sẽ sử dụng mặc định.")
+
+load_css("style.css")
+
 def get_all_brands():
-    try: return requests.get(f"{BACKEND_URL}/brands/").json()
-    except: return []
+    try:
+        response = requests.get(f"{BACKEND_URL}/brands/")
+        response.raise_for_status()  # Sẽ báo lỗi nếu status code là 4xx hoặc 5xx
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        st.error(f"Lỗi kết nối đến backend khi lấy danh sách brand: {e}")
+        return []
 def create_brand(name):
     try:
         res = requests.post(f"{BACKEND_URL}/brands/", json={"name": name})
@@ -90,69 +107,170 @@ elif st.session_state.page == 'dashboard':
         st.title(f"Dashboard cho Brand: {brand_data['name']}")
         if st.button("◀️ Quay lại danh sách Brand"):
             st.session_state.page = 'brand_lobby'; st.rerun()
+
+        # --- BƯỚC 1: CHUẨN BỊ DỮ LIỆU BAN ĐẦU ---
+        orders_df = pd.DataFrame(brand_data.get('orders', []))
+        ads_df = pd.DataFrame(brand_data.get('shopee_ads', []))
+        revenues_df = pd.DataFrame(brand_data.get('shopee_revenues', []))
+        customers_df = pd.DataFrame(brand_data.get('customers', []))
+
+        # Chuyển đổi các cột ngày tháng sang định dạng datetime
+        if not orders_df.empty: orders_df['order_date'] = pd.to_datetime(orders_df['order_date'], errors='coerce')
+        if not ads_df.empty: ads_df['start_date'] = pd.to_datetime(ads_df['start_date'], errors='coerce')
+        if not revenues_df.empty: revenues_df['payment_completed_date'] = pd.to_datetime(revenues_df['payment_completed_date'], errors='coerce')
+
+        # --- BƯỚC 2: TẠO GIAO DIỆN BỘ LỌC NGÀY THÁNG ---
+        st.header("📅 Bộ lọc Dữ liệu theo Thời gian")
         
-        # --- KHU VỰC UPLOAD MỚI ---
-        with st.expander("⬆️ Upload Dữ liệu Mới cho Brand này"):
-            with st.form("upload_form", clear_on_submit=True):
-                cost_file = st.file_uploader("1. File Giá vốn (.xlsx)", type="xlsx")
-                order_file = st.file_uploader("2. File Đơn hàng (.xlsx)", type="xlsx")
-                ad_file = st.file_uploader("3. File Quảng cáo (.csv)", type="csv")
-                revenue_file = st.file_uploader("4. File Doanh thu (.xlsx)", type="xlsx")
-                
-                if st.form_submit_button("Bắt đầu Upload và Xử lý"):
-                    with st.spinner("Đang xử lý..."):
-                        files_to_upload = {}
-                        if cost_file: files_to_upload['cost_file'] = (cost_file.name, cost_file, cost_file.type)
-                        if order_file: files_to_upload['order_file'] = (order_file.name, order_file, order_file.type)
-                        if ad_file: files_to_upload['ad_file'] = (ad_file.name, ad_file, ad_file.type)
-                        if revenue_file: files_to_upload['revenue_file'] = (revenue_file.name, revenue_file, revenue_file.type)
+        # Tìm ngày nhỏ nhất và lớn nhất trong tất cả các bộ dữ liệu
+        all_dates = pd.concat([
+            orders_df['order_date'],
+            ads_df['start_date'],
+            revenues_df['payment_completed_date']
+        ]).dropna()
 
-                        if files_to_upload:
-                            res = requests.post(f"{BACKEND_URL}/upload/shopee/{brand_id}", files=files_to_upload)
-                            if res.status_code == 200:
-                                st.success("Xử lý thành công!")
-                                st.json(res.json())
-                            else:
-                                st.error(f"Lỗi: {res.text}")
-                        else:
-                            st.warning("Vui lòng chọn ít nhất một file để upload.")
+        if not all_dates.empty:
+            min_date = all_dates.min().date()
+            max_date = all_dates.max().date()
 
+            col_start, col_end = st.columns(2)
+            with col_start:
+                start_date_filter = st.date_input("Từ ngày", min_date, min_value=min_date, max_value=max_date)
+            with col_end:
+                end_date_filter = st.date_input("Đến ngày", max_date, min_value=min_date, max_value=max_date)
+        else:
+            st.info("Chưa có dữ liệu ngày tháng để lọc.")
+            start_date_filter, end_date_filter = None, None
+
+        # --- BƯỚC 3: LỌC DỮ LIỆU DỰA TRÊN BỘ LỌC ---
+        if start_date_filter and end_date_filter:
+            start_datetime = pd.to_datetime(start_date_filter)
+            end_datetime = pd.to_datetime(end_date_filter)
+
+            filtered_orders_df = orders_df[orders_df['order_date'].between(start_datetime, end_datetime)]
+            filtered_ads_df = ads_df[ads_df['start_date'].between(start_datetime, end_datetime)]
+            filtered_revenues_df = revenues_df[revenues_df['payment_completed_date'].between(start_datetime, end_datetime)]
+            # Dữ liệu khách hàng không có ngày, ta sẽ tính lại dựa trên đơn hàng đã lọc
+            if not filtered_orders_df.empty:
+                 # Lấy username duy nhất từ các đơn hàng đã lọc
+                filtered_customer_usernames = filtered_orders_df['username'].unique()
+                # Lọc bảng khách hàng dựa trên danh sách username đó
+                filtered_customers_df = customers_df[customers_df['username'].isin(filtered_customer_usernames)]
+            else:
+                filtered_customers_df = pd.DataFrame()
+        else: # Nếu không có bộ lọc, dùng dữ liệu gốc
+            filtered_orders_df = orders_df
+            filtered_ads_df = ads_df
+            filtered_revenues_df = revenues_df
+            filtered_customers_df = customers_df
+
+        # --- BƯỚC 4: TÍNH TOÁN VÀ HIỂN THỊ KPI DỰA TRÊN DỮ LIỆU ĐÃ LỌC ---
         st.write("---")
-        # --- (Phần hiển thị KPI và biểu đồ giữ nguyên) ---
         st.header("📊 Chỉ số Hiệu suất Chính (KPIs)")
-        # TÍNH TOÁN CÁC CHỈ SỐ
-        orders = brand_data.get('orders', [])
-        customers = brand_data.get('customers', [])
-        shopee_ads = brand_data.get('shopee_ads', [])
-        shopee_revenues = brand_data.get('shopee_revenues', [])
-
-        # Chỉ số từ đơn hàng và khách hàng
-        total_orders = len(orders)
-        cancelled_orders = len([o for o in orders if o['status'] == 'Đã hủy'])
-        total_customers = len(customers)
+        
+        # Sử dụng các DataFrame đã lọc để tính toán
+        total_orders = len(filtered_orders_df)
+        cancelled_orders = len(filtered_orders_df[filtered_orders_df['status'] == 'Đã hủy'])
+        total_customers = len(filtered_customers_df)
         cancellation_rate = (cancelled_orders / total_orders * 100) if total_orders > 0 else 0
-
-        # Chỉ số từ dữ liệu mới (Quảng cáo và Doanh thu)
-        total_ad_spend = sum(ad.get('expense', 0) for ad in shopee_ads)
-        total_gmv_from_ads = sum(ad.get('gmv', 0) for ad in shopee_ads)
-        total_revenue_payment = sum(rev.get('total_payment', 0) for rev in shopee_revenues)
-
-        # HIỂN THỊ CÁC CHỈ SỐ
+        
+        total_ad_spend = filtered_ads_df['expense'].sum()
+        total_gmv_from_ads = filtered_ads_df['gmv'].sum()
+        total_revenue_payment = filtered_revenues_df['total_payment'].sum()
+        
+        # Hiển thị KPI (giữ nguyên)
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Tổng đơn hàng", f"{total_orders:,}")
-            st.metric("Tổng chi phí QC", f"{total_ad_spend:,.0f} ₫")
+            st.metric("Tổng chi phí QC", f"{total_ad_spend:,.0f} đ")
         with col2:
             st.metric("Số đơn hủy", f"{cancelled_orders:,}")
-            st.metric("Doanh thu từ QC (GMV)", f"{total_gmv_from_ads:,.0f} ₫")
+            st.metric("Doanh thu từ QC (GMV)", f"{total_gmv_from_ads:,.0f} đ")
         with col3:
             st.metric("Tỷ lệ hủy", f"{cancellation_rate:.2f}%")
-            st.metric("Tổng doanh thu thực nhận", f"{total_revenue_payment:,.0f} ₫")
+            st.metric("Tổng doanh thu thực nhận", f"{total_revenue_payment:,.0f} đ")
         with col4:
             st.metric("Tổng khách hàng", f"{total_customers:,}")
-            # Tính ROAS tổng
             overall_roas = (total_gmv_from_ads / total_ad_spend) if total_ad_spend > 0 else 0
             st.metric("ROAS Tổng", f"{overall_roas:.2f}")
+
+        # --- BƯỚC 5: VẼ BIỂU ĐỒ VÀ HIỂN THỊ BẢNG DỰA TRÊN DỮ LIỆU ĐÃ LỌC ---
+        # (Toàn bộ logic vẽ biểu đồ và hiển thị bảng bây giờ sẽ dùng các DataFrame đã lọc)
+        
+        st.write("---")
+        st.header("📈 Phân tích và Trực quan hóa Dữ liệu")
+
+        # BIỂU ĐỒ 1
+        st.subheader("Doanh thu và Chi phí Quảng cáo theo Thời gian")
+        if not filtered_ads_df.empty or not filtered_revenues_df.empty:
+            # Dùng filtered_ads_df và filtered_revenues_df thay vì tạo mới
+            daily_ads = filtered_ads_df.groupby(filtered_ads_df['start_date'].dt.date).agg(total_expense=('expense', 'sum'), total_gmv=('gmv', 'sum')).reset_index().rename(columns={'start_date': 'date'})
+            daily_revenue = filtered_revenues_df.groupby(filtered_revenues_df['payment_completed_date'].dt.date).agg(total_payment=('total_payment', 'sum')).reset_index().rename(columns={'payment_completed_date': 'date'})
+            df_merged = pd.merge(daily_ads, daily_revenue, on='date', how='outer').fillna(0).sort_values('date')
+            # (Phần code vẽ biểu đồ px.line giữ nguyên)
+            fig_line = px.line(df_merged, x='date', y=['total_payment', 'total_gmv', 'total_expense'],
+                               title="Tổng quan Doanh thu và Chi phí Quảng cáo",
+                               labels={'value': 'Số tiền (đ)', 'date': 'Ngày', 'variable': 'Chỉ số'},
+                               color_discrete_map={
+                                   'total_payment': '#1f77b4',
+                                   'total_gmv': '#2ca02c',
+                                   'total_expense': '#d62728'
+                               })
+            fig_line.update_layout(yaxis_title='Số tiền (đ)')
+            st.plotly_chart(fig_line, use_container_width=True)
+        else:
+            st.info("Không có dữ liệu trong khoảng thời gian đã chọn để vẽ biểu đồ này.")
+        
+        # BIỂU ĐỒ 2
+        st.subheader("Phân tích Hiệu quả Chiến dịch Quảng cáo (theo ROAS)")
+        if not filtered_ads_df.empty:
+            # (Toàn bộ logic vẽ biểu đồ cột Top 5 giữ nguyên, chỉ thay df_ads_chart bằng filtered_ads_df)
+            df_ads_perf = filtered_ads_df.groupby('campaign_name').agg(total_gmv=('gmv', 'sum'), total_expense=('expense', 'sum')).reset_index()
+            df_ads_perf['roas'] = df_ads_perf.apply(lambda row: row['total_gmv'] / row['total_expense'] if row['total_expense'] > 0 else 0, axis=1)
+            df_ads_perf = df_ads_perf.sort_values('roas', ascending=False)
+            col_top, col_bottom = st.columns(2)
+            with col_top:
+                #... (code vẽ biểu đồ top 5 giữ nguyên)
+                st.write("🚀 Top 5 Chiến dịch Hiệu quả nhất")
+                fig_bar_top = px.bar(df_ads_perf.head(5), x='roas', y='campaign_name', orientation='h',
+                                     title="Top 5 Chiến dịch theo ROAS",
+                                     labels={'roas': 'ROAS (Doanh thu / Chi phí)', 'campaign_name': 'Tên Chiến dịch'},
+                                     text='roas')
+                fig_bar_top.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+                st.plotly_chart(fig_bar_top, use_container_width=True)
+            
+            with col_bottom:
+                st.write("🔻 Top 5 Chiến dịch Kém hiệu quả nhất")
+                # Lọc ra các chiến dịch có chi phí > 0 để tránh các chiến dịch chưa chạy
+                df_bottom = df_ads_perf[df_ads_perf['total_expense'] > 0].sort_values('roas', ascending=True)
+                fig_bar_bottom = px.bar(df_bottom.head(5), x='roas', y='campaign_name', orientation='h',
+                                        title="Top 5 Chiến dịch kém hiệu quả theo ROAS",
+                                        labels={'roas': 'ROAS (Doanh thu / Chi phí)', 'campaign_name': 'Tên Chiến dịch'},
+                                        text='roas')
+                fig_bar_bottom.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+                st.plotly_chart(fig_bar_bottom, use_container_width=True)
+
+        else:
+            st.info("Không có dữ liệu Quảng cáo trong khoảng thời gian đã chọn.")
+        
+        # BIỂU ĐỒ 3
+        st.subheader("Phân tích Cơ cấu Chi phí trong Doanh thu")
+        if not filtered_revenues_df.empty:
+            # (Toàn bộ logic vẽ biểu đồ tròn giữ nguyên, chỉ thay df_revenue_chart bằng filtered_revenues_df)
+            total_payment = filtered_revenues_df['total_payment'].sum()
+            total_fixed_fee = filtered_revenues_df['fixed_fee'].sum()
+            total_service_fee = filtered_revenues_df['service_fee'].sum()
+            total_payment_fee = filtered_revenues_df['payment_fee'].sum()
+            total_commission_fee = filtered_revenues_df['commission_fee'].sum()
+            total_fees = total_fixed_fee + total_service_fee + total_payment_fee + total_commission_fee
+            net_profit = total_payment - total_fees
+            df_pie = pd.DataFrame({'Loại chi phí': ['Lợi nhuận thực nhận', 'Phí cố định', 'Phí dịch vụ', 'Phí thanh toán', 'Phí hoa hồng'],
+                                'Số tiền': [net_profit, total_fixed_fee, total_service_fee, total_payment_fee, total_commission_fee]})
+            fig_donut = px.pie(df_pie, values='Số tiền', names='Loại chi phí', 
+                               title='Phân bổ Doanh thu Thực nhận', hole=.4)
+            st.plotly_chart(fig_donut, use_container_width=True)
+        else:
+            st.info("Không có dữ liệu Doanh thu trong khoảng thời gian đã chọn.")
 
         # --- HIỂN THỊ DỮ LIỆU MỚI (DẠNG BẢNG) ---
         st.header("📋 Dữ liệu Vừa Import")
