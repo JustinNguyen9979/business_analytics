@@ -47,16 +47,40 @@ class Order(Base):
 class ShopeeAd(Base):
     __tablename__ = "shopee_ads"
     id = Column(Integer, primary_key=True, index=True)
+    
+    # --- CÁC CỘT MỚI ĐƯỢC THÊM VÀO ---
     campaign_name = Column(String)
-    start_date = Column(DateTime, nullable=True)
+    status = Column(String, nullable=True)
+    ad_type = Column(String, nullable=True)
+    product_id = Column(String, nullable=True)
+    target_audience_settings = Column(String, nullable=True)
+    ad_content = Column(String, nullable=True)
+    bidding_method = Column(String, nullable=True)
+    location = Column(String, nullable=True)
+    start_date = Column(Date, nullable=True)
+    end_date = Column(Date, nullable=True)
     impressions = Column(Integer, default=0)
     clicks = Column(Integer, default=0)
-    ctr = Column(Float, default=0.0) # Tỷ Lệ Click
+    ctr = Column(Float, default=0.0)
     conversions = Column(Integer, default=0)
+    direct_conversions = Column(Integer, default=0)
+    conversion_rate = Column(Float, default=0.0)
+    direct_conversion_rate = Column(Float, default=0.0)
+    cost_per_conversion = Column(Float, default=0.0)
+    cost_per_direct_conversion = Column(Float, default=0.0)
     items_sold = Column(Integer, default=0)
-    gmv = Column(Float, default=0.0) # Gross Merchandise Value
-    expense = Column(Float, default=0.0) # Chi phí
-    roas = Column(Float, default=0.0) # Return on Ad Spend
+    direct_items_sold = Column(Integer, default=0)
+    gmv = Column(Float, default=0.0)
+    direct_gmv = Column(Float, default=0.0)
+    expense = Column(Float, default=0.0)
+    roas = Column(Float, default=0.0)
+    direct_roas = Column(Float, default=0.0)
+    acos = Column(Float, default=0.0)
+    direct_acos = Column(Float, default=0.0)
+    product_impressions = Column(Integer, default=0)
+    product_clicks = Column(Integer, default=0)
+    product_ctr = Column(Float, default=0.0)
+    
     brand_id = Column(Integer, ForeignKey("brands.id"))
     owner_brand = relationship("Brand", back_populates="shopee_ads")
 

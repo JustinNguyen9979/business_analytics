@@ -32,10 +32,37 @@ class Order(OrderBase):
     class Config: { 'orm_mode': True }
 
 class ShopeeAdBase(BaseModel):
-    campaign_name: str
-    start_date: Optional[datetime] = None
-    impressions: int; clicks: int; ctr: float; conversions: int
-    items_sold: int; gmv: float; expense: float; roas: float
+    campaign_name: Optional[str] = None
+    status: Optional[str] = None
+    ad_type: Optional[str] = None
+    product_id: Optional[str] = None
+    target_audience_settings: Optional[str] = None
+    ad_content: Optional[str] = None
+    bidding_method: Optional[str] = None
+    location: Optional[str] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    impressions: int = 0
+    clicks: int = 0
+    ctr: float = 0.0
+    conversions: int = 0
+    direct_conversions: int = 0
+    conversion_rate: float = 0.0
+    direct_conversion_rate: float = 0.0
+    cost_per_conversion: float = 0.0
+    cost_per_direct_conversion: float = 0.0
+    items_sold: int = 0
+    direct_items_sold: int = 0
+    gmv: float = 0.0
+    direct_gmv: float = 0.0
+    expense: float = 0.0
+    roas: float = 0.0
+    direct_roas: float = 0.0
+    acos: float = 0.0
+    direct_acos: float = 0.0
+    product_impressions: int = 0
+    product_clicks: int = 0
+    product_ctr: float = 0.0
 class ShopeeAd(ShopeeAdBase):
     id: int; brand_id: int
     class Config: { 'orm_mode': True }
