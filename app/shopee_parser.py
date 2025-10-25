@@ -71,17 +71,47 @@ def process_ad_file(db: Session, file_content: bytes, brand_id: int):
 
 def process_revenue_file(db: Session, file_content: bytes, brand_id: int):
     try:
-        buffer = io.BytesIO(file_content); df = pd.read_excel(buffer, header=2, parse_dates=['Ngày hoàn thành thanh toán'])
+        buffer = io.BytesIO(file_content)
+        # Thêm 'Ngày đặt hàng' vào danh sách parse_dates
+        df = pd.read_excel(buffer, header=2, parse_dates=['Ngày hoàn thành thanh toán', 'Ngày đặt hàng'])
+        
+        # Chỉ lấy những dòng có "Order"
         df_orders = df[df['Đơn hàng / Sản phẩm'] == 'Order'].copy()
+        
+        # Logic xóa dữ liệu cũ trong khoảng thời gian của file mới
         if not df_orders.empty:
-            start_date = df_orders["Ngày hoàn thành thanh toán"].min(); end_date = df_orders["Ngày hoàn thành thanh toán"].max()
-            crud.delete_revenues_in_date_range(db, brand_id, start_date, end_date)
+            start_date = df_orders["Ngày hoàn thành thanh toán"].min()
+            end_date = df_orders["Ngày hoàn thành thanh toán"].max()
+            if pd.notna(start_date) and pd.notna(end_date):
+                 crud.delete_revenues_in_date_range(db, brand_id, start_date, end_date)
         
         count = 0
         for _, row in df_orders.iterrows():
-            revenue_data = { "order_code": row['Mã đơn hàng'], "payment_completed_date": row['Ngày hoàn thành thanh toán'], "total_payment": float(row['Tổng tiền đã thanh toán']),
-                "fixed_fee": float(row['Phí cố định']), "service_fee": float(row['Phí Dịch Vụ']), "payment_fee": float(row['Phí thanh toán']) }
+            # Ánh xạ toàn bộ cột từ file Excel vào dictionary
+            revenue_data = {
+                "order_code": row.get('Mã đơn hàng'),
+                "refund_request_code": row.get('Mã yêu cầu hoàn tiền'),
+                "order_date": row.get('Ngày đặt hàng'),
+                "payment_completed_date": row.get('Ngày hoàn thành thanh toán'),
+                "total_payment": to_float(row.get('Tổng tiền đã thanh toán')),
+                "product_price": to_float(row.get('Giá sản phẩm')),
+                "refund_amount": to_float(row.get('Số tiền hoàn lại')),
+                "shipping_fee": to_float(row.get('Phí vận chuyển')),
+                "buyer_paid_shipping_fee": to_float(row.get('Người mua trả')),
+                "actual_shipping_fee": to_float(row.get('Phí vận chuyển thực tế')),
+                "shopee_subsidized_shipping_fee": to_float(row.get('Phí vận chuyển được trợ giá từ Shopee')),
+                "seller_voucher_code": row.get('Mã ưu đãi do Người Bán chịu'),
+                "fixed_fee": to_float(row.get('Phí cố định')),
+                "service_fee": to_float(row.get('Phí Dịch Vụ')),
+                "payment_fee": to_float(row.get('Phí thanh toán')),
+                "commission_fee": to_float(row.get('Phí hoa hồng')),
+                "affiliate_marketing_fee": to_float(row.get('Tiếp thị liên kết')),
+                "buyer_username": row.get('Người Mua')
+            }
+            # Dùng .get() để tránh lỗi nếu một cột nào đó không tồn tại
+            
             crud.create_revenue_entry(db, revenue_data=revenue_data, brand_id=brand_id)
             count += 1
         return {"status": "success", "message": f"Đã xử lý {count} dòng doanh thu."}
-    except Exception as e: return {"status": "error", "message": str(e)}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
