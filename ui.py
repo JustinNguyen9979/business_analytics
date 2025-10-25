@@ -229,13 +229,11 @@ elif st.session_state.page == 'dashboard':
         # BIỂU ĐỒ 2
         st.subheader("Phân tích Hiệu quả Chiến dịch Quảng cáo (theo ROAS)")
         if not filtered_ads_df.empty:
-            # (Toàn bộ logic vẽ biểu đồ cột Top 5 giữ nguyên, chỉ thay df_ads_chart bằng filtered_ads_df)
             df_ads_perf = filtered_ads_df.groupby('campaign_name').agg(total_gmv=('gmv', 'sum'), total_expense=('expense', 'sum')).reset_index()
             df_ads_perf['roas'] = df_ads_perf.apply(lambda row: row['total_gmv'] / row['total_expense'] if row['total_expense'] > 0 else 0, axis=1)
             df_ads_perf = df_ads_perf.sort_values('roas', ascending=False)
             col_top, col_bottom = st.columns(2)
             with col_top:
-                #... (code vẽ biểu đồ top 5 giữ nguyên)
                 st.write("🚀 Top 5 Chiến dịch Hiệu quả nhất")
                 fig_bar_top = px.bar(df_ads_perf.head(5), x='roas', y='campaign_name', orientation='h',
                                      title="Top 5 Chiến dịch theo ROAS",
@@ -261,7 +259,6 @@ elif st.session_state.page == 'dashboard':
         # BIỂU ĐỒ 3
         st.subheader("Phân tích Cơ cấu Chi phí trong Doanh thu")
         if not filtered_revenues_df.empty:
-            # (Toàn bộ logic vẽ biểu đồ tròn giữ nguyên, chỉ thay df_revenue_chart bằng filtered_revenues_df)
             total_payment = filtered_revenues_df['total_payment'].sum()
             total_fixed_fee = filtered_revenues_df['fixed_fee'].sum()
             total_service_fee = filtered_revenues_df['service_fee'].sum()

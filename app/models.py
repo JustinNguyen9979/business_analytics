@@ -49,7 +49,6 @@ class ShopeeAd(Base):
     __tablename__ = "shopee_ads"
     id = Column(Integer, primary_key=True, index=True)
     
-    # --- CÁC CỘT MỚI ĐƯỢC THÊM VÀO ---
     campaign_name = Column(String)
     status = Column(String, nullable=True)
     ad_type = Column(String, nullable=True)

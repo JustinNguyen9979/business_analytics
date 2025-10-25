@@ -15,7 +15,7 @@ def get_db():
         db.close()
 
 @app.get("/")
-def read_root(): return {"message": "Chào mừng anh đến với CEO Dashboard API!"}
+def read_root(): return {"message": "Chào mừng đến với CEO Dashboard API!"}
 
 @app.get("/brands/", response_model=List[schemas.BrandInfo])
 def read_brands(db: Session = Depends(get_db)): return db.query(models.Brand).all()

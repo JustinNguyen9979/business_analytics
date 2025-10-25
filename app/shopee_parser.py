@@ -21,7 +21,7 @@ def to_float(value):
 def to_percent_float(value):
     try:
         # Xóa ký tự '%' và chuyển thành số thực (ví dụ: '5.25%' -> 5.25)
-        return float(str(value).replace('%', ''))
+        return float(str(value).replace('%', '')) / 100
     except (ValueError, TypeError):
         return 0.0
 
@@ -68,7 +68,7 @@ def process_ad_file(db: Session, file_content: bytes, brand_id: int):
             df['Ngày kết thúc'] = pd.to_datetime(df['Ngày kết thúc'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
 
             start_date = df['Ngày bắt đầu'].min()
-            end_date = df['Ngày bắt đầu'].max() # Logic xóa dựa trên ngày bắt đầu
+            end_date = df['Ngày bắt đầu'].max() 
             if pd.notna(start_date) and pd.notna(end_date):
                 crud.delete_ads_in_date_range(db, brand_id, start_date, end_date)
         
