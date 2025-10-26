@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
@@ -58,3 +58,24 @@ def delete_brand_data(brand_id: int, data: DataToDelete, db: Session = Depends(g
         deleted_types.append(data_type)
     
     return {"message": f"Đã xóa thành công dữ liệu cho các loại: {', '.join(deleted_types)}"}
+
+@app.delete("/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_brand_api(brand_id: int, db: Session = Depends(get_db)):
+    deleted_brand = crud.delete_brand_by_id(db, brand_id=brand_id)
+    if not deleted_brand:
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand để xóa")
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@app.put("/brands/{brand_id}", response_model=schemas.BrandInfo)
+def update_brand_api(brand_id: int, brand_update: schemas.BrandCreate, db: Session = Depends(get_db)):
+    updated_brand = crud.update_brand_name(db, brand_id=brand_id, new_name=brand_update.name)
+    if not updated_brand:
+        raise HTTPException(status_code=400, detail="Không thể đổi tên. Brand không tồn tại hoặc tên mới đã bị trùng.")
+    return updated_brand
+
+@app.post("/brands/{brand_id}/clone", response_model=schemas.BrandInfo)
+def clone_brand_api(brand_id: int, db: Session = Depends(get_db)):
+    cloned = crud.clone_brand(db, brand_id=brand_id)
+    if not cloned:
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand để nhân bản")
+    return cloned
