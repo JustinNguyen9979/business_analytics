@@ -113,8 +113,8 @@ function BrandLobby() {
     return (
         <Container component="main" maxWidth="lg" sx={{ py: 8 }}>
             <Box sx={{ textAlign: 'center', mb: 8 }}>
-                <Typography variant="h3" component="h1" gutterBottom>CEO Dashboard</Typography>
-                <Typography variant="h5" component="h2" color="text.secondary">Chọn một Brand để bắt đầu Phân tích</Typography>
+                <Typography variant="h3" component="h1" gutterBottom>Business Analytics</Typography>
+                <Typography variant="h5" component="h2" color="text.secondary">Quản lý Danh mục Thương hiệu</Typography>
             </Box>
 
             {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
@@ -156,7 +156,7 @@ function BrandLobby() {
                 }}
                 BackdropProps={{ sx: { backdropFilter: 'blur(5px)' } }}
             >
-                <DialogTitle sx={{ fontWeight: 'bold' }}>Đổi tên Brand</DialogTitle>
+                <DialogTitle sx={{ fontWeight: 'bold' }}>Đổi tên Thương hiệu</DialogTitle>
                 <DialogContent>
                     <TextField 
                         autoFocus 
@@ -196,7 +196,7 @@ function BrandLobby() {
             >
                 <DialogTitle sx={{ color: 'error.main', fontWeight: 'bold' }}>Xác nhận Xóa</DialogTitle>
                 <DialogContent>
-                    <Typography>Anh có chắc chắn muốn xóa brand <Typography component="span" sx={{ fontWeight: 'bold' }}>"{selectedBrand?.name}"</Typography> không? Toàn bộ dữ liệu liên quan sẽ bị mất vĩnh viễn.</Typography>
+                    <Typography>Bạn có chắc chắn muốn xóa brand <Typography component="span" sx={{ fontWeight: 'bold' }}>"{selectedBrand?.name}"</Typography> không? Toàn bộ dữ liệu liên quan sẽ bị mất vĩnh viễn.</Typography>
                 </DialogContent>
                 <DialogActions sx={{ p: '0 24px 16px' }}>
                     <Button onClick={closeDialogs}>Hủy</Button>

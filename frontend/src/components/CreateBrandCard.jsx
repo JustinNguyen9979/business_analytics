@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Card, Dialog, DialogTitle, DialogContent, TextField, Button, DialogActions, Box } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 
-function CreateBrandCard({ onBrandCreated }) {
+function CreateBrandCard({ onCreate, onError, onClearError }) {
     const [open, setOpen] = React.useState(false);
     const [name, setName] = React.useState('');
     const [createError, setCreateError] = useState(''); 
@@ -27,7 +27,7 @@ function CreateBrandCard({ onBrandCreated }) {
             // Lấy lỗi từ component cha và set vào state lỗi cục bộ
             const errorMessage = err.response?.data?.detail || 'Lỗi không xác định.';
             setCreateError(errorMessage);
-            if (onError) onError(errorMessage);
+            // if (onError) onError(errorMessage);
         }
     };
 
@@ -79,13 +79,13 @@ function CreateBrandCard({ onBrandCreated }) {
                     }
                 }}
             >
-                <DialogTitle sx={{ fontWeight: 'bold' }}>Tạo Brand Mới</DialogTitle>
+                <DialogTitle sx={{ fontWeight: 'bold' }}>Thêm Thương hiệu Mới</DialogTitle>
                 <DialogContent>
                     <TextField
                         autoFocus
                         margin="dense"
                         id="name"
-                        label="Tên Brand"
+                        label="Tên Thương hiệu"
                         type="text"
                         fullWidth
                         variant="outlined" // Đổi thành outlined cho đẹp hơn
@@ -98,7 +98,7 @@ function CreateBrandCard({ onBrandCreated }) {
                 </DialogContent>
                 <DialogActions sx={{ p: '0 24px 16px' }}>
                     <Button onClick={handleClose} color="secondary">Hủy</Button>
-                    <Button onClick={handleCreate} variant="contained">Tạo</Button>
+                    <Button onClick={handleCreate} variant="contained">Thêm mới</Button>
                 </DialogActions>
             </Dialog>
         </>
