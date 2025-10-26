@@ -6,7 +6,17 @@ import pandas as pd
 # (Các hàm của Brand, Product không đổi)
 def get_brand(db: Session, brand_id: int): return db.query(models.Brand).filter(models.Brand.id == brand_id).first()
 def get_brand_by_name(db: Session, name: str): return db.query(models.Brand).filter(models.Brand.name == name).first()
-def create_brand(db: Session, brand: schemas.BrandCreate): db_brand = models.Brand(name=brand.name); db.add(db_brand); db.commit(); db.refresh(db_brand); return db_brand
+
+def create_brand(db: Session, brand: schemas.BrandCreate):
+    clean_name = brand.name.strip()
+    if db.query(models.Brand).filter(models.Brand.name == clean_name).first():
+        return None # Báo hiệu tên đã tồn tại
+    db_brand = models.Brand(name=clean_name)
+    db.add(db_brand)
+    db.commit()
+    db.refresh(db_brand)
+    return db_brand
+
 def get_or_create_product(db: Session, sku: str, brand_id: int):
     db_product = db.query(models.Product).filter(models.Product.sku == sku, models.Product.brand_id == brand_id).first()
     if not db_product: db_product = models.Product(sku=sku, brand_id=brand_id); db.add(db_product); db.commit(); db.refresh(db_product)
@@ -99,11 +109,11 @@ def delete_brand_by_id(db: Session, brand_id: int):
 def update_brand_name(db: Session, brand_id: int, new_name: str):
     db_brand = db.query(models.Brand).filter(models.Brand.id == brand_id).first()
     if db_brand:
-        # Kiểm tra xem tên mới đã tồn tại chưa (trừ chính brand này)
-        existing_brand = db.query(models.Brand).filter(models.Brand.name == new_name, models.Brand.id != brand_id).first()
+        clean_new_name = new_name.strip() 
+        existing_brand = db.query(models.Brand).filter(models.Brand.name == clean_new_name, models.Brand.id != brand_id).first()
         if existing_brand:
-            return None # Trả về None để báo lỗi tên trùng lặp
-        db_brand.name = new_name
+            return None
+        db_brand.name = clean_new_name
         db.commit()
         db.refresh(db_brand)
     return db_brand

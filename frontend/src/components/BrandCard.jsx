@@ -16,7 +16,6 @@ function BrandCard({ brand, onClick, onRename, onClone, onDelete }) {
         setAnchorEl(null);
     };
 
-    // Các hàm này sẽ gọi đến các hàm xử lý được truyền từ BrandLobby
     const handleRename = (event) => {
         event.stopPropagation();
         onRename(brand);
@@ -43,7 +42,7 @@ function BrandCard({ brand, onClick, onRename, onClone, onDelete }) {
                 textAlign: 'center',
                 display: 'flex',
                 flexDirection: 'column',
-                position: 'relative', // Cần thiết để định vị IconButton
+                position: 'relative',
                 backgroundColor: 'rgba(255, 255, 255, 0.05)',
                 backdropFilter: 'blur(10px)',
                 border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -54,7 +53,6 @@ function BrandCard({ brand, onClick, onRename, onClone, onDelete }) {
                 },
             }}
         >
-            {/* Nút "..." ở góc trên bên phải */}
             <IconButton
                 aria-label="more"
                 id="long-button"
@@ -67,24 +65,68 @@ function BrandCard({ brand, onClick, onRename, onClone, onDelete }) {
                     top: 8,
                     right: 8,
                     color: 'rgba(255, 255, 255, 0.7)',
-                    zIndex: 1 // Đảm bảo nút nằm trên cùng
+                    zIndex: 1
                 }}
             >
                 <MoreVertIcon />
             </IconButton>
-            <Menu anchorEl={anchorEl} open={open} onClose={handleMenuClose}>
+
+            <Menu 
+                anchorEl={anchorEl} 
+                open={open} 
+                onClose={handleMenuClose}
+                PaperProps={{
+                    sx: {
+                        width: '150px',
+                        backgroundColor: 'rgba(40, 50, 70, 0.85)',
+                        backdropFilter: 'blur(10px)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+                        borderRadius: 2,
+                    },
+                }}
+            >
                 <MenuItem onClick={handleRename}>Đổi tên</MenuItem>
                 <MenuItem onClick={handleClone}>Nhân bản</MenuItem>
                 <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Xóa</MenuItem>
             </Menu>
 
-            <CardActionArea onClick={() => onClick(brand.id)} sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <CardContent>
-                    <BusinessCenterIcon sx={{ fontSize: 70, color: 'primary.main', mb: 2 }} />
-                    <Typography variant="h6" component="div">
-                        {brand.name}
-                    </Typography>
-                </CardContent>
+            <CardActionArea 
+                onClick={() => onClick(brand.id)} 
+                sx={{ 
+                    flexGrow: 1, 
+                    display: 'flex', 
+                    flexDirection: 'column', 
+                    justifyContent: 'center', 
+                    // Thêm padding trực tiếp và giới hạn chiều rộng
+                    p: 2,
+                    minWidth: 0, // Rất quan trọng để flex item có thể co lại
+                }}
+            >
+                <BusinessCenterIcon sx={{ fontSize: 70, color: 'primary.main', mb: 2 }} />
+                
+                <Typography
+                    variant="h6"
+                    component="div"
+                    sx={{
+                        width: '100%', // Chiếm toàn bộ chiều rộng có sẵn (sau khi trừ padding)
+                        fontSize: '1rem',
+                        fontWeight: 600,
+                        
+                        // Kỹ thuật cắt ngắn văn bản
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        
+                        // Hiệu ứng khi hover vào CARD CHA
+                        '.MuiCard-root:hover &': {
+                            whiteSpace: 'normal',
+                            overflow: 'visible',
+                        }
+                    }}
+                >
+                    {brand.name}
+                </Typography>
             </CardActionArea>
         </Card>
     );
