@@ -123,16 +123,21 @@ def clone_brand(db: Session, brand_id: int):
     if not original_brand:
         return None
     
-    # Tạo tên mới, kiểm tra nếu tên đã tồn tại thì thêm số
+    # BƯỚC 1: Luôn tìm ra tên gốc bằng cách loại bỏ đuôi " - Copy..."
+    base_name = original_brand.name.split(' - Copy')[0]
+    
+    # BƯỚC 2: Bắt đầu tìm tên khả dụng
     copy_number = 1
-    new_name = f"{original_brand.name} - Copy"
+    # Thử với tên "base_name - Copy" trước tiên
+    new_name = f"{base_name} - Copy"
+    
+    # Nếu tên đó đã tồn tại, bắt đầu thêm số vào sau
     while db.query(models.Brand).filter(models.Brand.name == new_name).first():
         copy_number += 1
-        new_name = f"{original_brand.name} - Copy {copy_number}"
+        new_name = f"{base_name} - Copy {copy_number}"
         
     cloned_brand = models.Brand(name=new_name)
     db.add(cloned_brand)
     db.commit()
     db.refresh(cloned_brand)
-    # Lưu ý: Hiện tại chỉ nhân bản tên. Nếu muốn nhân bản cả dữ liệu, logic sẽ phức tạp hơn.
     return cloned_brand

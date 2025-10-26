@@ -1,15 +1,24 @@
-// FILE: frontend/src/layouts/DashboardLayout.jsx (PHIÊN BẢN AURORA CHÍNH XÁC)
+// FILE: frontend/src/layouts/DashboardLayout.jsx (PHIÊN BẢN HOÀN CHỈNH)
 
 import React, { useState } from 'react';
 import { styled } from '@mui/material/styles';
-import { Link as RouterLink, Outlet } from 'react-router-dom';
-import { Box, Drawer as MuiDrawer, AppBar as MuiAppBar, Toolbar, List, Typography, Divider, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText, CssBaseline } from '@mui/material';
+import { Link as RouterLink, Outlet, useParams, useNavigate } from 'react-router-dom';
+import { Box, Drawer as MuiDrawer, AppBar as MuiAppBar, Toolbar, List, Typography, Divider, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText, CssBaseline, Collapse } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
 import AuroraBackground from '../components/AuroraBackground';
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import ExpandLess from '@mui/icons-material/ExpandLess';
+import ExpandMore from '@mui/icons-material/ExpandMore';
+import StorefrontIcon from '@mui/icons-material/Storefront';
+import WebIcon from '@mui/icons-material/Web';
+import PriceCheckIcon from '@mui/icons-material/PriceCheck';
+import ImportDialog from '../components/ImportDialog';
+import SingleImportDialog from '../components/SingleImportDialog'; 
+// import { uploadPlatformData, uploadCostFile } from '../services/api';
 
 const drawerWidth = 240;
 
@@ -34,46 +43,64 @@ const closedMixin = (theme) => ({
   },
 });
 
-const AppBar = styled(MuiAppBar, {
-  shouldForwardProp: (prop) => prop !== 'open',
-})(({ theme, open }) => ({
-  zIndex: theme.zIndex.drawer + 1,
-  transition: theme.transitions.create(['width', 'margin'], {
-    easing: theme.transitions.easing.sharp,
-    duration: theme.transitions.duration.leavingScreen,
+const AppBar = styled(MuiAppBar, { shouldForwardProp: (prop) => prop !== 'open' })(
+  ({ theme, open }) => ({
+    zIndex: theme.zIndex.drawer + 1,
+    // ...
   }),
-  ...(open && {
-    marginLeft: drawerWidth,
-    width: `calc(100% - ${drawerWidth}px)`,
-    transition: theme.transitions.create(['width', 'margin'], {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-  }),
-}));
+);
 
 const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' })(
   ({ theme, open }) => ({
     width: drawerWidth,
     flexShrink: 0,
-    whiteSpace: 'nowrap',
-    boxSizing: 'border-box',
-    ...(open && {
-      ...openedMixin(theme),
-      '& .MuiDrawer-paper': openedMixin(theme),
-    }),
-    ...(!open && {
-      ...closedMixin(theme),
-      '& .MuiDrawer-paper': closedMixin(theme),
-    }),
+    // ...
   }),
 );
 
 export default function DashboardLayout() {
+  const { brandId } = useParams();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(true);
+  const [isImportMenuOpen, setImportMenuOpen] = useState(false);
+  
+  // State cho dialog nhiều file
+  const [isMultiImportDialogOpen, setMultiImportDialogOpen] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState('');
 
-  const handleDrawerToggle = () => {
-    setOpen(!open);
+  // State cho dialog một file
+  const [isSingleImportDialogOpen, setSingleImportDialogOpen] = useState(false);
+
+  const handleDrawerToggle = () => setOpen(!open);
+  const handleImportMenuToggle = () => setImportMenuOpen(!isImportMenuOpen);
+
+  // Hàm cho dialog nhiều file
+  const handleOpenMultiImportDialog = (platform) => {
+    setSelectedPlatform(platform);
+    setMultiImportDialogOpen(true);
+  };
+  const handleCloseMultiImportDialog = () => {
+    setMultiImportDialogOpen(false);
+  };
+  const handleMultiUpload = async (files) => {
+    console.log("Uploading multi-files for brand:", brandId, "and platform:", selectedPlatform, files);
+    // await uploadPlatformData(brandId, selectedPlatform, files);
+    alert(`Đã nhận các file cho ${selectedPlatform}. Xem console log.`);
+    navigate(0);
+  };
+
+  // Hàm cho dialog một file
+  const handleOpenSingleImportDialog = () => {
+    setSingleImportDialogOpen(true);
+  };
+  const handleCloseSingleImportDialog = () => {
+    setSingleImportDialogOpen(false);
+  };
+  const handleSingleUpload = async (fileObject) => {
+    console.log("Uploading single file for brand:", brandId, fileObject);
+    // await uploadCostFile(brandId, fileObject.costFile);
+    alert(`Đã nhận file giá nhập. Xem console log.`);
+    navigate(0);
   };
 
   return (
@@ -83,83 +110,97 @@ export default function DashboardLayout() {
       
       <AppBar position="fixed" open={open}>
         <Toolbar>
-          <IconButton
-            color="inherit"
-            aria-label="toggle drawer"
-            onClick={handleDrawerToggle}
-            edge="start"
-            sx={{
-              marginRight: 5,
-              ...(open && { display: 'none' }),
-            }}
-          >
+          <IconButton color="inherit" onClick={handleDrawerToggle} edge="start" sx={{ marginRight: 5, ...(open && { display: 'none' }), }}>
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div">
-            Dashboard
-          </Typography>
+          <Typography variant="h6" noWrap component="div">Dashboard</Typography>
         </Toolbar>
       </AppBar>
 
       <Drawer variant="permanent" open={open}>
-        <Box sx={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          px: 2,
-          minHeight: { xs: 56, sm: 64 }
-        }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, minHeight: { xs: 56, sm: 64 } }}>
           <Box sx={{ display: 'flex', alignItems: 'center', opacity: open ? 1 : 0, transition: 'opacity 0.2s' }}>
              <QueryStatsIcon sx={{ color: 'primary.main', mr: 1.5, fontSize: 30 }} />
              <Typography variant="h6" noWrap>Analytics</Typography>
           </Box>
-          <IconButton onClick={handleDrawerToggle} sx={{ opacity: open ? 1 : 0 }}>
+          <IconButton color="inherit" onClick={handleDrawerToggle} sx={{ opacity: open ? 1 : 0 }}>
             <ChevronLeftIcon />
           </IconButton>
         </Box>
         <Divider />
         <List>
-            {/* ĐÂY LÀ PHẦN CODE ĐẦY ĐỦ CỦA CÁC MENU ITEM */}
             <ListItem disablePadding sx={{ display: 'block' }}>
-                <ListItemButton
-                    component={RouterLink} to="/"
-                    sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5 }}
-                >
-                    <ListItemIcon
-                        sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center', color: 'primary.main' }}
-                    >
+                <ListItemButton component={RouterLink} to="/" sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
+                    <ListItemIcon sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center', color: 'primary.main' }}>
                         <ArrowBackIcon />
                     </ListItemIcon>
                     <ListItemText primary="Quay lại Sảnh chính" sx={{ opacity: open ? 1 : 0 }} />
                 </ListItemButton>
             </ListItem>
+        
             <ListItem disablePadding sx={{ display: 'block' }}>
-                <ListItemButton
-                    sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5 }}
-                >
-                    <ListItemIcon
-                        sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center' }}
-                    >
+                <ListItemButton sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
+                    <ListItemIcon sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center' }}>
                         <DashboardIcon />
                     </ListItemIcon>
                     <ListItemText primary="Tổng quan" sx={{ opacity: open ? 1 : 0 }} />
                 </ListItemButton>
             </ListItem>
+
+            <ListItem disablePadding sx={{ display: 'block' }}>
+                <ListItemButton onClick={handleImportMenuToggle} sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
+                    <ListItemIcon sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center' }}>
+                        <CloudUploadIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Import Dữ liệu" sx={{ opacity: open ? 1 : 0 }} />
+                    {open ? (isImportMenuOpen ? <ExpandLess /> : <ExpandMore />) : null}
+                </ListItemButton>
+            </ListItem>
+            
+            <Collapse in={isImportMenuOpen && open} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding>
+                    <ListItemButton sx={{ pl: 4 }} onClick={handleOpenSingleImportDialog}>
+                        <ListItemIcon><PriceCheckIcon /></ListItemIcon>
+                        <ListItemText primary="File Giá nhập" />
+                    </ListItemButton>
+                    <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('Shopee')}>
+                        <ListItemIcon><StorefrontIcon /></ListItemIcon>
+                        <ListItemText primary="Shopee" />
+                    </ListItemButton>
+                    <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('TikTok')}>
+                        <ListItemIcon><StorefrontIcon /></ListItemIcon>
+                        <ListItemText primary="TikTok" />
+                    </ListItemButton>
+                     <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('Lazada')}>
+                        <ListItemIcon><StorefrontIcon /></ListItemIcon>
+                        <ListItemText primary="Lazada" />
+                    </ListItemButton>
+                     <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('Website')}>
+                        <ListItemIcon><WebIcon /></ListItemIcon>
+                        <ListItemText primary="Website" />
+                    </ListItemButton>
+                </List>
+            </Collapse>
         </List>
       </Drawer>
 
-      <Box 
-        component="main" 
-        sx={{ 
-          flexGrow: 1, 
-          p: 3,
-          overflow: 'auto',
-          height: '100vh'
-        }}
-      >
+      <Box component="main" sx={{ flexGrow: 1, p: 3, overflow: 'auto', height: '100vh' }}>
         <Toolbar /> 
         <Outlet />
       </Box>
+
+      <ImportDialog 
+        open={isMultiImportDialogOpen}
+        onClose={handleCloseMultiImportDialog}
+        platformName={selectedPlatform}
+        onUpload={handleMultiUpload}
+      />
+      <SingleImportDialog
+        open={isSingleImportDialogOpen}
+        onClose={handleCloseSingleImportDialog}
+        title="Import File Giá Nhập"
+        onUpload={handleSingleUpload}
+      />
     </Box>
   );
 }
