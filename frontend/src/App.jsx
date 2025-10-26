@@ -2,7 +2,10 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { ThemeProvider, createTheme, CssBaseline, Box } from '@mui/material';
+
 import BrandLobby from './pages/BrandLobby';
+import DashboardLayout from './layouts/DashboardLayout'; 
+import DashboardPage from './pages/DashboardPage';   
 
 // Tạo một theme tối (dark theme) chi tiết hơn
 const futuristicTheme = createTheme({
@@ -64,16 +67,16 @@ function App() {
     return (
         <ThemeProvider theme={futuristicTheme}>
             <CssBaseline />
-            <Box sx={{
-                minHeight: '100vh',
-                background: `linear-gradient(135deg, ${futuristicTheme.palette.background.default} 0%, #000000 100%)`,
-                py: 6
-            }}>
-                <Routes>
-                    <Route path="/" element={<BrandLobby />} />
-                    {/* <Route path="/dashboard/:brandId" element={<Dashboard />} /> */}
-                </Routes>
-            </Box>
+            {/* Bỏ Box bao ngoài đi để layout tự quản lý background */}
+            <Routes>
+                {/* Route cho trang sảnh chính */}
+                <Route path="/" element={<BrandLobby />} />
+                
+                {/* Route cho trang dashboard, sử dụng layout mới */}
+                <Route element={<DashboardLayout />}>
+                    <Route path="/dashboard/:brandId" element={<DashboardPage />} />
+                </Route>
+            </Routes>
         </ThemeProvider>
     );
 }
