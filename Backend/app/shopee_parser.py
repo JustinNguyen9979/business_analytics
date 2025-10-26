@@ -1,7 +1,8 @@
 import pandas as pd
 from sqlalchemy.orm import Session
-from . import crud
+import crud
 import io
+import traceback
 
 # --- CÁC HÀM HỖ TRỢ CHUYỂN ĐỔI DỮ LIỆU ---
 def to_int(value):
@@ -39,22 +40,70 @@ def process_cost_file(db: Session, file_content: bytes, brand_id: int): # Giữ 
 def process_order_file(db: Session, file_content: bytes, brand_id: int):
     try:
         buffer = io.BytesIO(file_content)
-        # Để Pandas tự động xử lý ngày tháng một cách linh hoạt
-        df = pd.read_excel(buffer, header=0, parse_dates=["Ngày đặt hàng"])
+        # Đọc toàn bộ file vào df_orig để bảo toàn dữ liệu gốc
+        df_orig = pd.read_excel(buffer, header=0, dtype=str).fillna('')
+
+        # --- LOGIC XÓA DỮ LIỆU CŨ (AN TOÀN) ---
+        # Chỉ thực hiện xóa nếu DataFrame có dữ liệu và có cột "Ngày đặt hàng"
+        if not df_orig.empty and "Ngày đặt hàng" in df_orig.columns:
+            try:
+                # Tạo một bản sao chỉ để xác định khoảng thời gian, không làm thay đổi df_orig
+                df_dates = df_orig[["Ngày đặt hàng"]].copy()
+                df_dates["Ngày đặt hàng"] = pd.to_datetime(df_dates["Ngày đặt hàng"], errors='coerce')
+                df_dates.dropna(subset=["Ngày đặt hàng"], inplace=True)
+                
+                if not df_dates.empty:
+                    start_date = df_dates["Ngày đặt hàng"].min()
+                    end_date = df_dates["Ngày đặt hàng"].max()
+                    print(f"Sẽ xóa dữ liệu đơn hàng từ {start_date} đến {end_date}")
+                    crud.delete_orders_in_date_range(db, brand_id, start_date, end_date)
+            except Exception as e:
+                print(f"CẢNH BÁO: Không thể xóa dữ liệu cũ. Lỗi: {e}. Quá trình import sẽ tiếp tục.")
+
+        # --- VÒNG LẶP XỬ LÝ TRÊN DỮ LIỆU GỐC (df_orig) ---
+        processed_count = 0
+        skipped_count = 0
         
-        if not df.empty:
-            start_date = df["Ngày đặt hàng"].min(); end_date = df["Ngày đặt hàng"].max()
-            if pd.notna(start_date) and pd.notna(end_date):
-                 crud.delete_orders_in_date_range(db, brand_id, start_date, end_date)
+        for index, row in df_orig.iterrows():
+            try:
+                order_code = row.get('Mã đơn hàng')
+                sku = row.get('SKU phân loại hàng')
+                
+                if not order_code or not sku:
+                    skipped_count += 1
+                    continue
+
+                # Chuyển đổi và kiểm tra ngày tháng cho từng dòng
+                order_datetime = pd.to_datetime(row.get('Ngày đặt hàng'), errors='coerce')
+                if pd.isna(order_datetime):
+                    print(f"Dòng {index + 2}: Ngày đặt hàng '{row.get('Ngày đặt hàng')}' không hợp lệ, bỏ qua.")
+                    skipped_count += 1
+                    continue
+
+                order_data = row.to_dict()
+                order_data['Ngày đặt hàng'] = order_datetime.date()
+                order_data['Số lượng'] = to_int(row.get('Số lượng'))
+                
+                crud.get_or_create_customer(db, customer_data=order_data, brand_id=brand_id)
+                crud.create_order_entry(db, order_data=order_data, brand_id=brand_id)
+                
+                processed_count += 1
+
+            except Exception as e:
+                print(f"Lỗi xử lý dòng {index + 2}: {e}. Dữ liệu dòng: {row.to_dict()}")
+                skipped_count += 1
+                continue
+
+        message = f"Hoàn tất! Đã xử lý {processed_count}/{len(df_orig)} dòng sản phẩm."
+        if skipped_count > 0:
+            message += f" Đã bỏ qua {skipped_count} dòng bị lỗi hoặc thiếu dữ liệu."
+            
+        return {"status": "success", "message": message}
         
-        count = 0
-        for _, row in df.iterrows():
-            if pd.notna(row.get('SKU phân loại hàng')):
-                crud.get_or_create_customer(db, customer_data=row.to_dict(), brand_id=brand_id)
-                crud.create_order_entry(db, order_data=row.to_dict(), brand_id=brand_id)
-                count += 1
-        return {"status": "success", "message": f"Đã xử lý {count} đơn hàng."}
-    except Exception as e: return {"status": "error", "message": str(e)}
+    except Exception as e: 
+        print("--- LỖI NGHIÊM TRỌNG TRONG process_order_file ---")
+        traceback.print_exc()
+        return {"status": "error", "message": f"Lỗi hệ thống nghiêm trọng: {e}"}
 
 def process_ad_file(db: Session, file_content: bytes, brand_id: int):
     try:

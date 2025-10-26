@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Date, Float
 from sqlalchemy.orm import relationship
-from .database import Base
+from database import Base
 
 class Brand(Base):
     __tablename__ = "brands"
@@ -36,7 +36,7 @@ class Order(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, index=True)
     order_code = Column(String, index=True)         # Từ 'Mã đơn hàng'
-    order_date = Column(DateTime)                   # Từ 'Ngày đặt hàng'
+    order_date = Column(Date, nullable=True)        # Từ 'Ngày đặt hàng'
     status = Column(String)                         # Từ 'Trạng Thái Đơn Hàng'
     sku = Column(String)                            # Từ 'SKU phân loại hàng'
     quantity = Column(Integer)                      # Từ 'Số lượng'

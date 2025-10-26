@@ -2,13 +2,13 @@ version: '3.8'
 
 services:
   backend:
-    build: .
-    command: uvicorn app.main:app --host 0.0.0.0 --port ${WEB_APP_PORT} --reload
+    build:
+      context: ./backend
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - .:/app 
-    working_dir: /app
+      - ./backend/app:/app
     ports:
-      - "${WEB_APP_PORT}:${WEB_APP_PORT}"
+      - "8000:8000"
     depends_on:
       - db
     environment:
@@ -16,21 +16,22 @@ services:
     restart: unless-stopped
 
   frontend:
-    build: .
-    working_dir: /app
-    command: streamlit run ui.py --server.port 8501 --server.address 0.0.0.0
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev # Sử dụng Dockerfile phát triển
     volumes:
-      - .:/app 
+      - ./frontend:/app # Ánh xạ toàn bộ thư mục frontend vào container
+      - /app/node_modules # Loại trừ node_modules để không bị ghi đè bởi thư mục rỗng trên máy host
     ports:
-      - "8501:8501"
+      - "5173:5173" # Ánh xạ port của Vite dev server ra ngoài
+    restart: unless-stopped
     depends_on:
       - backend
-    restart: unless-stopped
 
   db:
     image: postgres:13
     volumes:
-      - ${POSTGRES_DATA_PATH}:/var/lib/postgresql/data/
+      - postgres_data:/var/lib/postgresql/data/
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}

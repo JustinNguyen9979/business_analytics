@@ -1,0 +1,22 @@
+# FILE: frontend/Dockerfile.dev (DÀNH RIÊNG CHO DEVELOPMENT)
+
+# Dùng image Node.js phiên bản 20
+FROM node:20-alpine
+
+# Đặt thư mục làm việc
+WORKDIR /app
+
+# Sao chép package.json và package-lock.json
+COPY package*.json ./
+
+# Cài đặt các thư viện
+RUN npm install
+
+# Sao chép toàn bộ code (chỉ để dự phòng, volume sẽ ghi đè lên)
+COPY . .
+
+# Mở port mặc định của Vite dev server
+EXPOSE 5173
+
+# Lệnh mặc định để khởi động dev server
+CMD ["npm", "run", "dev"]

@@ -30,7 +30,7 @@ class Customer(CustomerBase):
 # --- Order Schema ---
 class OrderBase(BaseModel):
     order_code: str
-    order_date: datetime
+    order_date: Optional[date] = None
     status: str
     sku: str
     quantity: int
