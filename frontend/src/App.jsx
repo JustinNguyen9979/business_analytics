@@ -9,14 +9,14 @@ const futuristicTheme = createTheme({
     palette: {
         mode: 'dark',
         primary: {
-            main: '#00BFFF', // Deep Sky Blue - một màu xanh công nghệ
+            main: '#00BFFF', // Deep Sky Blue
         },
         secondary: {
-            main: '#9370DB', // Medium Purple - một màu tím nhẹ nhàng
+            main: '#9370DB', // Medium Purple
         },
         background: {
-            default: '#0A1929', // Màu nền xanh đen đậm
-            paper: 'rgba(10, 25, 41, 0.7)', // Màu nền cho các Card, có độ trong suốt
+            default: '#071225', // slightly adjusted to match CSS vars
+            paper: 'rgba(10, 25, 41, 0.6)', // translucent paper for cards
         },
         text: {
             primary: '#E0E0E0',
@@ -24,25 +24,40 @@ const futuristicTheme = createTheme({
         }
     },
     typography: {
-        fontFamily: 'Roboto, sans-serif',
+        fontFamily: "'Inter', 'Roboto', sans-serif",
         h3: {
             fontWeight: 700,
+            fontSize: '2.5rem',
         },
         h5: {
             fontWeight: 300,
+            fontSize: '1.5rem',
         }
     },
     components: {
-        // Tùy chỉnh mặc định cho một số component
         MuiButton: {
             styleOverrides: {
                 root: {
-                    borderRadius: 8,
-                    textTransform: 'none', // Bỏ viết hoa mặc định
+                    borderRadius: 10,
+                    textTransform: 'none', // keep capitalization natural
+                    transition: 'transform 0.12s ease, box-shadow 0.12s ease',
                 },
-            },
+                containedPrimary: {
+                    boxShadow: '0 6px 18px rgba(0,179,255,0.08)'
+                }
+            }
         },
-    },
+        MuiCard: {
+            styleOverrides: {
+                root: {
+                    background: "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02))",
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)'
+                }
+            }
+        }
+    }
 });
 
 function App() {
@@ -52,6 +67,7 @@ function App() {
             <Box sx={{
                 minHeight: '100vh',
                 background: `linear-gradient(135deg, ${futuristicTheme.palette.background.default} 0%, #000000 100%)`,
+                py: 6
             }}>
                 <Routes>
                     <Route path="/" element={<BrandLobby />} />

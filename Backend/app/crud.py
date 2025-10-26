@@ -88,3 +88,41 @@ def delete_data_by_type(db: Session, brand_id: int, data_type: str):
     elif data_type == 'revenues': db.query(models.ShopeeRevenue).filter(models.ShopeeRevenue.brand_id == brand_id).delete()
     elif data_type == 'products': db.query(models.Product).filter(models.Product.brand_id == brand_id).delete()
     db.commit()
+
+def delete_brand_by_id(db: Session, brand_id: int):
+    db_brand = db.query(models.Brand).filter(models.Brand.id == brand_id).first()
+    if db_brand:
+        db.delete(db_brand)
+        db.commit()
+    return db_brand
+
+def update_brand_name(db: Session, brand_id: int, new_name: str):
+    db_brand = db.query(models.Brand).filter(models.Brand.id == brand_id).first()
+    if db_brand:
+        # Kiểm tra xem tên mới đã tồn tại chưa (trừ chính brand này)
+        existing_brand = db.query(models.Brand).filter(models.Brand.name == new_name, models.Brand.id != brand_id).first()
+        if existing_brand:
+            return None # Trả về None để báo lỗi tên trùng lặp
+        db_brand.name = new_name
+        db.commit()
+        db.refresh(db_brand)
+    return db_brand
+
+def clone_brand(db: Session, brand_id: int):
+    original_brand = db.query(models.Brand).filter(models.Brand.id == brand_id).first()
+    if not original_brand:
+        return None
+    
+    # Tạo tên mới, kiểm tra nếu tên đã tồn tại thì thêm số
+    copy_number = 1
+    new_name = f"{original_brand.name} - Copy"
+    while db.query(models.Brand).filter(models.Brand.name == new_name).first():
+        copy_number += 1
+        new_name = f"{original_brand.name} - Copy {copy_number}"
+        
+    cloned_brand = models.Brand(name=new_name)
+    db.add(cloned_brand)
+    db.commit()
+    db.refresh(cloned_brand)
+    # Lưu ý: Hiện tại chỉ nhân bản tên. Nếu muốn nhân bản cả dữ liệu, logic sẽ phức tạp hơn.
+    return cloned_brand
