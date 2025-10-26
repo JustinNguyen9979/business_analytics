@@ -20,10 +20,12 @@ def read_root(): return {"message": "Chào mừng đến với CEO Dashboard API
 @app.get("/brands/", response_model=List[schemas.BrandInfo])
 def read_brands(db: Session = Depends(get_db)): return db.query(models.Brand).all()
 
-@app.post("/brands/", response_model=schemas.Brand)
+@app.post("/brands/", response_model=schemas.BrandInfo)
 def create_brand_api(brand: schemas.BrandCreate, db: Session = Depends(get_db)):
-    if crud.get_brand_by_name(db, name=brand.name): raise HTTPException(status_code=400, detail="Brand đã tồn tại")
-    return crud.create_brand(db=db, brand=brand)
+    new_brand = crud.create_brand(db=db, brand=brand)
+    if not new_brand:
+         raise HTTPException(status_code=400, detail="Brand đã tồn tại")
+    return new_brand
 
 @app.get("/brands/{brand_id}", response_model=schemas.Brand)
 def read_brand(brand_id: int, db: Session = Depends(get_db)):
