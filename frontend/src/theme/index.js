@@ -13,7 +13,7 @@ const PALETTE = {
         contrastText: '#FFFFFF',
     },
     background: {
-        default: '#010409', // Nền tối để làm nổi bật hiệu ứng Aurora
+        default: '#0d1e3dff', // Nền tối để làm nổi bật hiệu ứng Aurora
         paper: 'rgba(10, 25, 41, 0.6)',
     },
     text: {
@@ -52,6 +52,7 @@ const theme = createTheme({
                 }
             }
         },
+
         // Card (Dùng cho BrandLobby)
         MuiCard: {
             styleOverrides: {
@@ -63,6 +64,7 @@ const theme = createTheme({
                 }
             }
         },
+
         // AppBar (Thanh header trong Dashboard)
         MuiAppBar: {
             styleOverrides: {
@@ -75,6 +77,7 @@ const theme = createTheme({
                 }
             }
         },
+
         // Drawer (Thanh sidebar trong Dashboard)
         MuiDrawer: {
             styleOverrides: {
@@ -86,6 +89,7 @@ const theme = createTheme({
                 }
             }
         },
+
         // Icon trong ListItem (Menu sidebar)
         MuiListItemIcon: {
             styleOverrides: {
@@ -94,6 +98,7 @@ const theme = createTheme({
                 }
             }
         },
+
         MuiDialog: {
             styleOverrides: {
                 paper: ({ theme }) => ({ // Sử dụng arrow function để truy cập theme
@@ -106,10 +111,38 @@ const theme = createTheme({
             },
         },
 
+        // Tùy chỉnh CSS toàn cục, bao gồm cả thanh cuộn
+        MuiCssBaseline: {
+            styleOverrides: (theme) => ({
+                body: {
+                    // Style cho thanh cuộn trên Firefox
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: `${theme.palette.text.secondary} ${theme.palette.background.default}`,
+
+                    // Style cho thanh cuộn trên các trình duyệt Webkit (Chrome, Safari, Edge)
+                    '&::-webkit-scrollbar': {
+                        width: '4px',
+                    },
+                    '&::-webkit-scrollbar-track': {
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                    },
+                    '&::-webkit-scrollbar-thumb': {
+                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                        borderRadius: theme.shape.borderRadius,
+                        border: '2px solid transparent',
+                        backgroundClip: 'content-box',
+                        '&:hover': {
+                            backgroundColor: 'rgba(255, 255, 255, 0.4)',
+                        },
+                    },
+                },
+            }),
+        },
+
         MuiMenu: {
             styleOverrides: {
                 paper: ({ theme }) => ({
-                    minWidth: 180, // <-- THÊM DÒNG NÀY
+                    minWidth: 180, // Đặt chiều rộng tối thiểu cho menu
                     backgroundColor: '#1e293b',
                     border: `1px solid ${theme.palette.divider}`,
                     borderRadius: theme.shape.borderRadius,
