@@ -1,7 +1,12 @@
 import React from 'react';
-import { Card, CardActionArea, CardContent, Typography, IconButton, Menu, MenuItem } from '@mui/material';
+import { Card, CardActionArea, Typography, IconButton, Menu, MenuItem, ListItemIcon, ListItemText } from '@mui/material';
 import BusinessCenterIcon from '@mui/icons-material/BusinessCenter';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import { StyledBrandCard } from './StyledComponents';
+
 
 function BrandCard({ brand, onClick, onRename, onClone, onDelete }) {
     const [anchorEl, setAnchorEl] = React.useState(null);
@@ -35,30 +40,9 @@ function BrandCard({ brand, onClick, onRename, onClone, onDelete }) {
     };
 
     return (
-        <Card
-            sx={{
-                width: 200,
-                height: 200,
-                textAlign: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-                position: 'relative',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                    transform: 'translateY(-5px)',
-                    boxShadow: '0 10px 20px rgba(0, 191, 255, 0.2)',
-                },
-            }}
-        >
+        <StyledBrandCard>
             <IconButton
                 aria-label="more"
-                id="long-button"
-                aria-controls={open ? 'long-menu' : undefined}
-                aria-expanded={open ? 'true' : undefined}
-                aria-haspopup="true"
                 onClick={handleMenuClick}
                 sx={{
                     position: 'absolute',
@@ -75,20 +59,26 @@ function BrandCard({ brand, onClick, onRename, onClone, onDelete }) {
                 anchorEl={anchorEl} 
                 open={open} 
                 onClose={handleMenuClose}
-                PaperProps={{
-                    sx: {
-                        width: '150px',
-                        backgroundColor: 'rgba(40, 50, 70, 0.85)',
-                        backdropFilter: 'blur(10px)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-                        borderRadius: 2,
-                    },
-                }}
             >
-                <MenuItem onClick={handleRename}>Đổi tên</MenuItem>
-                <MenuItem onClick={handleClone}>Nhân bản</MenuItem>
-                <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>Xóa</MenuItem>
+                {/* 2. CẬP NHẬT LẠI CÁC MENU ITEM */}
+                <MenuItem onClick={handleRename}>
+                    <ListItemIcon>
+                        <DriveFileRenameOutlineIcon fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText>Đổi tên</ListItemText>
+                </MenuItem>
+                <MenuItem onClick={handleClone}>
+                    <ListItemIcon>
+                        <ContentCopyIcon fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText>Nhân bản</ListItemText>
+                </MenuItem>
+                <MenuItem onClick={handleDelete} sx={{ color: 'error.main' }}>
+                    <ListItemIcon>
+                        <DeleteOutlineIcon fontSize="small" sx={{ color: 'error.main' }} />
+                    </ListItemIcon>
+                    <ListItemText>Xóa</ListItemText>
+                </MenuItem>
             </Menu>
 
             <CardActionArea 
@@ -128,7 +118,7 @@ function BrandCard({ brand, onClick, onRename, onClone, onDelete }) {
                     {brand.name}
                 </Typography>
             </CardActionArea>
-        </Card>
+        </StyledBrandCard>
     );
 }
 

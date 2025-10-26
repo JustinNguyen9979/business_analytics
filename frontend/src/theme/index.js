@@ -13,8 +13,8 @@ const PALETTE = {
         contrastText: '#FFFFFF',
     },
     background: {
-        default: '#071225', // Màu nền chính
-        paper: 'rgba(10, 25, 41, 0.6)', // Màu nền cho các Card
+        default: '#010409', // Nền tối để làm nổi bật hiệu ứng Aurora
+        paper: 'rgba(10, 25, 41, 0.6)',
     },
     text: {
         primary: '#E0E0E0',
@@ -67,10 +67,10 @@ const theme = createTheme({
         MuiAppBar: {
             styleOverrides: {
                 root: {
-                    backgroundColor: 'rgba(10, 25, 41, 0.7)', // Màu nền kính mờ
-                    backdropFilter: 'blur(10px)',
-                    WebkitBackdropFilter: 'blur(10px)',
-                    boxShadow: 'none', // Bỏ shadow mặc định
+                    backgroundColor: 'rgba(15, 23, 42, 0.7)', // Màu nền kính mờ đậm hơn
+                    backdropFilter: 'blur(12px)', // Tăng độ mờ
+                    WebkitBackdropFilter: 'blur(12px)',
+                    boxShadow: 'none',
                     borderBottom: `1px solid ${PALETTE.divider}`,
                 }
             }
@@ -79,10 +79,9 @@ const theme = createTheme({
         MuiDrawer: {
             styleOverrides: {
                 paper: {
-                    // Hiệu ứng Kính mờ
-                    backgroundColor: 'rgba(10, 25, 41, 0.7)',
-                    backdropFilter: 'blur(10px)',
-                    WebkitBackdropFilter: 'blur(10px)',
+                    backgroundColor: 'rgba(15, 23, 42, 0.7)', // Đồng bộ màu với AppBar
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
                     borderRight: `1px solid ${PALETTE.divider}`,
                 }
             }
@@ -94,8 +93,35 @@ const theme = createTheme({
                     color: PALETTE.text.secondary, // Màu mặc định cho icon
                 }
             }
+        },
+        MuiDialog: {
+            styleOverrides: {
+                paper: ({ theme }) => ({ // Sử dụng arrow function để truy cập theme
+                    borderRadius: theme.shape.borderRadius * 2, // Bo tròn góc nhiều hơn một chút
+                    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+                    backdropFilter: 'blur(15px)',
+                    WebkitBackdropFilter: 'blur(15px)',
+                    border: `1px solid ${theme.palette.divider}`,
+                }),
+            },
+        },
+
+        MuiMenu: {
+            styleOverrides: {
+                paper: ({ theme }) => ({
+                    minWidth: 180, // <-- THÊM DÒNG NÀY
+                    backgroundColor: '#1e293b',
+                    border: `1px solid ${theme.palette.divider}`,
+                    borderRadius: theme.shape.borderRadius,
+                    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+                }),
+                list: {
+                    padding: '4px 0',
+                }
+            }
         }
     }
 });
+
 
 export default theme;

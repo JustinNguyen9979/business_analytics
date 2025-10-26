@@ -1,6 +1,6 @@
-// FILE: frontend/src/layouts/DashboardLayout.jsx (PHIÊN BẢN DỌN DẸP)
+// FILE: frontend/src/layouts/DashboardLayout.jsx (PHIÊN BẢN AURORA CHÍNH XÁC)
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { Link as RouterLink, Outlet } from 'react-router-dom';
 import { Box, Drawer as MuiDrawer, AppBar as MuiAppBar, Toolbar, List, Typography, Divider, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText, CssBaseline } from '@mui/material';
@@ -9,6 +9,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
+import AuroraBackground from '../components/AuroraBackground';
 
 const drawerWidth = 240;
 
@@ -70,56 +71,16 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
 
 export default function DashboardLayout() {
   const [open, setOpen] = useState(true);
-  
-  // 2. THÊM STATE VÀ REF MỚI
-  const scrollableContentRef = useRef(null);
-  const [backgroundPositionY, setBackgroundPositionY] = useState(0);
 
   const handleDrawerToggle = () => {
     setOpen(!open);
   };
-  
-  // 3. THÊM useEffect ĐỂ LẮNG NGHE SỰ KIỆN SCROLL
-  useEffect(() => {
-    const scrollableElement = scrollableContentRef.current;
-
-    const handleScroll = () => {
-      if (!scrollableElement) return;
-
-      const scrollTop = scrollableElement.scrollTop;
-      const scrollHeight = scrollableElement.scrollHeight;
-      const clientHeight = scrollableElement.clientHeight;
-      
-      // Tránh chia cho 0 nếu nội dung không thể cuộn
-      const maxScrollTop = scrollHeight - clientHeight;
-      if (maxScrollTop > 0) {
-        const scrollPercentage = (scrollTop / maxScrollTop) * 100;
-        setBackgroundPositionY(scrollPercentage);
-      }
-    };
-
-    if (scrollableElement) {
-      scrollableElement.addEventListener('scroll', handleScroll);
-    }
-    
-    // Dọn dẹp listener khi component bị unmount
-    return () => {
-      if (scrollableElement) {
-        scrollableElement.removeEventListener('scroll', handleScroll);
-      }
-    };
-  }, []); // Mảng rỗng đảm bảo effect chỉ chạy 1 lần khi mount
 
   return (
-    <Box sx={{ 
-        display: 'flex', 
-        minHeight: '100vh',
-        background: (theme) => `linear-gradient(135deg, ${theme.palette.background.default} 0%, #000000 100%)`,
-        backgroundSize: '100% 200%', // Rất quan trọng: làm background cao gấp đôi
-        backgroundPositionY: `${backgroundPositionY}%`, // Vị trí Y động
-        transition: 'background-position 0.1s ease-out', // Làm mượt chuyển động
-    }}>
+    <Box sx={{ display: 'flex' }}>
       <CssBaseline />
+      <AuroraBackground />
+      
       <AppBar position="fixed" open={open}>
         <Toolbar>
           <IconButton
@@ -158,22 +119,14 @@ export default function DashboardLayout() {
         </Box>
         <Divider />
         <List>
+            {/* ĐÂY LÀ PHẦN CODE ĐẦY ĐỦ CỦA CÁC MENU ITEM */}
             <ListItem disablePadding sx={{ display: 'block' }}>
                 <ListItemButton
                     component={RouterLink} to="/"
-                    sx={{
-                        minHeight: 48,
-                        justifyContent: open ? 'initial' : 'center',
-                        px: 2.5,
-                    }}
+                    sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5 }}
                 >
                     <ListItemIcon
-                        sx={{
-                            minWidth: 0,
-                            mr: open ? 3 : 'auto',
-                            justifyContent: 'center',
-                            color: 'primary.main',
-                        }}
+                        sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center', color: 'primary.main' }}
                     >
                         <ArrowBackIcon />
                     </ListItemIcon>
@@ -182,18 +135,10 @@ export default function DashboardLayout() {
             </ListItem>
             <ListItem disablePadding sx={{ display: 'block' }}>
                 <ListItemButton
-                    sx={{
-                        minHeight: 48,
-                        justifyContent: open ? 'initial' : 'center',
-                        px: 2.5,
-                    }}
+                    sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5 }}
                 >
                     <ListItemIcon
-                        sx={{
-                            minWidth: 0,
-                            mr: open ? 3 : 'auto',
-                            justifyContent: 'center',
-                        }}
+                        sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center' }}
                     >
                         <DashboardIcon />
                     </ListItemIcon>
@@ -205,12 +150,11 @@ export default function DashboardLayout() {
 
       <Box 
         component="main" 
-        ref={scrollableContentRef} 
         sx={{ 
           flexGrow: 1, 
-          p: 3, 
-          overflow: 'auto', // Rất quan trọng: cho phép box này có thanh cuộn
-          height: '100vh'   // Giới hạn chiều cao để thanh cuộn xuất hiện
+          p: 3,
+          overflow: 'auto',
+          height: '100vh'
         }}
       >
         <Toolbar /> 

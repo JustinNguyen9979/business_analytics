@@ -1,22 +1,22 @@
-// FILE: frontend/src/pages/BrandLobby.jsx (PHIÊN BẢN HOÀN CHỈNH ĐỂ COPY)
+// FILE: frontend/src/pages/BrandLobby.jsx (PHIÊN BẢN CÓ AURORA BACKGROUND)
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Container, Typography, Box, CircularProgress, Alert, Grid, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button } from '@mui/material';
 import { getAllBrands, createBrand, deleteBrand, updateBrand, cloneBrand } from '../services/api';
 import BrandCard from '../components/BrandCard';
 import CreateBrandCard from '../components/CreateBrandCard';
+import AuroraBackground from '../components/AuroraBackground';
 
 function BrandLobby() {
     const [brands, setBrands] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null); // Lỗi chung của trang
+    const [error, setError] = useState(null);
     const navigate = useNavigate();
-
-    // State cho các Dialog
     const [dialogs, setDialogs] = useState({ rename: false, delete: false });
     const [selectedBrand, setSelectedBrand] = useState(null);
     const [newName, setNewName] = useState('');
-    const [renameError, setRenameError] = useState(''); // Lỗi riêng cho dialog đổi tên
+    const [renameError, setRenameError] = useState('');
 
     const fetchBrands = async () => {
         try {
@@ -42,10 +42,10 @@ function BrandLobby() {
     const handleBrandCreated = async (brandName) => {
         if (!brandName) return;
         try {
+            setError(null);
             await createBrand(brandName);
             fetchBrands();
         } catch (error) {
-            // Ném lỗi ra để component CreateBrandCard bắt và hiển thị
             throw error;
         }
     };
@@ -53,7 +53,7 @@ function BrandLobby() {
     const openRenameDialog = (brand) => {
         setSelectedBrand(brand);
         setNewName(brand.name);
-        setRenameError(''); // Reset lỗi
+        setRenameError('');
         setDialogs({ ...dialogs, rename: true });
     };
 
@@ -86,7 +86,7 @@ function BrandLobby() {
             setError(null);
             await cloneBrand(brandId);
             fetchBrands();
-        } catch (err) {
+        } catch (err) { // ĐÚNG
             setError(err.response?.data?.detail || 'Lỗi khi nhân bản.');
         }
     };
@@ -94,6 +94,7 @@ function BrandLobby() {
     const handleDeleteSubmit = async () => {
         if (!selectedBrand) return;
         try {
+            setError(null);
             await deleteBrand(selectedBrand.id);
             fetchBrands();
             closeDialogs();
@@ -104,106 +105,107 @@ function BrandLobby() {
 
     if (loading) {
         return (
-            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'background.default' }}>
+                <AuroraBackground />
                 <CircularProgress />
             </Box>
         );
     }
 
     return (
-        <Container component="main" maxWidth="lg" sx={{ py: 8 }}>
-            <Box sx={{ textAlign: 'center', mb: 8 }}>
-                <Typography variant="h3" component="h1" gutterBottom>Business Analytics</Typography>
-                <Typography variant="h5" component="h2" color="text.secondary">Quản lý Danh mục Thương hiệu</Typography>
-            </Box>
+        <>
+            <AuroraBackground />
 
-            {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
+            <Container 
+                component="main" 
+                maxWidth="lg" 
+                sx={{ 
+                    py: 8,
+                    position: 'relative',
+                    zIndex: 1
+                }}
+            >
+                <Box sx={{ textAlign: 'center', mb: 8 }}>
+                    <Typography variant="h3" component="h1" gutterBottom>Business Analytics</Typography>
+                    <Typography variant="h5" component="h2" color="text.secondary">Quản lý Danh mục Thương hiệu</Typography>
+                </Box>
 
-            <Grid container spacing={4} justifyContent="center">
-                {brands.map((brand) => (
-                    <Grid item key={brand.id}>
-                        <BrandCard
-                            brand={brand}
-                            onClick={handleBrandClick}
-                            onRename={openRenameDialog}
-                            onClone={handleCloneSubmit}
-                            onDelete={openDeleteDialog}
+                {error && <Alert severity="error" sx={{ mb: 4, backgroundColor: 'rgba(211, 47, 47, 0.25)', backdropFilter: 'blur(5px)' }}>{error}</Alert>}
+
+                <Grid container spacing={4} justifyContent="center">
+                    {brands.map((brand) => (
+                        <Grid item key={brand.id}>
+                            <BrandCard
+                                brand={brand}
+                                onClick={handleBrandClick}
+                                onRename={openRenameDialog}
+                                onClone={handleCloneSubmit}
+                                onDelete={openDeleteDialog}
+                            />
+                        </Grid>
+                    ))}
+                    <Grid item>
+                        <CreateBrandCard
+                            onCreate={handleBrandCreated}
                         />
                     </Grid>
-                ))}
-                <Grid item>
-                    <CreateBrandCard
-                        onCreate={handleBrandCreated}
-                        onError={(msg) => setError(msg)}
-                        onClearError={() => setError(null)}
-                    />
                 </Grid>
-            </Grid>
 
-            {/* --- DIALOG ĐỔI TÊN --- */}
-            <Dialog 
-                open={dialogs.rename} 
-                onClose={closeDialogs} 
-                maxWidth="xs" 
-                fullWidth 
-                PaperProps={{
-                    sx: {
-                        borderRadius: 4, 
-                        backgroundColor: 'rgba(30, 41, 59, 0.7)', 
-                        backdropFilter: 'blur(15px)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)'
-                    }
-                }}
-                BackdropProps={{ sx: { backdropFilter: 'blur(5px)' } }}
-            >
-                <DialogTitle sx={{ fontWeight: 'bold' }}>Đổi tên Thương hiệu</DialogTitle>
-                <DialogContent>
-                    <TextField 
-                        autoFocus 
-                        margin="dense" 
-                        label="Tên mới" 
-                        type="text" 
-                        fullWidth 
-                        variant="outlined" 
-                        value={newName} 
-                        onChange={(e) => setNewName(e.target.value)}
-                        error={!!renameError} 
-                        helperText={renameError}
-                        onKeyPress={(e) => e.key === 'Enter' && handleRenameSubmit()}
-                    />
-                </DialogContent>
-                <DialogActions sx={{ p: '0 24px 16px' }}>
-                    <Button onClick={closeDialogs}>Hủy</Button>
-                    <Button onClick={handleRenameSubmit} variant="contained">Lưu</Button>
-                </DialogActions>
-            </Dialog>
+                <Dialog 
+                    open={dialogs.rename} 
+                    onClose={closeDialogs} 
+                    maxWidth="xs" 
+                    fullWidth 
+                    PaperProps={{ sx: { borderRadius: 4, backgroundColor: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(15px)', border: '1px solid rgba(255, 255, 255, 0.1)' } }}
+                    BackdropProps={{ sx: { backdropFilter: 'blur(5px)' } }}
+                >
+                    <DialogTitle sx={{ fontWeight: 'bold' }}>Đổi tên Thương hiệu</DialogTitle>
+                    <DialogContent>
+                        <TextField 
+                            autoFocus 
+                            margin="dense" 
+                            label="Tên mới" 
+                            type="text" 
+                            fullWidth 
+                            variant="outlined" 
+                            value={newName} 
+                            onChange={(e) => setNewName(e.target.value)}
+                            error={!!renameError} 
+                            helperText={renameError}
+                            onKeyPress={(e) => e.key === 'Enter' && handleRenameSubmit()}
+                            BackdropProps={{ sx: { backdropFilter: 'blur(5px)' } }}
+                        />
+                    </DialogContent>
+                    <DialogActions sx={{ p: '0 24px 16px' }}>
+                        <Button onClick={closeDialogs}>Hủy</Button>
+                        <Button onClick={handleRenameSubmit} variant="contained">Lưu</Button>
+                    </DialogActions>
+                </Dialog>
 
-            {/* --- DIALOG XÁC NHẬN XÓA --- */}
-            <Dialog 
-                open={dialogs.delete} 
-                onClose={closeDialogs} 
-                maxWidth="xs" 
-                fullWidth
-                PaperProps={{
-                    sx: {
-                        borderRadius: 4, 
-                        backgroundColor: 'rgba(30, 41, 59, 0.7)', 
-                        backdropFilter: 'blur(15px)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)'
-                    }
-                }}
-                BackdropProps={{ sx: { backdropFilter: 'blur(3px)' } }}
-            >
-                <DialogTitle sx={{ color: 'error.main', fontWeight: 'bold' }}>Xác nhận Xóa</DialogTitle>
-                <DialogContent>
-                    <Typography>Bạn có chắc chắn muốn xóa brand <Typography component="span" sx={{ fontWeight: 'bold' }}>"{selectedBrand?.name}"</Typography> không? Toàn bộ dữ liệu liên quan sẽ bị mất vĩnh viễn.</Typography>
-                </DialogContent>
-                <DialogActions sx={{ p: '0 24px 16px' }}>
-                    <Button onClick={closeDialogs}>Hủy</Button>
-                    <Button onClick={handleDeleteSubmit} color="error" variant="contained">Xóa vĩnh viễn</Button>
-                </DialogActions>
-            </Dialog>
-        </Container>
+                <Dialog 
+                    open={dialogs.delete} 
+                    onClose={closeDialogs} 
+                    maxWidth="xs" 
+                    fullWidth
+                    PaperProps={{ sx: { borderRadius: 4, backgroundColor: 'rgba(30, 41, 59, 0.7)', backdropFilter: 'blur(15px)', border: '1px solid rgba(255, 255, 255, 0.1)' } }}
+                    BackdropProps={{ sx: { backdropFilter: 'blur(3px)' } }}
+                >
+                    <DialogTitle sx={{ color: 'error.main', fontWeight: 'bold' }}>Xóa Thương hiệu</DialogTitle>
+                    <DialogContent>
+                        <Typography>
+                            Bạn có chắc chắn muốn xóa thương hiệu <Typography component="span" sx={{ fontWeight: 'bold', display: 'inline-block', maxWidth: '100%', wordBreak: 'break-word'}}>"{selectedBrand?.name}"</Typography>
+                        </Typography>
+                        <Typography sx={{ fontWeight: 'bold', mt: 2, color: 'warning.main' }}>
+                            CẢNH BÁO: Dữ liệu đã xóa không thể khôi phục.
+                        </Typography>
+                    </DialogContent>
+                    <DialogActions sx={{ p: '0 24px 16px' }}>
+                        <Button onClick={closeDialogs}>Hủy</Button>
+                        <Button onClick={handleDeleteSubmit} color="error" variant="contained">XÁC NHẬN XÓA</Button>
+                    </DialogActions>
+                </Dialog>
+            </Container>
+        </>
     );
 }
 
