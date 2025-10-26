@@ -2,8 +2,8 @@ from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Optional
-from . import crud, models, schemas, shopee_parser
-from .database import SessionLocal, engine
+import crud, models, schemas, shopee_parser
+from database import SessionLocal, engine
 
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="CEO Dashboard API by Julice")
