@@ -139,6 +139,35 @@ const theme = createTheme({
             }),
         },
 
+        MuiPaper: {
+            variants: [
+                {
+                    props: { variant: 'glass' },
+                    style: ({ theme }) => ({
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        backdropFilter: 'blur(10px)',
+                        WebkitBackdropFilter: 'blur(10px)',
+                        border: `1px solid ${theme.palette.divider}`,
+                        borderRadius: theme.shape.borderRadius * 4, // Bo tròn nhiều hơn
+                    }),
+                },
+                {
+                    props: { variant: 'placeholder' },
+                    style: ({ theme }) => ({
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        backdropFilter: 'blur(10px)',
+                        WebkitBackdropFilter: 'blur(10px)',
+                        border: `1px solid ${theme.palette.divider}`,
+                        borderRadius: theme.shape.borderRadius * 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: 400,
+                    }),
+                },
+            ]
+        },
+
         MuiMenu: {
             styleOverrides: {
                 paper: ({ theme }) => ({
@@ -155,6 +184,8 @@ const theme = createTheme({
         }
     }
 });
+
+
 
 
 export default theme;

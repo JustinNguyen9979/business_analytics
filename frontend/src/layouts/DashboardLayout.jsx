@@ -1,4 +1,4 @@
-// FILE: frontend/src/layouts/DashboardLayout.jsx (PHIÊN BẢN HOÀN CHỈNH)
+// FILE: frontend/src/layouts/DashboardLayout.jsx (PHIÊN BẢN REFACTORED CHUẨN MUI)
 
 import React, { useState } from 'react';
 import { styled } from '@mui/material/styles';
@@ -17,8 +17,7 @@ import StorefrontIcon from '@mui/icons-material/Storefront';
 import WebIcon from '@mui/icons-material/Web';
 import PriceCheckIcon from '@mui/icons-material/PriceCheck';
 import ImportDialog from '../components/ImportDialog';
-import SingleImportDialog from '../components/SingleImportDialog'; 
-// import { uploadPlatformData, uploadCostFile } from '../services/api';
+import SingleImportDialog from '../components/SingleImportDialog';
 
 const drawerWidth = 240;
 
@@ -43,18 +42,46 @@ const closedMixin = (theme) => ({
   },
 });
 
-const AppBar = styled(MuiAppBar, { shouldForwardProp: (prop) => prop !== 'open' })(
-  ({ theme, open }) => ({
-    zIndex: theme.zIndex.drawer + 1,
-    // ...
+const DrawerHeader = styled('div')(({ theme }) => ({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'flex-end',
+  padding: theme.spacing(0, 1),
+  ...theme.mixins.toolbar,
+}));
+
+const AppBar = styled(MuiAppBar, {
+  shouldForwardProp: (prop) => prop !== 'open',
+})(({ theme, open }) => ({
+  zIndex: theme.zIndex.drawer + 1,
+  transition: theme.transitions.create(['width', 'margin'], {
+    easing: theme.transitions.easing.sharp,
+    duration: theme.transitions.duration.leavingScreen,
   }),
-);
+  ...(open && {
+    marginLeft: drawerWidth,
+    width: `calc(100% - ${drawerWidth}px)`,
+    transition: theme.transitions.create(['width', 'margin'], {
+      easing: theme.transitions.easing.sharp,
+      duration: theme.transitions.duration.enteringScreen,
+    }),
+  }),
+}));
 
 const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' })(
   ({ theme, open }) => ({
     width: drawerWidth,
     flexShrink: 0,
-    // ...
+    whiteSpace: 'nowrap',
+    boxSizing: 'border-box',
+    ...(open && {
+      ...openedMixin(theme),
+      '& .MuiDrawer-paper': openedMixin(theme),
+    }),
+    ...(!open && {
+      ...closedMixin(theme),
+      '& .MuiDrawer-paper': closedMixin(theme),
+    }),
   }),
 );
 
@@ -63,18 +90,13 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(true);
   const [isImportMenuOpen, setImportMenuOpen] = useState(false);
-  
-  // State cho dialog nhiều file
   const [isMultiImportDialogOpen, setMultiImportDialogOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState('');
-
-  // State cho dialog một file
   const [isSingleImportDialogOpen, setSingleImportDialogOpen] = useState(false);
 
   const handleDrawerToggle = () => setOpen(!open);
   const handleImportMenuToggle = () => setImportMenuOpen(!isImportMenuOpen);
 
-  // Hàm cho dialog nhiều file
   const handleOpenMultiImportDialog = (platform) => {
     setSelectedPlatform(platform);
     setMultiImportDialogOpen(true);
@@ -84,12 +106,10 @@ export default function DashboardLayout() {
   };
   const handleMultiUpload = async (files) => {
     console.log("Uploading multi-files for brand:", brandId, "and platform:", selectedPlatform, files);
-    // await uploadPlatformData(brandId, selectedPlatform, files);
     alert(`Đã nhận các file cho ${selectedPlatform}. Xem console log.`);
     navigate(0);
   };
 
-  // Hàm cho dialog một file
   const handleOpenSingleImportDialog = () => {
     setSingleImportDialogOpen(true);
   };
@@ -98,7 +118,6 @@ export default function DashboardLayout() {
   };
   const handleSingleUpload = async (fileObject) => {
     console.log("Uploading single file for brand:", brandId, fileObject);
-    // await uploadCostFile(brandId, fileObject.costFile);
     alert(`Đã nhận file giá nhập. Xem console log.`);
     navigate(0);
   };
@@ -110,23 +129,34 @@ export default function DashboardLayout() {
       
       <AppBar position="fixed" open={open}>
         <Toolbar>
-          <IconButton color="inherit" onClick={handleDrawerToggle} edge="start" sx={{ marginRight: 5, ...(open && { display: 'none' }), }}>
+          <IconButton
+            color="inherit"
+            aria-label="open drawer"
+            onClick={handleDrawerToggle}
+            edge="start"
+            sx={{
+              marginRight: 5,
+              ...(open && { display: 'none' }),
+            }}
+          >
             <MenuIcon />
           </IconButton>
-          <Typography variant="h6" noWrap component="div">Dashboard</Typography>
+          <Typography variant="h6" noWrap component="div">
+            Dashboard
+          </Typography>
         </Toolbar>
       </AppBar>
 
       <Drawer variant="permanent" open={open}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, minHeight: { xs: 56, sm: 64 } }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', opacity: open ? 1 : 0, transition: 'opacity 0.2s' }}>
-             <QueryStatsIcon sx={{ color: 'primary.main', mr: 1.5, fontSize: 30 }} />
-             <Typography variant="h6" noWrap>Analytics</Typography>
-          </Box>
-          <IconButton color="inherit" onClick={handleDrawerToggle} sx={{ opacity: open ? 1 : 0 }}>
-            <ChevronLeftIcon />
-          </IconButton>
-        </Box>
+        <DrawerHeader>
+            <Box sx={{ display: 'flex', alignItems: 'center', mr: 'auto', pl: 1, opacity: open ? 1 : 0, transition: 'opacity 0.2s' }}>
+                <QueryStatsIcon sx={{ color: 'primary.main', mr: 1.5, fontSize: 30 }} />
+                <Typography variant="h6" noWrap>Analytics</Typography>
+            </Box>
+            <IconButton onClick={handleDrawerToggle} sx={{ opacity: open ? 1 : 0, color: 'inherit' }}>
+                <ChevronLeftIcon />
+            </IconButton>
+        </DrawerHeader>
         <Divider />
         <List>
             <ListItem disablePadding sx={{ display: 'block' }}>
