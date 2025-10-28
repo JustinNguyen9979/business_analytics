@@ -1,4 +1,4 @@
-import React, { useEffect, useState, Fragment } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Typography, Box, Grid, Paper, Divider, CircularProgress, Alert, Tabs, Tab, useTheme, useMediaQuery, Button, Menu, MenuItem } from '@mui/material';
 import FilterListIcon from '@mui/icons-material/FilterList';
@@ -7,6 +7,7 @@ import { StatItem } from '../components/StatItem';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import dayjs from 'dayjs'; 
 import 'dayjs/locale/vi';
+import { calculateAllKpis } from '../utils/kpiCalculations';
 
 const ChartPlaceholder = ({ title }) => (
     <Paper variant="placeholder" elevation={0}>
@@ -70,65 +71,11 @@ function DashboardPage() {
         handleCloseMenu();
     };
 
-    // THÊM LẠI HÀM NÀY
     const handleCustomDateChange = (newDateRange) => {
         setCustomDateRange(newDateRange);
         setTimeRange(null); 
         console.log("Custom date range changed to:", newDateRange);
     };
-
-    const timeOptions = [
-        { label: 'Hôm nay', value: 'today' },
-        { label: 'Tuần này', value: 'week' },
-        { label: 'Tháng này', value: 'month' },
-        { label: 'Năm nay', value: 'year' },
-    ];
-    const selectedOptionLabel = timeOptions.find(opt => opt.value === timeRange)?.label || 'Tùy chỉnh';
-    
-    const kpiGroups = [
-        {
-            groupTitle: 'Tài chính',
-            items: [
-                { title: 'DOANH THU (GMV)', value: '1.25 tỷ', tooltipText: 'Gross Merchandise Value - Tổng giá trị hàng hóa đã bán (chưa trừ chi phí).' },
-                { title: 'TỔNG CHI PHÍ', value: '850 tr' },
-                { title: 'GIÁ VỐN (COGS)', value: '400 tr', tooltipText: 'Cost of Goods Sold - Chi phí giá vốn hàng bán.' },
-                { title: 'CHI PHÍ THỰC THI', value: '450 tr' },
-                { title: 'LỢI NHUẬN', value: '400 tr' },
-                { title: 'ROI', value: '47.05%', tooltipText: 'Return on Investment - Tỷ suất lợi nhuận trên tổng chi phí. Công thức: (Lợi nhuận / Tổng chi phí) * 100.' },
-            ]
-        },
-        {
-            groupTitle: 'Marketing',
-            items: [
-                { title: 'CHI PHÍ ADS', value: '210 tr' },
-                { title: 'ROAS', value: '5.95', tooltipText: 'Return on Ad Spend - Doanh thu trên chi phí quảng cáo. Công thức: Doanh thu từ Ads / Chi phí Ads.' },
-                { title: 'CPO', value: '40,682đ', tooltipText: 'Cost Per Order - Chi phí để có được một đơn hàng từ quảng cáo. Công thức: Chi phí Ads / Số đơn từ Ads.' },
-                { title: 'CTR', value: '2.5%', tooltipText: 'Click-Through Rate - Tỷ lệ nhấp chuột vào quảng cáo. Công thức: (Số lượt nhấp / Số lượt hiển thị) * 100.' },
-                { title: 'CPC', value: '3,500đ', tooltipText: 'Cost Per Click - Chi phí cho mỗi lượt nhấp chuột vào quảng cáo. Công thức: Chi phí Ads / Số lượt nhấp.' },
-                { title: 'TỶ LỆ CHUYỂN ĐỔI', value: '3.8%' },
-            ]
-        },
-        {
-            groupTitle: 'Vận hành',
-            items: [
-                { title: 'TỔNG ĐƠN', value: '5,432' },
-                { title: 'SỐ ĐƠN CHỐT', value: '5,160' },
-                { title: 'SỐ ĐƠN HỦY', value: '272' },
-                { title: 'TỶ LỆ HỦY ĐƠN', value: '5%' },
-                { title: 'TỶ LỆ HOÀN TRẢ', value: '2%' },
-                { title: 'AOV', value: '242,248đ', tooltipText: 'Average Order Value - Giá trị trung bình của một đơn hàng.' },
-            ]
-        },
-        {
-            groupTitle: 'Khách hàng',
-            items: [
-                { title: 'TỔNG LƯỢNG KHÁCH', value: '2,200' },
-                { title: 'KHÁCH MỚI', value: '1,200' },
-                { title: 'KHÁCH QUAY LẠI', value: '1000' },
-                { title: 'CAC', value: '175,000đ', tooltipText: 'Customer Acquisition Cost - Chi phí để có được một khách hàng mới. Công thức: Chi phí Marketing / Số khách hàng mới.' },
-            ]
-        }
-    ];
 
     useEffect(() => {
         handleTimeRangeChange(null, 'month');
@@ -156,6 +103,61 @@ function DashboardPage() {
     if (error) { return <Alert severity="error">{error}</Alert>; }
     if (!brand) { return <Alert severity="warning">Không có dữ liệu cho brand này.</Alert>; }
 
+    const kpis = calculateAllKpis(brand);
+
+    const kpiGroups = [
+        {
+            groupTitle: 'Tài chính',
+            items: [
+                { title: 'DOANH THU (GMV)', value: kpis.gmv, tooltipText: 'Gross Merchandise Value - Tổng giá trị hàng hóa đã bán (chưa trừ chi phí).' },
+                { title: 'TỔNG CHI PHÍ', value: kpis.totalCost },
+                { title: 'GIÁ VỐN (COGS)', value: kpis.cogs, tooltipText: 'Cost of Goods Sold - Chi phí giá vốn hàng bán.' },
+                { title: 'CHI PHÍ THỰC THI', value: kpis.executionCost },
+                { title: 'LỢI NHUẬN', value: kpis.profit },
+                { title: 'ROI', value: kpis.roi, tooltipText: 'Return on Investment - Tỷ suất lợi nhuận trên tổng chi phí. Công thức: (Lợi nhuận / Tổng chi phí) * 100.' },
+            ]
+        },
+        {
+            groupTitle: 'Marketing',
+            items: [
+                { title: 'CHI PHÍ ADS', value: kpis.adSpend },
+                { title: 'ROAS', value: kpis.roas, tooltipText: 'Return on Ad Spend - Doanh thu trên chi phí quảng cáo. Công thức: Doanh thu từ Ads / Chi phí Ads.' },
+                { title: 'CPO', value: kpis.cpo, tooltipText: 'Cost Per Order - Chi phí để có được một đơn hàng từ quảng cáo. Công thức: Chi phí Ads / Số đơn từ Ads.' },
+                { title: 'CTR', value: kpis.ctr, tooltipText: 'Click-Through Rate - Tỷ lệ nhấp chuột vào quảng cáo. Công thức: (Số lượt nhấp / Số lượt hiển thị) * 100.' },
+                { title: 'CPC', value: kpis.cpc, tooltipText: 'Cost Per Click - Chi phí cho mỗi lượt nhấp chuột vào quảng cáo. Công thức: Chi phí Ads / Số lượt nhấp.' },
+                { title: 'TỶ LỆ CHUYỂN ĐỔI', value: kpis.conversionRate },
+            ]
+        },
+        {
+            groupTitle: 'Vận hành',
+            items: [
+                { title: 'TỔNG ĐƠN', value: kpis.totalOrders },
+                { title: 'SỐ ĐƠN CHỐT', value: kpis.completedOrders },
+                { title: 'SỐ ĐƠN HỦY', value: kpis.cancelledOrders },
+                { title: 'TỶ LỆ HỦY ĐƠN', value: kpis.cancellationRate },
+                { title: 'TỶ LỆ HOÀN TRẢ', value: kpis.refundRate },
+                { title: 'AOV', value: kpis.aov, tooltipText: 'Average Order Value - Giá trị trung bình của một đơn hàng.' },
+            ]
+        },
+        {
+            groupTitle: 'Khách hàng',
+            items: [
+                { title: 'TỔNG LƯỢNG KHÁCH', value: kpis.totalCustomers },
+                { title: 'KHÁCH MỚI', value: kpis.newCustomers },
+                { title: 'KHÁCH QUAY LẠI', value: kpis.returningCustomers },
+                { title: 'CAC', value: kpis.cac, tooltipText: 'Customer Acquisition Cost - Chi phí để có được một khách hàng mới. Công thức: Chi phí Marketing / Số khách hàng mới.' },
+            ]
+        }
+    ];
+
+    const timeOptions = [
+        { label: 'Hôm nay', value: 'today' },
+        { label: 'Tuần này', value: 'week' },
+        { label: 'Tháng này', value: 'month' },
+        { label: 'Năm nay', value: 'year' },
+    ];
+    const selectedOptionLabel = timeOptions.find(opt => opt.value === timeRange)?.label || 'Tùy chỉnh';
+
     return (
         <Box>
             <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: 700 }}>
@@ -165,7 +167,7 @@ function DashboardPage() {
             <Paper variant="glass" elevation={0} sx={{ p: 3, mb: 4 }}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
                     <Typography variant="h6" noWrap>
-                        📊 Chỉ số Hiệu suất Tổng thể
+                        Chỉ số Hiệu suất Tổng thể
                     </Typography>
                     
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', justifyContent: { xs: 'center', lg: 'flex-end' } }}>
@@ -243,39 +245,52 @@ function DashboardPage() {
                 </Box>
                 <Divider sx={{ mb: 3 }} />
                 
-                <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
+                <Box
+                    sx={{
+                        display: 'grid',
+                        // Tự động tạo các cột có chiều rộng tối thiểu 250px
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+                    }}
+                >
                     {kpiGroups.map((group, groupIndex) => (
-                        <Fragment key={group.groupTitle}>
-                            <Box sx={{ flex: '1 1 250px', p: { xs: 0, md: 2 } }}>
-                                <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 2, fontWeight: 600, fontSize: '0.875rem', letterSpacing: '0.5px', textAlign: { xs: 'left', sm: 'center' } }}>
-                                    {group.groupTitle}
-                                </Typography>
-                                <Box
-                                    sx={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
-                                        gap: 3,
-                                        textAlign: 'left'
-                                    }}
-                                >
-                                    {group.items.map((kpi) => (
-                                        <StatItem 
-                                            key={kpi.title} 
-                                            title={kpi.title} 
-                                            value={kpi.value} 
-                                            tooltipText={kpi.tooltipText}
-                                            />
-                                    ))}
-                                </Box>
-                                {groupIndex < kpiGroups.length - 1 && (
-                                    <Divider sx={{ display: { xs: 'block', md: 'none' }, mt: 3 }} />
-                                )}
+                        <Box 
+                            key={group.groupTitle}
+                            sx={{
+                                p: 2,
+                                // Đường kẻ phải cho các item không phải cuối cùng trên hàng
+                                borderRight: {
+                                    md: (groupIndex + 1) % 4 !== 0 && groupIndex < kpiGroups.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                                    lg: (groupIndex + 1) % 4 !== 0 && groupIndex < kpiGroups.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                                },
+                                // Đường kẻ dưới cho các item
+                                borderBottom: {
+                                    xs: groupIndex < kpiGroups.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                                    md: groupIndex < 2 ? `1px solid ${theme.palette.divider}` : 'none', // Chỉ kẻ cho 2 hàng đầu tiên trên MD
+                                    lg: 'none' // Không kẻ dưới trên LG
+                                }
+                            }}
+                        >
+                            <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 2, fontWeight: 600, fontSize: '0.875rem', textAlign: 'center' }}>
+                                {group.groupTitle}
+                            </Typography>
+                            <Box
+                                sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+                                    gap: 3,
+                                    textAlign: 'left'
+                                }}
+                            >
+                                {group.items.map((kpi) => (
+                                    <StatItem 
+                                        key={kpi.title} 
+                                        title={kpi.title} 
+                                        value={kpi.value} 
+                                        tooltipText={kpi.tooltipText}
+                                    />
+                                ))}
                             </Box>
-                            
-                            {groupIndex < kpiGroups.length - 1 && (
-                                <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', md: 'block' } }} />
-                            )}
-                        </Fragment>
+                        </Box>
                     ))}
                 </Box>
             </Paper>
