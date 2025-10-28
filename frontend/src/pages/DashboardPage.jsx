@@ -1,8 +1,11 @@
 import React, { useEffect, useState, Fragment } from 'react';
 import { useParams } from 'react-router-dom';
-import { Typography, Box, Grid, Paper, Divider, CircularProgress, Alert } from '@mui/material';
+import { Typography, Box, Grid, Paper, Divider, CircularProgress, Alert, Tabs, Tab, useTheme, useMediaQuery, Button, Menu, MenuItem } from '@mui/material';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import { getBrandDetails } from '../services/api';
-import StatItem from '../components/StatItem';
+import { StatItem } from '../components/StatItem';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import 'dayjs/locale/vi';
 
 const ChartPlaceholder = ({ title }) => (
     <Paper variant="placeholder" elevation={0}>
@@ -15,27 +18,59 @@ function DashboardPage() {
     const [brand, setBrand] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [customDateRange, setCustomDateRange] = useState([null, null]);
+    const [timeRange, setTimeRange] = useState('month');
+    
+    // SỬ DỤNG BREAKPOINT 'lg' (1200px) ĐỂ CÓ NHIỀU KHÔNG GIAN HƠN
+    const theme = useTheme();
+    const isCompactLayout = useMediaQuery(theme.breakpoints.down('lg'));
+    
+    const [anchorEl, setAnchorEl] = useState(null);
+    const openMenu = Boolean(anchorEl);
+    const handleClickMenu = (event) => setAnchorEl(event.currentTarget);
+    const handleCloseMenu = () => setAnchorEl(null);
+
+    const handleTimeRangeChange = (event, newValue) => {
+        setTimeRange(newValue);
+        setCustomDateRange([null, null]); 
+        console.log("Time range changed to:", newValue);
+    };
+
+    // THÊM LẠI HÀM NÀY
+    const handleCustomDateChange = (newDateRange) => {
+        setCustomDateRange(newDateRange);
+        setTimeRange(null); 
+        console.log("Custom date range changed to:", newDateRange);
+    };
+
+    const timeOptions = [
+        { label: 'Hôm nay', value: 'today' },
+        { label: 'Tuần này', value: 'week' },
+        { label: 'Tháng này', value: 'month' },
+        { label: 'Năm nay', value: 'year' },
+    ];
+    const selectedOptionLabel = timeOptions.find(opt => opt.value === timeRange)?.label || 'Tùy chỉnh';
     
     const kpiGroups = [
         {
             groupTitle: 'Tài chính',
             items: [
-                { title: 'DOANH THU (GMV)', value: '1.25 tỷ' },
+                { title: 'DOANH THU (GMV)', value: '1.25 tỷ', tooltipText: 'Gross Merchandise Value - Tổng giá trị hàng hóa đã bán (chưa trừ chi phí).' },
                 { title: 'TỔNG CHI PHÍ', value: '850 tr' },
-                { title: 'GIÁ VỐN (COGS)', value: '400 tr' },
+                { title: 'GIÁ VỐN (COGS)', value: '400 tr', tooltipText: 'Cost of Goods Sold - Chi phí giá vốn hàng bán.' },
                 { title: 'CHI PHÍ THỰC THI', value: '450 tr' },
                 { title: 'LỢI NHUẬN', value: '400 tr' },
-                { title: 'ROI', value: '47.05%' },
+                { title: 'ROI', value: '47.05%', tooltipText: 'Return on Investment - Tỷ suất lợi nhuận trên tổng chi phí. Công thức: (Lợi nhuận / Tổng chi phí) * 100.' },
             ]
         },
         {
             groupTitle: 'Marketing',
             items: [
                 { title: 'CHI PHÍ ADS', value: '210 tr' },
-                { title: 'ROAS', value: '5.95' },
-                { title: 'CPO', value: '40,682đ' },
-                { title: 'CTR', value: '2.5%' },
-                {title: 'CPC', value: '3,500đ' },
+                { title: 'ROAS', value: '5.95', tooltipText: 'Return on Ad Spend - Doanh thu trên chi phí quảng cáo. Công thức: Doanh thu từ Ads / Chi phí Ads.' },
+                { title: 'CPO', value: '40,682đ', tooltipText: 'Cost Per Order - Chi phí để có được một đơn hàng từ quảng cáo. Công thức: Chi phí Ads / Số đơn từ Ads.' },
+                { title: 'CTR', value: '2.5%', tooltipText: 'Click-Through Rate - Tỷ lệ nhấp chuột vào quảng cáo. Công thức: (Số lượt nhấp / Số lượt hiển thị) * 100.' },
+                { title: 'CPC', value: '3,500đ', tooltipText: 'Cost Per Click - Chi phí cho mỗi lượt nhấp chuột vào quảng cáo. Công thức: Chi phí Ads / Số lượt nhấp.' },
                 { title: 'TỶ LỆ CHUYỂN ĐỔI', value: '3.8%' },
             ]
         },
@@ -47,7 +82,7 @@ function DashboardPage() {
                 { title: 'SỐ ĐƠN HỦY', value: '272' },
                 { title: 'TỶ LỆ HỦY ĐƠN', value: '5%' },
                 { title: 'TỶ LỆ HOÀN TRẢ', value: '2%' },
-                { title: 'GIÁ TRỊ ĐHTB (AOV)', value: '242,248đ' },
+                { title: 'AOV', value: '242,248đ', tooltipText: 'Average Order Value - Giá trị trung bình của một đơn hàng.' },
             ]
         },
         {
@@ -56,7 +91,7 @@ function DashboardPage() {
                 { title: 'TỔNG LƯỢNG KHÁCH', value: '2,200' },
                 { title: 'KHÁCH MỚI', value: '1,200' },
                 { title: 'KHÁCH QUAY LẠI', value: '1000' },
-                { title: 'CAC', value: '175,000đ' },
+                { title: 'CAC', value: '175,000đ', tooltipText: 'Customer Acquisition Cost - Chi phí để có được một khách hàng mới. Công thức: Chi phí Marketing / Số khách hàng mới.' },
             ]
         }
     ];
@@ -84,28 +119,96 @@ function DashboardPage() {
 
     return (
         <Box>
-            <Typography variant="h4" gutterBottom sx={{ mb: 4 }}>
-                Phân tích cho Thương hiệu: {brand.name}
+            <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: 700 }}>
+                Báo cáo Kinh doanh: {brand.name}
             </Typography>
             
             <Paper variant="glass" elevation={0} sx={{ p: 3, mb: 4 }}>
-                <Typography variant="h6" sx={{ mb: 2 }}>
-                    📊 Chỉ số Hiệu suất Tổng thể
-                </Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
+                    <Typography variant="h6" noWrap>
+                        📊 Chỉ số Hiệu suất Tổng thể
+                    </Typography>
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', justifyContent: { xs: 'center', lg: 'flex-end' } }}>
+                        <DatePicker 
+                            label="Từ ngày"
+                            value={customDateRange[0]}
+                            onChange={(date) => handleCustomDateChange([date, customDateRange[1]])}
+                            maxDate={customDateRange[1]}
+                            openTo="day"
+                            views={['year', 'month', 'day']}
+                            format="DD/MM/YYYY"
+                            slotProps={{
+                                textField: { variant: 'standard', size: 'small', sx: { '& .MuiInput-underline:before': { borderBottom: 'none' }, '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottom: 'none' } } },
+                                popper: { sx: { '& .MuiPaper-root': { backdropFilter: 'none', backgroundColor: '#1e2b3b' } } },
+                                dialog: { PaperProps: { sx: { backdropFilter: 'none', backgroundColor: '#1e2b3b' } } }
+                            }}
+                            sx={{ width: 150 }}
+                        />
+                        <DatePicker 
+                            label="Đến ngày"
+                            value={customDateRange[1]}
+                            onChange={(date) => handleCustomDateChange([customDateRange[0], date])}
+                            minDate={customDateRange[0]}
+                            openTo="day"
+                            views={['year', 'month', 'day']}
+                            format="DD/MM/YYYY"
+                            slotProps={{
+                                textField: { variant: 'standard', size: 'small', sx: { '& .MuiInput-underline:before': { borderBottom: 'none' }, '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottom: 'none' } } },
+                                popper: { sx: { '& .MuiPaper-root': { backdropFilter: 'none', backgroundColor: '#1e2b3b' } } },
+                                dialog: { PaperProps: { sx: { backdropFilter: 'none', backgroundColor: '#1e2b3b' } } }
+                            }}
+                            sx={{ width: 150 }}
+                        />
+                        
+                        {isCompactLayout ? (
+                            <>
+                                <Button
+                                    onClick={handleClickMenu}
+                                    variant="outlined"
+                                    size="small"
+                                    startIcon={<FilterListIcon />}
+                                    sx={{ width: { xs: '100%', sm: 'auto' } }}
+                                >
+                                    {selectedOptionLabel}
+                                </Button>
+                                <Menu
+                                    anchorEl={anchorEl}
+                                    open={openMenu}
+                                    onClose={handleCloseMenu}
+                                    MenuListProps={{ sx: { width: anchorEl?.clientWidth } }}
+                                >
+                                    {timeOptions.map((option) => (
+                                        <MenuItem key={option.value} selected={option.value === timeRange} onClick={(event) => handleTimeRangeChange(event, option.value)}>
+                                            {option.label}
+                                        </MenuItem>
+                                    ))}
+                                </Menu>
+                            </>
+                        ) : (
+                            <>
+                                <Divider orientation="vertical" flexItem />
+                                <Tabs 
+                                    value={timeRange} 
+                                    onChange={handleTimeRangeChange}
+                                    variant="standard"
+                                    sx={{ minHeight: 'auto', '& .MuiTabs-indicator': { backgroundColor: 'primary.main' }, '& .MuiTab-root': { minHeight: 'auto', minWidth: 'auto', px: 2, py: 0.5, textTransform: 'none', '&.Mui-selected': { color: 'primary.main' } } }}
+                                >
+                                    {timeOptions.map((option) => (
+                                        <Tab key={option.value} label={option.label} value={option.value} />
+                                    ))}
+                                </Tabs>
+                            </>
+                        )}
+                    </Box>
+                </Box>
                 <Divider sx={{ mb: 3 }} />
                 
-                {/* --- KHÔI PHỤC VÀ SỬA LẠI LOGIC DIVIDER --- */}
-                <Box
-                    sx={{
-                        display: 'flex',
-                        flexWrap: 'wrap', // Cho phép xuống dòng
-                        gap: { xs: 3, md: 0 }, // Chỉ dùng gap trên mobile
-                    }}
-                >
+                <Box sx={{ display: 'flex', flexWrap: 'wrap' }}>
                     {kpiGroups.map((group, groupIndex) => (
                         <Fragment key={group.groupTitle}>
                             <Box sx={{ flex: '1 1 250px', p: { xs: 0, md: 2 } }}>
-                                <Typography variant="overline" sx={{ display: 'block', mb: 2, fontWeight: 600 }}>
+                                <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 2, fontWeight: 600, fontSize: '0.875rem', letterSpacing: '0.5px', textAlign: { xs: 'left', sm: 'center' } }}>
                                     {group.groupTitle}
                                 </Typography>
                                 <Box
@@ -117,16 +220,19 @@ function DashboardPage() {
                                     }}
                                 >
                                     {group.items.map((kpi) => (
-                                        <StatItem key={kpi.title} title={kpi.title} value={kpi.value} />
+                                        <StatItem 
+                                            key={kpi.title} 
+                                            title={kpi.title} 
+                                            value={kpi.value} 
+                                            tooltipText={kpi.tooltipText}
+                                            />
                                     ))}
                                 </Box>
-                                {/* Divider Ngang cho mobile */}
                                 {groupIndex < kpiGroups.length - 1 && (
                                     <Divider sx={{ display: { xs: 'block', md: 'none' }, mt: 3 }} />
                                 )}
                             </Box>
                             
-                            {/* Divider Dọc cho desktop */}
                             {groupIndex < kpiGroups.length - 1 && (
                                 <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', md: 'block' } }} />
                             )}

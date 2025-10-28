@@ -123,6 +123,10 @@ const theme = createTheme({
                     '&::-webkit-scrollbar': {
                         width: '4px',
                     },
+                    '*::selection': {
+                        backgroundColor: theme.palette.primary.main + '2D', // Màu primary với 30% opacity
+                        color: theme.palette.text.primary,
+                    },
                     '&::-webkit-scrollbar-track': {
                         backgroundColor: 'rgba(255, 255, 255, 0.05)',
                     },
@@ -166,6 +170,22 @@ const theme = createTheme({
                     }),
                 },
             ]
+        },
+
+        MuiTooltip: {
+            styleOverrides: {
+                tooltip: ({ theme }) => ({
+                    backgroundColor: 'rgba(30, 41, 59, 0.7)', // Màu nền kính mờ
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    border: `1px solid ${theme.palette.divider}`,
+                    fontSize: '0.875rem', // Tăng cỡ chữ một chút cho dễ đọc
+                    padding: theme.spacing(1.5),
+                }),
+                arrow: ({ theme }) => ({
+                    color: 'rgba(30, 41, 59, 0.7)', // Đồng bộ màu mũi tên
+                }),
+            },
         },
 
         MuiMenu: {
