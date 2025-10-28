@@ -5,6 +5,7 @@ import FilterListIcon from '@mui/icons-material/FilterList';
 import { getBrandDetails } from '../services/api';
 import { StatItem } from '../components/StatItem';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs from 'dayjs'; 
 import 'dayjs/locale/vi';
 
 const ChartPlaceholder = ({ title }) => (
@@ -31,9 +32,42 @@ function DashboardPage() {
     const handleCloseMenu = () => setAnchorEl(null);
 
     const handleTimeRangeChange = (event, newValue) => {
+        let start = dayjs();
+        let end = dayjs();
+
+        switch (newValue) {
+            case 'today':
+                start = dayjs().startOf('day');
+                end = dayjs().endOf('day');
+                break;
+            case 'week':
+                start = dayjs().startOf('week');
+                end = dayjs().endOf('week');
+                break;
+            case 'month':
+                start = dayjs().startOf('month');
+                // Nếu đang trong tháng hiện tại, ngày kết thúc là hôm nay
+                if (dayjs().isSame(start, 'month')) {
+                    end = dayjs();
+                } else {
+                    end = dayjs().endOf('month');
+                }
+                break;
+            case 'year':
+                start = dayjs().startOf('year');
+                 // Nếu đang trong năm hiện tại, ngày kết thúc là hôm nay
+                 if (dayjs().isSame(start, 'year')) {
+                    end = dayjs();
+                } else {
+                    end = dayjs().endOf('year');
+                }
+                break;
+            default:
+                break;
+        }
         setTimeRange(newValue);
-        setCustomDateRange([null, null]); 
-        console.log("Time range changed to:", newValue);
+        setCustomDateRange([start, end]); // Cập nhật cả DatePicker
+        handleCloseMenu();
     };
 
     // THÊM LẠI HÀM NÀY
@@ -95,6 +129,11 @@ function DashboardPage() {
             ]
         }
     ];
+
+    useEffect(() => {
+        handleTimeRangeChange(null, 'month');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     useEffect(() => {
         const fetchDetails = async () => {
