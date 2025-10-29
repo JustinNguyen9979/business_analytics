@@ -205,12 +205,7 @@ function DashboardPage() {
                             openTo="day"
                             views={['year', 'month', 'day']}
                             format="DD/MM/YYYY"
-                            slotProps={{
-                                textField: { variant: 'standard', size: 'small', sx: { '& .MuiInput-underline:before': { borderBottom: 'none' }, '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottom: 'none' } } },
-                                popper: { sx: { '& .MuiPaper-root': { backdropFilter: 'none', backgroundColor: '#1e2b3b' } } },
-                                dialog: { PaperProps: { sx: { backdropFilter: 'none', backgroundColor: '#1e2b3b' } } }
-                            }}
-                            sx={{ width: 150 }}
+                            sx={{ width: 150 }} // Chỉ giữ lại prop sx nếu cần
                         />
                         <DatePicker 
                             label="Đến ngày"
@@ -220,12 +215,7 @@ function DashboardPage() {
                             openTo="day"
                             views={['year', 'month', 'day']}
                             format="DD/MM/YYYY"
-                            slotProps={{
-                                textField: { variant: 'standard', size: 'small', sx: { '& .MuiInput-underline:before': { borderBottom: 'none' }, '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottom: 'none' } } },
-                                popper: { sx: { '& .MuiPaper-root': { backdropFilter: 'none', backgroundColor: '#1e2b3b' } } },
-                                dialog: { PaperProps: { sx: { backdropFilter: 'none', backgroundColor: '#1e2b3b' } } }
-                            }}
-                            sx={{ width: 150 }}
+                            sx={{ width: 150 }} // Chỉ giữ lại prop sx nếu cần
                         />
                         
                         {isCompactLayout ? (
