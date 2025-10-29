@@ -143,6 +143,66 @@ const theme = createTheme({
             }),
         },
 
+        // Tùy chỉnh DatePicker để phù hợp với theme kính mờ
+        MuiDatePicker: {
+            defaultProps: {
+                slotProps: {
+                    // Tự động áp dụng style cho ô input
+                    textField: {
+                        variant: 'standard',
+                        size: 'small',
+                        sx: {
+                            '& .MuiInput-underline:before': { borderBottom: 'none' },
+                            '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottom: 'none' },
+                        },
+                    },
+                    // Tự động áp dụng style cho pop-up lịch
+                    popper: {
+                        placement: 'bottom', 
+                        sx: {
+                            '& .MuiPaper-root': {
+                                backdropFilter: 'blur(15px)',
+                                backgroundColor: 'rgba(30, 41, 59, 0.7)',
+                                border: (theme) => `1px solid ${theme.palette.divider}`,
+                            },
+                        },
+                    },
+                     dialog: { // Dành cho mobile
+                        PaperProps: {
+                            sx: {
+                                backdropFilter: 'blur(15px)',
+                                backgroundColor: 'rgba(30, 41, 59, 0.7)',
+                                border: (theme) => `1px solid ${theme.palette.divider}`,
+                            },
+                        },
+                    },
+                    // Tự động áp dụng style cho các icon và nút bấm
+                    openPickerButton: {
+                        sx: { color: (theme) => theme.palette.text.secondary },
+                    },
+                    calendarHeader: {
+                        sx: {
+                            '& .MuiPickersArrowSwitcher-button': { color: (theme) => theme.palette.text.secondary },
+                            '& .MuiPickersCalendarHeader-label': { color: (theme) => theme.palette.text.primary },
+                            '& .MuiPickersCalendarHeader-switchViewIcon': { color: (theme) => theme.palette.text.secondary },
+                        },
+                    },
+                    day: {
+                        sx: {
+                            '&.Mui-selected': {
+                                backgroundColor: (theme) => theme.palette.primary.main,
+                                color: (theme) => theme.palette.primary.contrastText,
+                            },
+                            '&:hover': {
+                                backgroundColor: (theme) => theme.palette.action.hover,
+                            },
+                        },
+                    },
+                },
+            },
+        },
+
+        // Tùy chỉnh Paper để tạo hiệu ứng kính mờ và placeholder
         MuiPaper: {
             variants: [
                 {
@@ -172,6 +232,7 @@ const theme = createTheme({
             ]
         },
 
+        // Tùy chỉnh Tooltip để phù hợp với theme kính mờ
         MuiTooltip: {
             styleOverrides: {
                 tooltip: ({ theme }) => ({
@@ -188,6 +249,7 @@ const theme = createTheme({
             },
         },
 
+        // Tùy chỉnh Menu để phù hợp với theme kính mờ
         MuiMenu: {
             styleOverrides: {
                 paper: ({ theme }) => ({
