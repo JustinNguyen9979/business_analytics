@@ -4,9 +4,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Container, Typography, Box, CircularProgress, Alert, Grid, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button } from '@mui/material';
 import { getAllBrands, createBrand, deleteBrand, updateBrand, cloneBrand } from '../services/api';
-import BrandCard from '../components/BrandCard';
-import CreateBrandCard from '../components/CreateBrandCard';
-import AuroraBackground from '../components/AuroraBackground';
+import BrandCard from '../components/brand/BrandCard';
+import CreateBrandCard from '../components/brand/CreateBrandCard';
+import AuroraBackground from '../components/ui/AuroraBackground';
 
 function BrandLobby() {
     const [brands, setBrands] = useState([]);

@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Typography, Box, Grid, Paper, Divider, CircularProgress, Alert, Tabs, Tab, useTheme, useMediaQuery, Button, Menu, MenuItem } from '@mui/material';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import { getBrandDetails } from '../services/api';
-import { StatItem } from '../components/StatItem';
+import { StatItem } from '../components/dashboard/StatItem';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import ImportDialog from "../components/import/ImportDialog";
+import SingleImportDialog from "../components/import/SingleImportDialog";
 import dayjs from 'dayjs'; 
 import 'dayjs/locale/vi';
 import { calculateAllKpis } from '../utils/kpiCalculations';
@@ -14,6 +16,14 @@ const ChartPlaceholder = ({ title }) => (
         <Typography variant="h6" color="text.secondary">{title}</Typography>
     </Paper>
 );
+
+const getPreviousPeriod = (startDate, endDate) => {
+    if (!startDate || !endDate) return [null, null];
+    const diff = endDate.diff(startDate, 'day');
+    const prevEndDate = startDate.subtract(1, 'day').endOf('day');
+    const prevStartDate = prevEndDate.subtract(diff, 'day').startOf('day');
+    return [prevStartDate, prevEndDate];
+};
 
 function DashboardPage() {
     const { brandId } = useParams();
@@ -31,6 +41,19 @@ function DashboardPage() {
     const openMenu = Boolean(anchorEl);
     const handleClickMenu = (event) => setAnchorEl(event.currentTarget);
     const handleCloseMenu = () => setAnchorEl(null);
+
+    const { currentKpis, previousKpis } = useMemo(() => {
+        if (!brand || !customDateRange[0] || !customDateRange[1]) {
+            return { currentKpis: {}, previousKpis: {} };
+        }
+        
+        const currentData = calculateAllKpis(brand, customDateRange);
+        
+        const previousPeriod = getPreviousPeriod(customDateRange[0], customDateRange[1]);
+        const previousData = calculateAllKpis(brand, previousPeriod);
+
+        return { currentKpis: currentData, previousKpis: previousData };
+    }, [brand, customDateRange]);
 
     const handleTimeRangeChange = (event, newValue) => {
         let start = dayjs();
@@ -103,49 +126,52 @@ function DashboardPage() {
     if (error) { return <Alert severity="error">{error}</Alert>; }
     if (!brand) { return <Alert severity="warning">Không có dữ liệu cho brand này.</Alert>; }
 
-    const kpis = calculateAllKpis(brand);
-
     const kpiGroups = [
         {
             groupTitle: 'Tài chính',
             items: [
-                { title: 'DOANH THU (GMV)', value: kpis.gmv, tooltipText: 'Gross Merchandise Value - Tổng giá trị hàng hóa đã bán (chưa trừ chi phí).' },
-                { title: 'TỔNG CHI PHÍ', value: kpis.totalCost },
-                { title: 'GIÁ VỐN (COGS)', value: kpis.cogs, tooltipText: 'Cost of Goods Sold - Chi phí giá vốn hàng bán.' },
-                { title: 'CHI PHÍ THỰC THI', value: kpis.executionCost },
-                { title: 'LỢI NHUẬN', value: kpis.profit },
-                { title: 'ROI', value: kpis.roi, tooltipText: 'Return on Investment - Tỷ suất lợi nhuận trên tổng chi phí. Công thức: (Lợi nhuận / Tổng chi phí) * 100.' },
+                { key: 'gmv', title: 'DOANH THU (GMV)', format: 'currency', tooltipText: 'Gross Merchandise Value - Tổng giá trị hàng hóa đã bán (chưa trừ chi phí).' },
+                { key: 'totalCost', title: 'TỔNG CHI PHÍ', format: 'currency' },
+                { key: 'cogs', title: 'GIÁ VỐN (COGS)', format: 'currency', tooltipText: 'Cost of Goods Sold - Chi phí giá vốn hàng bán.' },
+                { key: 'executionCost', title: 'CHI PHÍ THỰC THI', format: 'currency' },
+                { key: 'profit', title: 'LỢI NHUẬN', format: 'currency' },
+                { key: 'roi', title: 'ROI (%)', format: 'percent', tooltipText: 'Return on Investment - Tỷ suất lợi nhuận trên tổng chi phí. Công thức: (Lợi nhuận / Tổng chi phí) * 100.' },
+                { key: 'profitMargin', title: 'TỶ SUẤT LỢI NHUẬN (%)', format: 'percent', tooltipText: 'Tỷ lệ lợi nhuận so với doanh thu. Công thức: (Lợi nhuận / Doanh thu Ròng) * 100.' },
             ]
         },
         {
             groupTitle: 'Marketing',
             items: [
-                { title: 'CHI PHÍ ADS', value: kpis.adSpend },
-                { title: 'ROAS', value: kpis.roas, tooltipText: 'Return on Ad Spend - Doanh thu trên chi phí quảng cáo. Công thức: Doanh thu từ Ads / Chi phí Ads.' },
-                { title: 'CPO', value: kpis.cpo, tooltipText: 'Cost Per Order - Chi phí để có được một đơn hàng từ quảng cáo. Công thức: Chi phí Ads / Số đơn từ Ads.' },
-                { title: 'CTR', value: kpis.ctr, tooltipText: 'Click-Through Rate - Tỷ lệ nhấp chuột vào quảng cáo. Công thức: (Số lượt nhấp / Số lượt hiển thị) * 100.' },
-                { title: 'CPC', value: kpis.cpc, tooltipText: 'Cost Per Click - Chi phí cho mỗi lượt nhấp chuột vào quảng cáo. Công thức: Chi phí Ads / Số lượt nhấp.' },
-                { title: 'TỶ LỆ CHUYỂN ĐỔI', value: kpis.conversionRate },
+                { key: 'adSpend', title: 'CHI PHÍ ADS', format: 'currency' },
+                { key: 'roas', title: 'ROAS', format: 'number', tooltipText: 'Return on Ad Spend - Doanh thu trên chi phí quảng cáo. Công thức: Doanh thu từ Ads / Chi phí Ads.' },
+                { key: 'cpo', title: 'CPO', format: 'currency', tooltipText: 'Cost Per Order - Chi phí để có được một đơn hàng từ quảng cáo.' },
+                { key: 'ctr', title: 'CTR (%)', format: 'percent', tooltipText: 'Click-Through Rate - Tỷ lệ nhấp chuột vào quảng cáo.' },
+                { key: 'cpc', title: 'CPC', format: 'currency', tooltipText: 'Cost Per Click - Chi phí cho mỗi lượt nhấp chuột vào quảng cáo.' },
+                { key: 'conversionRate', title: 'TỶ LỆ CHUYỂN ĐỔI (%)', format: 'percent' },
             ]
         },
         {
             groupTitle: 'Vận hành',
             items: [
-                { title: 'TỔNG ĐƠN', value: kpis.totalOrders },
-                { title: 'SỐ ĐƠN CHỐT', value: kpis.completedOrders },
-                { title: 'SỐ ĐƠN HỦY', value: kpis.cancelledOrders },
-                { title: 'TỶ LỆ HỦY ĐƠN', value: kpis.cancellationRate },
-                { title: 'TỶ LỆ HOÀN TRẢ', value: kpis.refundRate },
-                { title: 'AOV', value: kpis.aov, tooltipText: 'Average Order Value - Giá trị trung bình của một đơn hàng.' },
+                { key: 'totalOrders', title: 'TỔNG ĐƠN', format: 'number' },
+                { key: 'completedOrders', title: 'ĐƠN CHỐT', format: 'number' },
+                { key: 'cancelledOrders', title: 'ĐƠN HỦY', format: 'number' },
+                { key: 'cancellationRate', title: 'TỶ LỆ HỦY', format: 'percent' },
+                { key: 'refundRate', title: 'TỶ LỆ HOÀN', format: 'percent' },
+                { key: 'aov', title: 'AOV', format: 'currency', tooltipText: 'Average Order Value - Giá trị trung bình của một đơn hàng.' },
+                { key: 'upt', title: 'UPT', format: 'number', tooltipText: 'Units Per Transaction - Số sản phẩm trung bình trên một đơn hàng.' },
+                { key: 'uniqueSkusSold', title: 'SỐ SKU ĐÃ BÁN', format: 'number', tooltipText: 'Số loại sản phẩm khác nhau đã được bán.' },
             ]
         },
         {
             groupTitle: 'Khách hàng',
             items: [
-                { title: 'TỔNG LƯỢNG KHÁCH', value: kpis.totalCustomers },
-                { title: 'KHÁCH MỚI', value: kpis.newCustomers },
-                { title: 'KHÁCH QUAY LẠI', value: kpis.returningCustomers },
-                { title: 'CAC', value: kpis.cac, tooltipText: 'Customer Acquisition Cost - Chi phí để có được một khách hàng mới. Công thức: Chi phí Marketing / Số khách hàng mới.' },
+                { key: 'totalCustomers', title: 'TỔNG KHÁCH', format: 'number' },
+                { key: 'newCustomers', title: 'KHÁCH MỚI', format: 'number' },
+                { key: 'returningCustomers', title: 'KHÁCH QUAY LẠI', format: 'number' },
+                { key: 'cac', title: 'CAC', format: 'currency', tooltipText: 'Customer Acquisition Cost - Chi phí để có được một khách hàng mới.' },
+                { key: 'retentionRate', title: 'TỶ LỆ QL (%)', format: 'percent' },
+                { key: 'ltv', title: 'LTV', format: 'currency', tooltipText: 'Customer Lifetime Value - Lợi nhuận trung bình một khách hàng mang lại.' },
             ]
         }
     ];
@@ -283,9 +309,11 @@ function DashboardPage() {
                             >
                                 {group.items.map((kpi) => (
                                     <StatItem 
-                                        key={kpi.title} 
+                                        key={kpi.key} 
                                         title={kpi.title} 
-                                        value={kpi.value} 
+                                        value={currentKpis[kpi.key]} 
+                                        previousValue={previousKpis[kpi.key]}
+                                        format={kpi.format}
                                         tooltipText={kpi.tooltipText}
                                     />
                                 ))}

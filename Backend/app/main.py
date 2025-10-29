@@ -33,33 +33,58 @@ def read_brand(brand_id: int, db: Session = Depends(get_db)):
     if not db_brand: raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
     return db_brand
 
-@app.post("/upload/shopee/{brand_id}")
-async def upload_shopee_data(brand_id: int, db: Session = Depends(get_db),
-    cost_file: Optional[UploadFile] = File(None), order_file: Optional[UploadFile] = File(None),
-    ad_file: Optional[UploadFile] = File(None), revenue_file: Optional[UploadFile] = File(None)):
-    
-    if not crud.get_brand(db, brand_id): raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+@app.post("/upload/{platform}/{brand_id}")
+async def upload_platform_data(
+    platform: str, 
+    brand_id: int, 
+    db: Session = Depends(get_db),
+    cost_file: Optional[UploadFile] = File(None), 
+    order_file: Optional[UploadFile] = File(None),
+    ad_file: Optional[UploadFile] = File(None), 
+    revenue_file: Optional[UploadFile] = File(None)
+):
+    """
+    API Endpoint tổng quát để xử lý việc upload file từ nhiều nền tảng khác nhau.
+    - platform: Tên của nền tảng (ví dụ: "shopee", "tiktok").
+    - brand_id: ID của brand đang được xử lý.
+    """
+    # 1. Kiểm tra Brand có tồn tại không (giữ nguyên)
+    if not crud.get_brand(db, brand_id):
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+
     results = {}
-    if cost_file: results['cost_file'] = shopee_parser.process_cost_file(db, await cost_file.read(), brand_id)
-    if order_file: results['order_file'] = shopee_parser.process_order_file(db, await order_file.read(), brand_id)
-    if ad_file: results['ad_file'] = shopee_parser.process_ad_file(db, await ad_file.read(), brand_id)
-    if revenue_file: results['revenue_file'] = shopee_parser.process_revenue_file(db, await revenue_file.read(), brand_id)
-    return {"message": "Xử lý hoàn tất!", "results": results}
-
-# --- API MỚI ĐỂ XÓA DỮ LIỆU ---
-class DataToDelete(BaseModel):
-    data_types: List[str]
-
-@app.post("/brands/{brand_id}/delete-data")
-def delete_brand_data(brand_id: int, data: DataToDelete, db: Session = Depends(get_db)):
-    if not crud.get_brand(db, brand_id): raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
     
-    deleted_types = []
-    for data_type in data.data_types:
-        crud.delete_data_by_type(db, brand_id, data_type)
-        deleted_types.append(data_type)
+    # 2. Phân luồng xử lý dựa trên 'platform'
+    if platform.lower() == "shopee":
+        # Nếu là Shopee, gọi các hàm xử lý của shopee_parser
+        # Lưu ý: file giá vốn (cost_file) là file chung, không cần truyền source
+        if cost_file:
+            results['cost_file'] = shopee_parser.process_cost_file(db, await cost_file.read(), brand_id)
+        
+        # Các file còn lại cần truyền 'source' để gắn nhãn cho dữ liệu
+        if order_file:
+            results['order_file'] = shopee_parser.process_order_file(db, await order_file.read(), brand_id, source=platform)
+        if ad_file:
+            results['ad_file'] = shopee_parser.process_ad_file(db, await ad_file.read(), brand_id, source=platform)
+        if revenue_file:
+            results['revenue_file'] = shopee_parser.process_revenue_file(db, await revenue_file.read(), brand_id, source=platform)
     
-    return {"message": f"Đã xóa thành công dữ liệu cho các loại: {', '.join(deleted_types)}"}
+    elif platform.lower() == "tiktok":
+        # Đây là nơi để gọi các hàm xử lý cho TikTok trong tương lai
+        # Ví dụ: results['order_file'] = tiktok_parser.process_order_file(...)
+        # Hiện tại chưa có nên ta có thể báo lỗi hoặc không làm gì cả
+        raise HTTPException(status_code=501, detail="Chức năng upload cho TikTok chưa được triển khai.")
+        
+    else:
+        # Nếu platform không được hỗ trợ, báo lỗi
+        raise HTTPException(status_code=400, detail=f"Nền tảng '{platform}' không được hỗ trợ.")
+
+    # Kiểm tra xem có file nào được xử lý không
+    if not results:
+        raise HTTPException(status_code=400, detail="Không có file nào được cung cấp để xử lý.")
+
+    return {"message": f"Xử lý file cho nền tảng '{platform}' hoàn tất!", "results": results}
+
 
 @app.delete("/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_brand_api(brand_id: int, db: Session = Depends(get_db)):

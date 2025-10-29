@@ -3,30 +3,31 @@ from sqlalchemy.orm import Session
 import crud
 import io
 import traceback
+import math
 
 # --- CÁC HÀM HỖ TRỢ CHUYỂN ĐỔI DỮ LIỆU ---
 def to_int(value):
     try:
-        # Xóa dấu phẩy ngăn cách hàng nghìn và chuyển thành số nguyên
-        return int(str(value).replace(',', ''))
+        # Lấy giá trị tuyệt đối ngay sau khi chuyển đổi
+        return abs(int(str(value).replace(',', '')))
     except (ValueError, TypeError):
         return 0
 
 def to_float(value):
     try:
-        # Xóa dấu phẩy ngăn cách hàng nghìn và chuyển thành số thực
-        return float(str(value).replace(',', ''))
+        # Lấy giá trị tuyệt đối ngay sau khi chuyển đổi
+        return abs(float(str(value).replace(',', '')))
     except (ValueError, TypeError):
         return 0.0
 
 def to_percent_float(value):
     try:
-        # Xóa ký tự '%' và chuyển thành số thực (ví dụ: '5.25%' -> 5.25)
-        return float(str(value).replace('%', '')) 
+        # Lấy giá trị tuyệt đối ngay sau khi chuyển đổi
+        return abs(float(str(value).replace('%', ''))) 
     except (ValueError, TypeError):
         return 0.0
 
-def process_cost_file(db: Session, file_content: bytes, brand_id: int): # Giữ nguyên logic overwrite
+def process_cost_file(db: Session, file_content: bytes, brand_id: int): 
     try:
         buffer = io.BytesIO(file_content); df = pd.read_excel(buffer, usecols=[0, 1], header=0, names=['sku', 'cost_price'])
         df.dropna(subset=['sku'], inplace=True); df['sku'] = df['sku'].astype(str)
@@ -37,28 +38,11 @@ def process_cost_file(db: Session, file_content: bytes, brand_id: int): # Giữ 
         return {"status": "success", "message": f"Đã xử lý {len(df)} sản phẩm."}
     except Exception as e: return {"status": "error", "message": str(e)}
 
-def process_order_file(db: Session, file_content: bytes, brand_id: int):
+def process_order_file(db: Session, file_content: bytes, brand_id: int, source: str):
     try:
         buffer = io.BytesIO(file_content)
         # Đọc toàn bộ file vào df_orig để bảo toàn dữ liệu gốc
         df_orig = pd.read_excel(buffer, header=0, dtype=str).fillna('')
-
-        # --- LOGIC XÓA DỮ LIỆU CŨ (AN TOÀN) ---
-        # Chỉ thực hiện xóa nếu DataFrame có dữ liệu và có cột "Ngày đặt hàng"
-        if not df_orig.empty and "Ngày đặt hàng" in df_orig.columns:
-            try:
-                # Tạo một bản sao chỉ để xác định khoảng thời gian, không làm thay đổi df_orig
-                df_dates = df_orig[["Ngày đặt hàng"]].copy()
-                df_dates["Ngày đặt hàng"] = pd.to_datetime(df_dates["Ngày đặt hàng"], errors='coerce')
-                df_dates.dropna(subset=["Ngày đặt hàng"], inplace=True)
-                
-                if not df_dates.empty:
-                    start_date = df_dates["Ngày đặt hàng"].min()
-                    end_date = df_dates["Ngày đặt hàng"].max()
-                    print(f"Sẽ xóa dữ liệu đơn hàng từ {start_date} đến {end_date}")
-                    crud.delete_orders_in_date_range(db, brand_id, start_date, end_date)
-            except Exception as e:
-                print(f"CẢNH BÁO: Không thể xóa dữ liệu cũ. Lỗi: {e}. Quá trình import sẽ tiếp tục.")
 
         # --- VÒNG LẶP XỬ LÝ TRÊN DỮ LIỆU GỐC (df_orig) ---
         processed_count = 0
@@ -85,7 +69,7 @@ def process_order_file(db: Session, file_content: bytes, brand_id: int):
                 order_data['Số lượng'] = to_int(row.get('Số lượng'))
                 
                 crud.get_or_create_customer(db, customer_data=order_data, brand_id=brand_id)
-                crud.create_order_entry(db, order_data=order_data, brand_id=brand_id)
+                crud.create_order_entry(db, order_data=order_data, brand_id=brand_id, source=source)
                 
                 processed_count += 1
 
@@ -105,20 +89,12 @@ def process_order_file(db: Session, file_content: bytes, brand_id: int):
         traceback.print_exc()
         return {"status": "error", "message": f"Lỗi hệ thống nghiêm trọng: {e}"}
 
-def process_ad_file(db: Session, file_content: bytes, brand_id: int):
+def process_ad_file(db: Session, file_content: bytes, brand_id: int, source: str):
     try:
         buffer = io.BytesIO(file_content)
         df = pd.read_csv(buffer, skiprows=7, thousands=',')
         df.replace('-', 0, inplace=True)
 
-        if not df.empty and 'Ngày bắt đầu' in df.columns:
-            df['Ngày bắt đầu'] = pd.to_datetime(df['Ngày bắt đầu'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
-            df['Ngày kết thúc'] = pd.to_datetime(df['Ngày kết thúc'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
-            start_date = df['Ngày bắt đầu'].min()
-            end_date = df['Ngày bắt đầu'].max()
-            if pd.notna(start_date) and pd.notna(end_date):
-                crud.delete_ads_in_date_range(db, brand_id, start_date, end_date)
-        
         count = 0
         for _, row in df.iterrows():
             start_date_val = row.get('Ngày bắt đầu').date() if pd.notna(row.get('Ngày bắt đầu')) else None
@@ -157,23 +133,17 @@ def process_ad_file(db: Session, file_content: bytes, brand_id: int):
                 "product_clicks": to_int(row.get('Lượt clicks Sản phẩm')),
                 "product_ctr": to_percent_float(row.get('Tỷ lệ Click Sản phẩm')) 
             }
-            crud.create_ad_entry(db, ad_data=ad_data, brand_id=brand_id)
+            crud.create_ad_entry(db, ad_data=ad_data, brand_id=brand_id, source=source)
             count += 1
         return {"status": "success", "message": f"Đã xử lý {count} dòng quảng cáo."}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-def process_revenue_file(db: Session, file_content: bytes, brand_id: int):
+def process_revenue_file(db: Session, file_content: bytes, brand_id: int, source: str):
     try:
         buffer = io.BytesIO(file_content)
         df = pd.read_excel(buffer, header=2, parse_dates=['Ngày hoàn thành thanh toán', 'Ngày đặt hàng'])
         df_orders = df[df['Đơn hàng / Sản phẩm'] == 'Order'].copy()
-        
-        if not df_orders.empty:
-            start_date = df_orders["Ngày hoàn thành thanh toán"].min()
-            end_date = df_orders["Ngày hoàn thành thanh toán"].max()
-            if pd.notna(start_date) and pd.notna(end_date):
-                 crud.delete_revenues_in_date_range(db, brand_id, start_date, end_date)
         
         count = 0
         for _, row in df_orders.iterrows():
@@ -200,7 +170,7 @@ def process_revenue_file(db: Session, file_content: bytes, brand_id: int):
                 "affiliate_marketing_fee": to_float(row.get('Tiếp thị liên kết')),
                 "buyer_username": row.get('Người mua')
             }
-            crud.create_revenue_entry(db, revenue_data=revenue_data, brand_id=brand_id)
+            crud.create_revenue_entry(db, revenue_data=revenue_data, brand_id=brand_id, source=source)
             count += 1
         return {"status": "success", "message": f"Đã xử lý {count} dòng doanh thu."}
     except Exception as e:

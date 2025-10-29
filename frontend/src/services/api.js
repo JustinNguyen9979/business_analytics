@@ -71,3 +71,45 @@ export const cloneBrand = async (brandId) => {
         throw error;
     }
 };
+
+// Hàm tải lên file cho Shopee
+export const uploadShopeeFiles = async (brandId, files) => {
+    // FormData là cách chuẩn để gửi file qua API
+    const formData = new FormData();
+    if (files.orderFile) formData.append('order_file', files.orderFile);
+    if (files.revenueFile) formData.append('revenue_file', files.revenueFile);
+    if (files.adsFile) formData.append('ad_file', files.adsFile);
+    // Lưu ý: Tên key 'order_file', 'revenue_file', 'ad_file' phải khớp với backend
+
+    try {
+        const response = await apiClient.post(`/upload/shopee/${brandId}`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        return response.data;
+    } catch (error) {
+        console.error(`Error uploading files for brand ${brandId}:`, error);
+        // Ném lỗi ra để component có thể bắt và hiển thị cho người dùng
+        throw error;
+    }
+};
+
+// Hàm tải lên file chi phí cho Shopee
+export const uploadCostFile = async (brandId, costFile) => {
+    const formData = new FormData();
+    // Quan trọng: Key 'cost_file' phải khớp với tên tham số ở backend
+    formData.append('cost_file', costFile);
+
+    try {
+        const response = await apiClient.post(`/upload/shopee/${brandId}`, formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+            },
+        });
+        return response.data;
+    } catch (error) {
+        console.error(`Error uploading cost file for brand ${brandId}:`, error);
+        throw error;
+    }
+};
