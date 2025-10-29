@@ -9,15 +9,18 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
-import AuroraBackground from '../components/AuroraBackground';
+import AuroraBackground from '../components/ui/AuroraBackground';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import WebIcon from '@mui/icons-material/Web';
 import PriceCheckIcon from '@mui/icons-material/PriceCheck';
-import ImportDialog from '../components/ImportDialog';
-import SingleImportDialog from '../components/SingleImportDialog';
+import ImportDialog from '../components/import/ImportDialog';
+import SingleImportDialog from '../components/import/SingleImportDialog';
+import { uploadShopeeFiles, uploadCostFile } from '../services/api';
+import { useNotification } from '../context/NotificationContext';
+
 
 const drawerWidth = 240;
 
@@ -93,6 +96,7 @@ export default function DashboardLayout() {
   const [isMultiImportDialogOpen, setMultiImportDialogOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [isSingleImportDialogOpen, setSingleImportDialogOpen] = useState(false);
+  const { showNotification } = useNotification();
 
   const handleDrawerToggle = () => setOpen(!open);
   const handleImportMenuToggle = () => setImportMenuOpen(!isImportMenuOpen);
@@ -105,10 +109,25 @@ export default function DashboardLayout() {
     setMultiImportDialogOpen(false);
   };
   const handleMultiUpload = async (files) => {
-    console.log("Uploading multi-files for brand:", brandId, "and platform:", selectedPlatform, files);
-    alert(`Đã nhận các file cho ${selectedPlatform}. Xem console log.`);
-    navigate(0);
-  };
+        if (selectedPlatform !== 'Shopee') {
+            // Thay thế alert cũ
+            showNotification(`Chức năng upload cho ${selectedPlatform} chưa được hỗ trợ.`, 'warning');
+            return;
+        }
+
+        try {
+            const result = await uploadShopeeFiles(brandId, files);
+            // THAY THẾ ALERT THÀNH CÔNG
+            showNotification('Upload và xử lý file thành công!', 'success');
+            console.log('Phản hồi từ server:', result);
+            navigate(0); 
+        } catch (error) {
+            const errorMessage = error.response?.data?.detail || 'Đã có lỗi xảy ra khi upload file.';
+            // THAY THẾ ALERT LỖI
+            showNotification(errorMessage, 'error');
+            console.error("Lỗi chi tiết:", error.response);
+        }
+    };
 
   const handleOpenSingleImportDialog = () => {
     setSingleImportDialogOpen(true);
@@ -116,11 +135,25 @@ export default function DashboardLayout() {
   const handleCloseSingleImportDialog = () => {
     setSingleImportDialogOpen(false);
   };
-  const handleSingleUpload = async (fileObject) => {
-    console.log("Uploading single file for brand:", brandId, fileObject);
-    alert(`Đã nhận file giá nhập. Xem console log.`);
-    navigate(0);
-  };
+  const handleSingleUpload = async (costFile) => {
+        if (!costFile) {
+            showNotification("Vui lòng chọn một file giá nhập.", 'warning');
+            return;
+        }
+
+        try {
+            const result = await uploadCostFile(brandId, costFile);
+            showNotification("Upload file giá nhập thành công!", 'success');
+            console.log("Phản hồi từ server:", result);
+            navigate(0); 
+        } catch (error) {
+            const errorMessage = error.response?.data?.results?.cost_file?.message || 
+                                 error.response?.data?.detail || 
+                                 'Đã có lỗi xảy ra khi upload file giá nhập.';
+            showNotification(errorMessage, 'error');
+            console.error("Lỗi chi tiết:", error.response);
+        }
+    };
 
   return (
     <Box sx={{ display: 'flex' }}>

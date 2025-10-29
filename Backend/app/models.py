@@ -9,8 +9,8 @@ class Brand(Base):
     products = relationship("Product", back_populates="owner_brand", cascade="all, delete-orphan")
     customers = relationship("Customer", back_populates="owner_brand", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="owner_brand", cascade="all, delete-orphan")
-    shopee_ads = relationship("ShopeeAd", back_populates="owner_brand", cascade="all, delete-orphan")
-    shopee_revenues = relationship("ShopeeRevenue", back_populates="owner_brand", cascade="all, delete-orphan")
+    ads = relationship("Ad", back_populates="owner_brand", cascade="all, delete-orphan")
+    revenues = relationship("Revenue", back_populates="owner_brand", cascade="all, delete-orphan")
 
 class Product(Base):
     __tablename__ = "products"
@@ -41,11 +41,12 @@ class Order(Base):
     sku = Column(String)                            # Từ 'SKU phân loại hàng'
     quantity = Column(Integer)                      # Từ 'Số lượng'
     username = Column(String, index=True, nullable=True)
+    source = Column(String, nullable=False, index=True)
     brand_id = Column(Integer, ForeignKey("brands.id"))
 
     owner_brand = relationship("Brand", back_populates="orders")
 
-class ShopeeAd(Base):
+class Ad(Base):
     __tablename__ = "shopee_ads"
     id = Column(Integer, primary_key=True, index=True)
     
@@ -80,12 +81,13 @@ class ShopeeAd(Base):
     product_impressions = Column(Integer, default=0)
     product_clicks = Column(Integer, default=0)
     product_ctr = Column(Float, default=0.0)
+    source = Column(String, nullable=False, index=True)
     
     brand_id = Column(Integer, ForeignKey("brands.id"))
-    owner_brand = relationship("Brand", back_populates="shopee_ads")
+    owner_brand = relationship("Brand", back_populates="ads")
 
 # --- BẢNG MỚI CHO DỮ LIỆU DOANH THU ---
-class ShopeeRevenue(Base):
+class Revenue(Base):
     __tablename__ = "shopee_revenues"
     id = Column(Integer, primary_key=True, index=True)
     order_code = Column(String, index=True)
@@ -106,6 +108,7 @@ class ShopeeRevenue(Base):
     commission_fee = Column(Float, default=0.0)
     affiliate_marketing_fee = Column(Float, default=0.0)
     buyer_username = Column(String, nullable=True)
+    source = Column(String, nullable=False, index=True)
     
     brand_id = Column(Integer, ForeignKey("brands.id"))
-    owner_brand = relationship("Brand", back_populates="shopee_revenues")
+    owner_brand = relationship("Brand", back_populates="revenues") 
