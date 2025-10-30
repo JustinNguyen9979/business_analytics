@@ -13,6 +13,14 @@ def to_int(value):
     except (ValueError, TypeError):
         return 0
 
+def to_float_raw(value):
+    """Chuyển đổi sang float nhưng giữ nguyên giá trị âm/dương."""
+    try:
+        # Bỏ qua hàm abs()
+        return float(str(value).replace(',', ''))
+    except (ValueError, TypeError):
+        return 0.0
+
 def to_float(value):
     try:
         # Lấy giá trị tuyệt đối ngay sau khi chuyển đổi
@@ -95,6 +103,10 @@ def process_ad_file(db: Session, file_content: bytes, brand_id: int, source: str
         df = pd.read_csv(buffer, skiprows=7, thousands=',')
         df.replace('-', 0, inplace=True)
 
+        # Pandas sẽ cố gắng chuyển đổi chuỗi 'dd/mm/yyyy hh:mm:ss' thành datetime
+        df['Ngày bắt đầu'] = pd.to_datetime(df['Ngày bắt đầu'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
+        df['Ngày kết thúc'] = pd.to_datetime(df['Ngày kết thúc'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
+
         count = 0
         for _, row in df.iterrows():
             start_date_val = row.get('Ngày bắt đầu').date() if pd.notna(row.get('Ngày bắt đầu')) else None
@@ -155,8 +167,8 @@ def process_revenue_file(db: Session, file_content: bytes, brand_id: int, source
                 "refund_request_code": row.get('Mã yêu cầu hoàn tiền'),
                 "order_date": order_date_val,
                 "payment_completed_date": payment_date_val,
-                "total_payment": to_float(row.get('Tổng tiền đã thanh toán')),
-                "product_price": to_float(row.get('Giá sản phẩm')),
+                "total_payment": to_float_raw(row.get('Tổng tiền đã thanh toán')),
+                "product_price": to_float_raw(row.get('Giá sản phẩm')),
                 "refund_amount": to_float(row.get('Số tiền hoàn lại')),
                 "shipping_fee": to_float(row.get('Phí vận chuyển')),
                 "buyer_paid_shipping_fee": to_float(row.get('Người mua trả')),

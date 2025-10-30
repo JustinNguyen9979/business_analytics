@@ -47,7 +47,7 @@ class Order(Base):
     owner_brand = relationship("Brand", back_populates="orders")
 
 class Ad(Base):
-    __tablename__ = "shopee_ads"
+    __tablename__ = "ads"
     id = Column(Integer, primary_key=True, index=True)
     
     campaign_name = Column(String)
@@ -88,7 +88,7 @@ class Ad(Base):
 
 # --- BẢNG MỚI CHO DỮ LIỆU DOANH THU ---
 class Revenue(Base):
-    __tablename__ = "shopee_revenues"
+    __tablename__ = "revenues"
     id = Column(Integer, primary_key=True, index=True)
     order_code = Column(String, index=True)
     refund_request_code = Column(String, nullable=True)
