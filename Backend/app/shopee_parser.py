@@ -8,13 +8,11 @@ import math
 # --- CÁC HÀM HỖ TRỢ CHUYỂN ĐỔI DỮ LIỆU ---
 def to_int(value):
     try:
-        # Lấy giá trị tuyệt đối ngay sau khi chuyển đổi
         return abs(int(str(value).replace(',', '')))
     except (ValueError, TypeError):
         return 0
 
 def to_float_raw(value):
-    """Chuyển đổi sang float nhưng giữ nguyên giá trị âm/dương."""
     try:
         # Bỏ qua hàm abs()
         return float(str(value).replace(',', ''))
@@ -23,28 +21,46 @@ def to_float_raw(value):
 
 def to_float(value):
     try:
-        # Lấy giá trị tuyệt đối ngay sau khi chuyển đổi
         return abs(float(str(value).replace(',', '')))
     except (ValueError, TypeError):
         return 0.0
 
 def to_percent_float(value):
     try:
-        # Lấy giá trị tuyệt đối ngay sau khi chuyển đổi
         return abs(float(str(value).replace('%', ''))) 
     except (ValueError, TypeError):
         return 0.0
 
 def process_cost_file(db: Session, file_content: bytes, brand_id: int): 
     try:
-        buffer = io.BytesIO(file_content); df = pd.read_excel(buffer, usecols=[0, 1], header=0, names=['sku', 'cost_price'])
-        df.dropna(subset=['sku'], inplace=True); df['sku'] = df['sku'].astype(str)
+        buffer = io.BytesIO(file_content)
+        # SỬA ĐỔI 1: Đọc 3 cột thay vì 2, và đặt tên cho chúng
+        df = pd.read_excel(buffer, usecols=[0, 1, 2], header=0, names=['sku', 'name', 'cost_price'])
+        
+        # Tiền xử lý dữ liệu
+        df.dropna(subset=['sku'], inplace=True) # Vẫn yêu cầu SKU là bắt buộc
+        df['sku'] = df['sku'].astype(str)
+        df['name'] = df['name'].astype(str).fillna('') # Chuyển tên SP thành chuỗi, nếu trống thì là chuỗi rỗng
         df['cost_price'] = pd.to_numeric(df['cost_price'], errors='coerce').fillna(0).astype(int)
+
+        count = 0
         for _, row in df.iterrows():
+            # SỬA ĐỔI 2: Khi tạo/lấy sản phẩm, nếu nó đã tồn tại, ta sẽ cập nhật lại tên
             product = crud.get_or_create_product(db, sku=row['sku'], brand_id=brand_id)
-            crud.update_product_cost_price(db, product_id=product.id, cost_price=row['cost_price'])
-        return {"status": "success", "message": f"Đã xử lý {len(df)} sản phẩm."}
-    except Exception as e: return {"status": "error", "message": str(e)}
+            
+            # SỬA ĐỔI 3: Gọi hàm cập nhật cả tên và giá vốn
+            crud.update_product_details(
+                db, 
+                product_id=product.id, 
+                name=row['name'], 
+                cost_price=row['cost_price']
+            )
+            count += 1
+            
+        return {"status": "success", "message": f"Đã xử lý {count} sản phẩm."}
+    except Exception as e:
+        traceback.print_exc()
+        return {"status": "error", "message": str(e)}
 
 def process_order_file(db: Session, file_content: bytes, brand_id: int, source: str):
     try:
@@ -101,89 +117,56 @@ def process_ad_file(db: Session, file_content: bytes, brand_id: int, source: str
     try:
         buffer = io.BytesIO(file_content)
         df = pd.read_csv(buffer, skiprows=7, thousands=',')
-        df.replace('-', 0, inplace=True)
-
-        # Pandas sẽ cố gắng chuyển đổi chuỗi 'dd/mm/yyyy hh:mm:ss' thành datetime
         df['Ngày bắt đầu'] = pd.to_datetime(df['Ngày bắt đầu'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
-        df['Ngày kết thúc'] = pd.to_datetime(df['Ngày kết thúc'], format='%d/%m/%Y %H:%M:%S', errors='coerce')
-
+        
         count = 0
         for _, row in df.iterrows():
-            start_date_val = row.get('Ngày bắt đầu').date() if pd.notna(row.get('Ngày bắt đầu')) else None
-            end_date_val = row.get('Ngày kết thúc').date() if pd.notna(row.get('Ngày kết thúc')) else None
+            # Gom tất cả dữ liệu gốc vào một dictionary
+            details_dict = row.astype(str).to_dict()
 
             ad_data = {
+                # Trích xuất các chỉ số cốt lõi
                 "campaign_name": row.get('Tên Dịch vụ Hiển thị'),
-                "status": row.get('Trạng thái'),
-                "ad_type": row.get('Loại Dịch vụ Hiển thị'),
-                "product_id": str(row.get('Mã sản phẩm')),
-                "target_audience_settings": row.get('Cài đặt Đối tượng'),
-                "ad_content": row.get('Nội dung Dịch vụ Hiển thị'),
-                "bidding_method": row.get('Phương thức đấu thầu'),
-                "location": row.get('Vị trí'),
-                "start_date": start_date_val,
-                "end_date": end_date_val,
+                "ad_date": row.get('Ngày bắt đầu').date() if pd.notna(row.get('Ngày bắt đầu')) else None,
                 "impressions": to_int(row.get('Số lượt xem')),
                 "clicks": to_int(row.get('Số lượt click')),
-                "ctr": to_percent_float(row.get('Tỷ Lệ Click')), 
-                "conversions": to_int(row.get('Lượt chuyển đổi')),
-                "direct_conversions": to_int(row.get('Lượt chuyển đổi trực tiếp')),
-                "conversion_rate": to_percent_float(row.get('Tỷ lệ chuyển đổi')), 
-                "direct_conversion_rate": to_percent_float(row.get('Tỷ lệ chuyển đổi trực tiếp')), 
-                "cost_per_conversion": to_float(row.get('Chi phí cho mỗi lượt chuyển đổi')),
-                "cost_per_direct_conversion": to_float(row.get('Chi phí cho mỗi lượt chuyển đổi trực tiếp')),
-                "items_sold": to_int(row.get('Sản phẩm đã bán')),
-                "direct_items_sold": to_int(row.get('Sản phẩm đã bán trực tiếp')),
-                "gmv": to_float(row.get('GMV')),
-                "direct_gmv": to_float(row.get('GMV trực tiếp')),
-                "expense": to_float(row.get('Chi phí')),
-                "roas": to_float(row.get('ROAS')),
-                "direct_roas": to_float(row.get('ROAS trực tiếp')),
-                "acos": to_percent_float(row.get('ACOS')), 
-                "direct_acos": to_percent_float(row.get('ACOS trực tiếp')), 
-                "product_impressions": to_int(row.get('Lượt xem Sản phẩm')),
-                "product_clicks": to_int(row.get('Lượt clicks Sản phẩm')),
-                "product_ctr": to_percent_float(row.get('Tỷ lệ Click Sản phẩm')) 
+                "expense": to_float_raw(row.get('Chi phí')),
+                "orders": to_int(row.get('Lượt chuyển đổi')),
+                "gmv": to_float_raw(row.get('GMV')),
+                # Lưu toàn bộ dòng gốc vào details
+                "details": details_dict
             }
             crud.create_ad_entry(db, ad_data=ad_data, brand_id=brand_id, source=source)
             count += 1
         return {"status": "success", "message": f"Đã xử lý {count} dòng quảng cáo."}
     except Exception as e:
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
 
 def process_revenue_file(db: Session, file_content: bytes, brand_id: int, source: str):
     try:
         buffer = io.BytesIO(file_content)
-        df = pd.read_excel(buffer, header=2, parse_dates=['Ngày hoàn thành thanh toán', 'Ngày đặt hàng'])
+        df = pd.read_excel(buffer, header=2)
         df_orders = df[df['Đơn hàng / Sản phẩm'] == 'Order'].copy()
-        
+        df_orders['Ngày hoàn thành thanh toán'] = pd.to_datetime(df_orders['Ngày hoàn thành thanh toán'], errors='coerce')
+
         count = 0
         for _, row in df_orders.iterrows():
-            order_date_val = row.get('Ngày đặt hàng').date() if pd.notna(row.get('Ngày đặt hàng')) else None
-            payment_date_val = row.get('Ngày hoàn thành thanh toán').date() if pd.notna(row.get('Ngày hoàn thành thanh toán')) else None
+            # Gom tất cả dữ liệu gốc vào một dictionary
+            details_dict = row.astype(str).to_dict()
 
             revenue_data = {
+                # Trích xuất các chỉ số cốt lõi
                 "order_code": row.get('Mã đơn hàng'),
-                "refund_request_code": row.get('Mã yêu cầu hoàn tiền'),
-                "order_date": order_date_val,
-                "payment_completed_date": payment_date_val,
-                "total_payment": to_float_raw(row.get('Tổng tiền đã thanh toán')),
-                "product_price": to_float_raw(row.get('Giá sản phẩm')),
-                "refund_amount": to_float(row.get('Số tiền hoàn lại')),
-                "shipping_fee": to_float(row.get('Phí vận chuyển')),
-                "buyer_paid_shipping_fee": to_float(row.get('Người mua trả')),
-                "actual_shipping_fee": to_float(row.get('Phí vận chuyển thực tế')),
-                "shopee_subsidized_shipping_fee": to_float(row.get('Phí vận chuyển được trợ giá từ Shopee')),
-                "seller_voucher_code": row.get('Mã ưu đãi do Người Bán chịu'),
-                "fixed_fee": to_float(row.get('Phí cố định')),
-                "service_fee": to_float(row.get('Phí Dịch Vụ')),
-                "payment_fee": to_float(row.get('Phí thanh toán')),
-                "commission_fee": to_float(row.get('Phí hoa hồng')),
-                "affiliate_marketing_fee": to_float(row.get('Tiếp thị liên kết')),
-                "buyer_username": row.get('Người mua')
+                "transaction_date": row.get('Ngày hoàn thành thanh toán').date() if pd.notna(row.get('Ngày hoàn thành thanh toán')) else None,
+                "gmv": to_float_raw(row.get('Giá sản phẩm')),
+                "net_revenue": to_float_raw(row.get('Tổng tiền đã thanh toán')),
+                # Lưu toàn bộ dòng gốc vào details
+                "details": details_dict
             }
             crud.create_revenue_entry(db, revenue_data=revenue_data, brand_id=brand_id, source=source)
             count += 1
         return {"status": "success", "message": f"Đã xử lý {count} dòng doanh thu."}
     except Exception as e:
+        traceback.print_exc()
         return {"status": "error", "message": str(e)}
