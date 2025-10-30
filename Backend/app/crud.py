@@ -66,7 +66,7 @@ def create_order_entry(db: Session, order_data: dict, brand_id: int, source: str
 
 # --- HÀM GHI DỮ LIỆU QUẢNG CÁO ---
 def create_ad_entry(db: Session, ad_data: dict, brand_id: int, source: str):
-    new_ad = models.ShopeeAd(**ad_data, brand_id=brand_id, source=source)
+    new_ad = models.Ad(**ad_data, brand_id=brand_id, source=source)
     db.add(new_ad)
     db.commit()
     db.refresh(new_ad)
@@ -74,7 +74,7 @@ def create_ad_entry(db: Session, ad_data: dict, brand_id: int, source: str):
 
 # --- HÀM GHI DỮ LIỆU DOANH THU ---
 def create_revenue_entry(db: Session, revenue_data: dict, brand_id: int, source: str):
-    new_revenue = models.ShopeeRevenue(**revenue_data, brand_id=brand_id, source=source)
+    new_revenue = models.Revenue(**revenue_data, brand_id=brand_id, source=source)
     db.add(new_revenue)
     db.commit()
     db.refresh(new_revenue)

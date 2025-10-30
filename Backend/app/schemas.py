@@ -34,12 +34,13 @@ class OrderBase(BaseModel):
     status: str
     sku: str
     quantity: int
+    source: str
     username: Optional[str] = None
 class Order(OrderBase):
     id: int; brand_id: int
     class Config: { 'orm_mode': True }
 
-class ShopeeAdBase(BaseModel):
+class AdBase(BaseModel):
     campaign_name: Optional[str] = None
     status: Optional[str] = None
     ad_type: Optional[str] = None
@@ -71,12 +72,13 @@ class ShopeeAdBase(BaseModel):
     product_impressions: int = 0
     product_clicks: int = 0
     product_ctr: float = 0.0
-class ShopeeAd(ShopeeAdBase):
+    source: str 
+class Ad(AdBase):
     id: int; brand_id: int
     class Config: { 'orm_mode': True }
 
 # --- SCHEMA MỚI CHO DOANH THU ---
-class ShopeeRevenueBase(BaseModel):
+class RevenueBase(BaseModel):
     order_code: str
     refund_request_code: Optional[str] = None
     order_date: Optional[date] = None
@@ -95,8 +97,9 @@ class ShopeeRevenueBase(BaseModel):
     commission_fee: float = 0.0
     affiliate_marketing_fee: float = 0.0
     buyer_username: Optional[str] = None
+    source: str 
 
-class ShopeeRevenue(ShopeeRevenueBase):
+class Revenue(RevenueBase):
     id: int
     brand_id: int
     class Config:
@@ -110,8 +113,8 @@ class Brand(BrandBase):
     products: List[Product] = []
     customers: List[Customer] = []
     orders: List[Order] = []
-    shopee_ads: List[ShopeeAd] = []
-    shopee_revenues: List[ShopeeRevenue] = []
+    ads: List[Ad] = []
+    revenues: List[Revenue] = []
     class Config:
         orm_mode = True
     

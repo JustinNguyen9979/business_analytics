@@ -130,6 +130,7 @@ function DashboardPage() {
         {
             groupTitle: 'Tài chính',
             items: [
+                { key: 'netRevenue', title: 'DOANH THU RÒNG', format: 'currency' },
                 { key: 'gmv', title: 'DOANH THU (GMV)', format: 'currency', tooltipText: 'Gross Merchandise Value - Tổng giá trị hàng hóa đã bán (chưa trừ chi phí).' },
                 { key: 'totalCost', title: 'TỔNG CHI PHÍ', format: 'currency' },
                 { key: 'cogs', title: 'GIÁ VỐN (COGS)', format: 'currency', tooltipText: 'Cost of Goods Sold - Chi phí giá vốn hàng bán.' },
@@ -327,5 +328,92 @@ function DashboardPage() {
         </Box>
     );
 }
+
+// function DashboardPage() {
+//     const { brandId } = useParams();
+//     const [brand, setBrand] = useState(null);
+//     const [loading, setLoading] = useState(true);
+//     const [error, setError] = useState(null);
+//     const [customDateRange, setCustomDateRange] = useState([dayjs().startOf('month'), dayjs()]);
+
+//     useEffect(() => {
+//         const fetchDetails = async () => {
+//             if (!brandId) { setError("Không tìm thấy Brand ID."); setLoading(false); return; }
+//             try {
+//                 setLoading(true); setError(null);
+//                 const data = await getBrandDetails(brandId);
+//                 setBrand(data);
+//             } catch (err) {
+//                 console.error("Lỗi khi fetch chi tiết brand:", err);
+//                 setError(`Không thể tải dữ liệu cho brand ID: ${brandId}. Vui lòng thử lại.`);
+//             } finally {
+//                 setLoading(false);
+//             }
+//         };
+//         fetchDetails();
+//     }, [brandId]);
+
+//     // === KHỐI LOGIC DEBUG ===
+//     const debugInfo = useMemo(() => {
+//         if (!brand || !customDateRange[0] || !customDateRange[1]) {
+//             return { message: "Đang chờ dữ liệu..." };
+//         }
+
+//         const [startDate, endDate] = customDateRange;
+//         const allRevenues = brand.revenues || [];
+//         const allAds = brand.ads || [];
+//         const allOrders = brand.orders || [];
+
+//         const checkDate = (date) => {
+//             const d = dayjs(date);
+//             return !d.isBefore(startDate, 'day') && !d.isAfter(endDate, 'day');
+//         };
+
+//         const filteredFinancialRevenues = allRevenues.filter(r => checkDate(r.payment_completed_date));
+//         const filteredFinancialAds = allAds.filter(a => checkDate(a.start_date));
+//         const filteredOperationalOrders = allOrders.filter(o => checkDate(o.order_date));
+
+//         return {
+//             startDate: startDate.format('YYYY-MM-DD'),
+//             endDate: endDate.format('YYYY-MM-DD'),
+//             totalRevenues: allRevenues.length,
+//             totalAds: allAds.length,
+//             totalOrders: allOrders.length,
+//             filteredFinancialRevenuesCount: filteredFinancialRevenues.length,
+//             filteredFinancialAdsCount: filteredFinancialAds.length,
+//             filteredOperationalOrdersCount: filteredOperationalOrders.length,
+//         };
+
+//     }, [brand, customDateRange]);
+
+//     if (loading) return <CircularProgress />;
+//     if (error) return <Alert severity="error">{error}</Alert>;
+//     if (!brand) return <Alert severity="warning">Không có dữ liệu cho brand này.</Alert>;
+
+//     return (
+//         <Box>
+//             {/* === KHỐI HIỂN THỊ DEBUG === */}
+//             <Paper sx={{ p: 2, mb: 4, backgroundColor: 'rgba(255, 0, 0, 0.1)', border: '1px solid red' }}>
+//                 <Typography variant="h6" color="error">BẢNG THÔNG TIN DEBUG</Typography>
+//                 <Divider sx={{ my: 1 }} />
+//                 <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+//                     {JSON.stringify(debugInfo, null, 2)}
+//                 </pre>
+//             </Paper>
+//             {/* === KẾT THÚC KHỐI DEBUG === */}
+
+
+//             <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: 700 }}>
+//                 Báo cáo Kinh doanh: {brand.name}
+//             </Typography>
+            
+//             {/* Phần dashboard còn lại sẽ hiển thị 0 vì chúng ta chưa tính toán */}
+//             <Paper variant="glass" elevation={0} sx={{ p: 3, mb: 4 }}>
+//                 {/* ... Toàn bộ phần giao diện hiển thị KPI của anh ... */}
+//                 {/* Anh có thể tạm comment out phần này đi nếu muốn tập trung vào khối DEBUG */}
+//             </Paper>
+//         </Box>
+//     );
+// }
 
 export default DashboardPage;
