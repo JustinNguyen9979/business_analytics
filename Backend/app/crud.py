@@ -21,8 +21,14 @@ def get_or_create_product(db: Session, sku: str, brand_id: int):
     db_product = db.query(models.Product).filter(models.Product.sku == sku, models.Product.brand_id == brand_id).first()
     if not db_product: db_product = models.Product(sku=sku, brand_id=brand_id); db.add(db_product); db.commit(); db.refresh(db_product)
     return db_product
-def update_product_cost_price(db: Session, product_id: int, cost_price: int): # Nhận vào int
-    db.query(models.Product).filter(models.Product.id == product_id).update({"cost_price": cost_price}); db.commit()
+
+def update_product_details(db: Session, product_id: int, name: str, cost_price: int):
+    """Cập nhật cả tên và giá vốn cho một sản phẩm."""
+    db.query(models.Product).filter(models.Product.id == product_id).update({
+        "name": name,
+        "cost_price": cost_price
+    })
+    db.commit()
 
 # --- HÀM GHI DỮ LIỆU CUSTOMER ---
 def get_or_create_customer(db: Session, customer_data: dict, brand_id: int):

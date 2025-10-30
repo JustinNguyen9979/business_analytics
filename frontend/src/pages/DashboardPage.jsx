@@ -131,13 +131,14 @@ function DashboardPage() {
             groupTitle: 'Tài chính',
             items: [
                 { key: 'netRevenue', title: 'DOANH THU RÒNG', format: 'currency' },
-                { key: 'gmv', title: 'DOANH THU (GMV)', format: 'currency', tooltipText: 'Gross Merchandise Value - Tổng giá trị hàng hóa đã bán (chưa trừ chi phí).' },
+                { key: 'gmv', title: 'GMV', format: 'currency', tooltipText: 'Gross Merchandise Value - Tổng giá trị hàng hóa đã bán (chưa trừ chi phí).' },
                 { key: 'totalCost', title: 'TỔNG CHI PHÍ', format: 'currency' },
                 { key: 'cogs', title: 'GIÁ VỐN (COGS)', format: 'currency', tooltipText: 'Cost of Goods Sold - Chi phí giá vốn hàng bán.' },
                 { key: 'executionCost', title: 'CHI PHÍ THỰC THI', format: 'currency' },
                 { key: 'profit', title: 'LỢI NHUẬN', format: 'currency' },
                 { key: 'roi', title: 'ROI (%)', format: 'percent', tooltipText: 'Return on Investment - Tỷ suất lợi nhuận trên tổng chi phí. Công thức: (Lợi nhuận / Tổng chi phí) * 100.' },
                 { key: 'profitMargin', title: 'TỶ SUẤT LỢI NHUẬN (%)', format: 'percent', tooltipText: 'Tỷ lệ lợi nhuận so với doanh thu. Công thức: (Lợi nhuận / Doanh thu Ròng) * 100.' },
+                { key: 'takeRate', title: 'TAKE RATE (%)', format: 'percent', tooltipText: 'Tỷ lệ phần trăm chi phí thực thi so với GMV. Công thức: (Chi phí Thực thi / GMV) * 100.' },
             ]
         },
         {
@@ -157,11 +158,12 @@ function DashboardPage() {
                 { key: 'totalOrders', title: 'TỔNG ĐƠN', format: 'number' },
                 { key: 'completedOrders', title: 'ĐƠN CHỐT', format: 'number' },
                 { key: 'cancelledOrders', title: 'ĐƠN HỦY', format: 'number' },
-                { key: 'cancellationRate', title: 'TỶ LỆ HỦY', format: 'percent' },
-                { key: 'refundRate', title: 'TỶ LỆ HOÀN', format: 'percent' },
                 { key: 'aov', title: 'AOV', format: 'currency', tooltipText: 'Average Order Value - Giá trị trung bình của một đơn hàng.' },
                 { key: 'upt', title: 'UPT', format: 'number', tooltipText: 'Units Per Transaction - Số sản phẩm trung bình trên một đơn hàng.' },
                 { key: 'uniqueSkusSold', title: 'SỐ SKU ĐÃ BÁN', format: 'number', tooltipText: 'Số loại sản phẩm khác nhau đã được bán.' },
+                { key: 'conversionRate', title: 'Tỷ lệ Chốt', format: 'percent', tooltipText: 'Tỷ lệ giữa số đơn chốt và tổng số đơn.' },
+                { key: 'refundRate', title: 'TỶ LỆ HOÀN', format: 'percent' },
+                { key: 'cancellationRate', title: 'TỶ LỆ HỦY', format: 'percent' },
             ]
         },
         {
