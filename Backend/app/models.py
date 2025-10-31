@@ -37,15 +37,18 @@ class Customer(Base):
 class Order(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, index=True)
-    order_code = Column(String, index=True)         # Từ 'Mã đơn hàng'
-    order_date = Column(Date, nullable=True)        # Từ 'Ngày đặt hàng'
-    status = Column(String)                         # Từ 'Trạng Thái Đơn Hàng'
-    sku = Column(String)                            # Từ 'SKU phân loại hàng'
-    quantity = Column(Integer)                      # Từ 'Số lượng'
+
+    # --- Các cột cốt lõi anh yêu cầu ---
+    order_code = Column(String, index=True)
+    order_date = Column(Date, nullable=True, index=True)
+    status = Column(String, nullable=True)
     username = Column(String, index=True, nullable=True)
+    total_quantity = Column(Integer, default=0)
+    cogs = Column(Float, default=0.0)
     source = Column(String, nullable=False, index=True)
     brand_id = Column(Integer, ForeignKey("brands.id"))
-
+    details = Column(JSONB, nullable=True)
+    
     owner_brand = relationship("Brand", back_populates="orders")
 
 class Ad(Base):

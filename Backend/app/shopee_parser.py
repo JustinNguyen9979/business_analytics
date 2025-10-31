@@ -4,6 +4,7 @@ import crud
 import io
 import traceback
 import math
+import models
 
 # --- CÁC HÀM HỖ TRỢ CHUYỂN ĐỔI DỮ LIỆU ---
 def to_int(value):
@@ -62,56 +63,66 @@ def process_cost_file(db: Session, file_content: bytes, brand_id: int):
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
 
+# FILE: backend/app/shopee_parser.py
+
 def process_order_file(db: Session, file_content: bytes, brand_id: int, source: str):
     try:
         buffer = io.BytesIO(file_content)
-        # Đọc toàn bộ file vào df_orig để bảo toàn dữ liệu gốc
-        df_orig = pd.read_excel(buffer, header=0, dtype=str).fillna('')
-
-        # --- VÒNG LẶP XỬ LÝ TRÊN DỮ LIỆU GỐC (df_orig) ---
-        processed_count = 0
-        skipped_count = 0
+        # Đọc file, giữ nguyên dtype là string để kiểm soát
+        df = pd.read_excel(buffer, header=0, dtype=str).fillna('')
         
-        for index, row in df_orig.iterrows():
-            try:
-                order_code = row.get('Mã đơn hàng')
+        # Chuyển đổi kiểu dữ liệu một cách có kiểm soát
+        df['Ngày đặt hàng'] = pd.to_datetime(df['Ngày đặt hàng'], errors='coerce')
+        df['Số lượng'] = pd.to_numeric(df['Số lượng'], errors='coerce').fillna(0)
+        
+        products = db.query(models.Product).filter(models.Product.brand_id == brand_id).all()
+        product_cost_map = {p.sku: p.cost_price for p in products}
+
+        grouped = df.groupby('Mã đơn hàng')
+
+        count = 0
+        for order_code, group in grouped:
+            if not order_code: continue
+
+            first_row = group.iloc[0]
+
+            order_cogs = 0
+            items_details = []
+            for _, row in group.iterrows():
                 sku = row.get('SKU phân loại hàng')
+                quantity = int(row.get('Số lượng')) # Chuyển sang int
+                cost_price = product_cost_map.get(sku, 0)
+                order_cogs += cost_price * quantity
                 
-                if not order_code or not sku:
-                    skipped_count += 1
-                    continue
-
-                # Chuyển đổi và kiểm tra ngày tháng cho từng dòng
-                order_datetime = pd.to_datetime(row.get('Ngày đặt hàng'), errors='coerce')
-                if pd.isna(order_datetime):
-                    print(f"Dòng {index + 2}: Ngày đặt hàng '{row.get('Ngày đặt hàng')}' không hợp lệ, bỏ qua.")
-                    skipped_count += 1
-                    continue
-
-                order_data = row.to_dict()
-                order_data['Ngày đặt hàng'] = order_datetime.date()
-                order_data['Số lượng'] = to_int(row.get('Số lượng'))
-                
-                crud.get_or_create_customer(db, customer_data=order_data, brand_id=brand_id)
-                crud.create_order_entry(db, order_data=order_data, brand_id=brand_id, source=source)
-                
-                processed_count += 1
-
-            except Exception as e:
-                print(f"Lỗi xử lý dòng {index + 2}: {e}. Dữ liệu dòng: {row.to_dict()}")
-                skipped_count += 1
-                continue
-
-        message = f"Hoàn tất! Đã xử lý {processed_count}/{len(df_orig)} dòng sản phẩm."
-        if skipped_count > 0:
-            message += f" Đã bỏ qua {skipped_count} dòng bị lỗi hoặc thiếu dữ liệu."
+                items_details.append({
+                    "sku": sku,
+                    "name": row.get('Tên phân loại hàng'),
+                    "quantity": quantity
+                })
             
-        return {"status": "success", "message": message}
-        
-    except Exception as e: 
-        print("--- LỖI NGHIÊM TRỌNG TRONG process_order_file ---")
+            # === SỬA LỖI Ở ĐÂY: CHUYỂN TOÀN BỘ DỮ LIỆU GỐC THÀNH STRING ===
+            # Cách này đảm bảo không có kiểu dữ liệu phức tạp nào lọt vào JSON
+            details_dict = first_row.astype(str).to_dict()
+            details_dict['items'] = items_details
+            
+            order_data = {
+                "order_code": order_code,
+                "order_date": first_row.get('Ngày đặt hàng').date() if pd.notna(first_row.get('Ngày đặt hàng')) else None,
+                "status": first_row.get('Trạng Thái Đơn Hàng'),
+                "username": first_row.get('Người Mua'),
+                "total_quantity": int(group['Số lượng'].sum()), # Chuyển sang int
+                "cogs": order_cogs,
+                "details": details_dict
+            }
+            
+            crud.create_order_entry(db, order_data=order_data, brand_id=brand_id, source=source)
+            crud.get_or_create_customer(db, customer_data=first_row.to_dict(), brand_id=brand_id)
+            count += 1
+            
+        return {"status": "success", "message": f"Đã xử lý {count} đơn hàng."}
+    except Exception as e:
         traceback.print_exc()
-        return {"status": "error", "message": f"Lỗi hệ thống nghiêm trọng: {e}"}
+        return {"status": "error", "message": str(e)}
 
 def process_ad_file(db: Session, file_content: bytes, brand_id: int, source: str):
     try:

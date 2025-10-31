@@ -26,6 +26,7 @@ class CustomerBase(BaseModel):
     city: Optional[str] = None
     district_1: Optional[str] = None
     district_2: Optional[str] = None
+
 class Customer(CustomerBase):
     id: int; brand_id: int
     class Config: { 'orm_mode': True }
@@ -34,14 +35,18 @@ class Customer(CustomerBase):
 class OrderBase(BaseModel):
     order_code: str
     order_date: Optional[date] = None
-    status: str
-    sku: str
-    quantity: int
-    source: str
+    status: Optional[str] = None
     username: Optional[str] = None
+    total_quantity: int = 0
+    cogs: float = 0.0 # Thêm cogs
+    details: Optional[Dict[str, Any]] = None
+
 class Order(OrderBase):
-    id: int; brand_id: int
-    class Config: { 'orm_mode': True }
+    id: int
+    brand_id: int
+    source: str
+    class Config:
+        orm_mode = True
 
 class AdBase(BaseModel):
     campaign_name: Optional[str]
