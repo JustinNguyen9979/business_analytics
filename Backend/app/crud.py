@@ -52,19 +52,8 @@ def get_or_create_customer(db: Session, customer_data: dict, brand_id: int):
 
 # --- HÀM GHI DỮ LIỆU ORDER ---
 def create_order_entry(db: Session, order_data: dict, brand_id: int, source: str):
-    status = order_data.get('Trạng Thái Đơn Hàng')
-    final_status = 'Đã hủy' if status == 'Đã hủy' else 'Đang giao'
-
-    new_order = models.Order(
-        order_code=order_data.get("Mã đơn hàng"),
-        order_date=order_data.get("Ngày đặt hàng"),
-        status=final_status,
-        sku=order_data.get("SKU phân loại hàng"),
-        quantity=int(order_data.get("Số lượng", 0)),
-        username=order_data.get("Người Mua"),
-        source=source,
-        brand_id=brand_id
-    )
+    """Tạo một bản ghi đơn hàng mới (đã được tổng hợp)."""
+    new_order = models.Order(**order_data, brand_id=brand_id, source=source)
     db.add(new_order)
     db.commit()
     db.refresh(new_order)
