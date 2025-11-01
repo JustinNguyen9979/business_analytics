@@ -28,19 +28,17 @@ export const getAllBrands = async () => {
 //         throw error;
 //     }
 // };
-export const getBrandDetails = async (brandId, startDate, endDate) => {
-    // Thêm một bước kiểm tra an toàn
+export const getBrandDetails = async (brandId, startDate, endDate) => { // Xóa timeRange
     if (!brandId || !startDate || !endDate) {
-        // Nếu thiếu bất kỳ thông tin nào, không gọi API
         return Promise.reject(new Error("Thiếu thông tin Brand ID, ngày bắt đầu hoặc ngày kết thúc."));
     }
 
     try {
         const response = await apiClient.get(`/brands/${brandId}`, {
-            // Phần quan trọng nhất là 'params'
             params: {
                 start_date: startDate.format('YYYY-MM-DD'),
                 end_date: endDate.format('YYYY-MM-DD')
+                // Xóa time_range khỏi đây
             }
         });
         return response.data;

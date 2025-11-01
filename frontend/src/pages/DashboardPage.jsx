@@ -113,13 +113,15 @@ function DashboardPage() {
     useEffect(() => {
         const fetchDetailsForBothPeriods = async () => {
             if (!brandId || !customDateRange[0] || !customDateRange[1]) return;
-            setLoading(true); setError(null);
+            setLoading(true);
+            setError(null);
             const [currentStart, currentEnd] = customDateRange;
             const [prevStart, prevEnd] = getPreviousPeriod(currentStart, currentEnd, timeRange);
             try {
+                // Sửa lại các dòng gọi API
                 const [currentDataResponse, previousDataResponse] = await Promise.all([
-                    getBrandDetails(brandId, currentStart, currentEnd),
-                    (prevStart && prevEnd) ? getBrandDetails(brandId, prevStart, prevEnd) : Promise.resolve(null)
+                    getBrandDetails(brandId, currentStart, currentEnd), // Xóa timeRange
+                    (prevStart && prevEnd) ? getBrandDetails(brandId, prevStart, prevEnd) : Promise.resolve(null) // Xóa timeRange
                 ]);
                 setBrand(reviveDates(currentDataResponse));
                 setPreviousBrandData(reviveDates(previousDataResponse));
@@ -132,7 +134,7 @@ function DashboardPage() {
             }
         };
         fetchDetailsForBothPeriods();
-    }, [brandId, customDateRange, timeRange, navigate]); // Bỏ timeRange khỏi dependency cũng được
+    }, [brandId, customDateRange, timeRange, navigate]);
 
     if (loading) { return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>; }
     if (error) { return <Alert severity="error">{error}</Alert>; }

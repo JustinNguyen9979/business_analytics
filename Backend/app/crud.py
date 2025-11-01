@@ -8,23 +8,23 @@ from datetime import date
 # === HÀM get_brand_details ĐÃ ĐƯỢC VIẾT LẠI HOÀN TOÀN THEO CÁCH ỔN ĐỊNH ===
 def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: date):
     """
-    Lấy chi tiết Brand bằng cách thực hiện các truy vấn riêng lẻ, rõ ràng
-    để đảm bảo sự ổn định và tránh các lỗi phức tạp của SQLAlchemy.
+    Sử dụng lại logic truy vấn "siêu tập hợp" ổn định và hiệu quả nhất.
+    Toàn bộ logic cache đã được chuyển ra ngoài main.py.
     """
-    # Bước 1: Lấy đối tượng Brand chính
-    brand = db.query(models.Brand).filter(models.Brand.id == brand_id).first()
-    if not brand:
-        return None
-
-    # Bước 2: Lấy danh sách order_code từ các giao dịch tài chính trong kỳ
+    # Lấy danh sách order_code từ các giao dịch tài chính trong kỳ
     financial_order_codes_query = db.query(models.Revenue.order_code).filter(
         models.Revenue.brand_id == brand_id,
         models.Revenue.transaction_date.between(start_date, end_date)
     ).distinct()
     financial_order_codes = [code for code, in financial_order_codes_query]
 
-    # Bước 3: Tải "siêu tập hợp" các đơn hàng liên quan trong một truy vấn riêng
-    orders_superset = db.query(models.Order).filter(
+    # Lấy đối tượng Brand và eager-load các mối quan hệ đã được lọc
+    brand = db.query(models.Brand).filter(models.Brand.id == brand_id).first()
+    if not brand:
+        return None
+
+    # Tải "siêu tập hợp" các đơn hàng liên quan
+    brand.orders = db.query(models.Order).filter(
         models.Order.brand_id == brand_id,
         or_(
             models.Order.order_date.between(start_date, end_date),
@@ -32,29 +32,22 @@ def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: da
         )
     ).all()
 
-    # Bước 4: Tải các doanh thu trong kỳ
-    revenues_in_period = db.query(models.Revenue).filter(
+    # Tải các doanh thu trong kỳ
+    brand.revenues = db.query(models.Revenue).filter(
         models.Revenue.brand_id == brand_id,
         models.Revenue.transaction_date.between(start_date, end_date)
     ).all()
 
-    # Bước 5: Tải các quảng cáo trong kỳ
-    ads_in_period = db.query(models.Ad).filter(
+    # Tải các quảng cáo trong kỳ
+    brand.ads = db.query(models.Ad).filter(
         models.Ad.brand_id == brand_id,
         models.Ad.ad_date.between(start_date, end_date)
     ).all()
-
-    # Bước 6: Tải các dữ liệu không cần lọc
-    products = db.query(models.Product).filter(models.Product.brand_id == brand_id).all()
-    customers = db.query(models.Customer).filter(models.Customer.brand_id == brand_id).all()
-
-    # Bước 7: Gắn các danh sách đã lọc vào đối tượng brand
-    brand.orders = orders_superset
-    brand.revenues = revenues_in_period
-    brand.ads = ads_in_period
-    brand.products = products
-    brand.customers = customers
     
+    # Tải các dữ liệu không cần lọc
+    brand.products = db.query(models.Product).filter(models.Product.brand_id == brand_id).all()
+    brand.customers = db.query(models.Customer).filter(models.Customer.brand_id == brand_id).all()
+
     return brand
 
 
