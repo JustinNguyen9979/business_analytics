@@ -1,19 +1,16 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Typography, Box, Grid, Paper, Divider, CircularProgress, Alert, Tabs, Tab, useTheme, useMediaQuery, Button, Menu, MenuItem } from '@mui/material';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import { getBrandDetails } from '../services/api';
 import { StatItem } from '../components/dashboard/StatItem';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import ImportDialog from "../components/import/ImportDialog";
-import SingleImportDialog from "../components/import/SingleImportDialog";
-import dayjs from 'dayjs'; 
+import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
 import { calculateAllKpis } from '../utils/kpiCalculations';
 
 const reviveDates = (data) => {
     if (!data) return data;
-    // Chuyển đổi ngày tháng trong revenues, ads, orders
     (data.revenues || []).forEach(item => {
         if (item.transaction_date) item.transaction_date = dayjs(item.transaction_date);
     });
@@ -26,12 +23,6 @@ const reviveDates = (data) => {
     return data;
 };
 
-const ChartPlaceholder = ({ title }) => (
-    <Paper variant="placeholder" elevation={0}>
-        <Typography variant="h6" color="text.secondary">{title}</Typography>
-    </Paper>
-);
-
 const getPreviousPeriod = (startDate, endDate) => {
     if (!startDate || !endDate) return [null, null];
     const diff = endDate.diff(startDate, 'day');
@@ -40,21 +31,31 @@ const getPreviousPeriod = (startDate, endDate) => {
     return [prevStartDate, prevEndDate];
 };
 
+const ChartPlaceholder = ({ title }) => (
+    <Paper variant="placeholder" elevation={0} sx={{ p: 2, textAlign: 'center' }}>
+        <Typography variant="h6" color="text.secondary">{title}</Typography>
+        <Typography variant="body2" color="text.secondary">(Chức năng đang được phát triển)</Typography>
+    </Paper>
+);
+
 function DashboardPage() {
     const { brandId } = useParams();
-    const [brand, setBrand] = useState(null);
+    // === DÒNG SỬA LỖI ĐƯỢC THÊM VÀO ĐÂY ===
+    const navigate = useNavigate();
+    // ======================================
 
+    const [brand, setBrand] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [customDateRange, setCustomDateRange] = useState([null, null]);
+    const [customDateRange, setCustomDateRange] = useState([dayjs().startOf('month'), dayjs()]);
     const [timeRange, setTimeRange] = useState('month');
     
-    // SỬ DỤNG BREAKPOINT 'lg' (1200px) ĐỂ CÓ NHIỀU KHÔNG GIAN HƠN
     const theme = useTheme();
     const isCompactLayout = useMediaQuery(theme.breakpoints.down('lg'));
     
     const [anchorEl, setAnchorEl] = useState(null);
     const openMenu = Boolean(anchorEl);
+
     const handleClickMenu = (event) => setAnchorEl(event.currentTarget);
     const handleCloseMenu = () => setAnchorEl(null);
 
@@ -62,115 +63,68 @@ function DashboardPage() {
         if (!brand || !customDateRange[0] || !customDateRange[1]) {
             return { currentKpis: {}, previousKpis: {} };
         }
-        
         const currentData = calculateAllKpis(brand, customDateRange);
-        
         const previousPeriod = getPreviousPeriod(customDateRange[0], customDateRange[1]);
         const previousData = calculateAllKpis(brand, previousPeriod);
-
         return { currentKpis: currentData, previousKpis: previousData };
     }, [brand, customDateRange]);
 
     const handleTimeRangeChange = (event, newValue) => {
+        if (!newValue) return;
         let start = dayjs();
         let end = dayjs();
 
         switch (newValue) {
             case 'today':
-                start = dayjs().startOf('day');
-                end = dayjs().endOf('day');
-                break;
+                start = dayjs().startOf('day'); end = dayjs().endOf('day'); break;
             case 'week':
-                start = dayjs().startOf('week');
-                end = dayjs().endOf('week');
-                break;
+                start = dayjs().startOf('week'); end = dayjs().endOf('week'); break;
             case 'month':
-                start = dayjs().startOf('month');
-                // Nếu đang trong tháng hiện tại, ngày kết thúc là hôm nay
-                if (dayjs().isSame(start, 'month')) {
-                    end = dayjs();
-                } else {
-                    end = dayjs().endOf('month');
-                }
-                break;
+                start = dayjs().startOf('month'); end = dayjs(); break;
             case 'year':
-                start = dayjs().startOf('year');
-                 // Nếu đang trong năm hiện tại, ngày kết thúc là hôm nay
-                 if (dayjs().isSame(start, 'year')) {
-                    end = dayjs();
-                } else {
-                    end = dayjs().endOf('year');
-                }
-                break;
-            default:
-                break;
+                start = dayjs().startOf('year'); end = dayjs(); break;
+            default: break;
         }
         setTimeRange(newValue);
-        setCustomDateRange([start, end]); // Cập nhật cả DatePicker
+        setCustomDateRange([start, end]);
         handleCloseMenu();
     };
 
     const handleCustomDateChange = (newDateRange) => {
-        setCustomDateRange(newDateRange);
-        setTimeRange(null); 
-        console.log("Custom date range changed to:", newDateRange);
+        if (newDateRange[0] && newDateRange[1] && dayjs(newDateRange[0]).isValid() && dayjs(newDateRange[1]).isValid()) {
+            setCustomDateRange(newDateRange);
+            setTimeRange(null);
+        }
     };
-
-    // useEffect(() => {
-    //     handleTimeRangeChange(null, 'month');
-    // // eslint-disable-next-line react-hooks/exhaustive-deps
-    // }, []);
-
-    // useEffect(() => {
-    //     const fetchDetails = async () => {
-    //         if (!brandId) { setError("Không tìm thấy Brand ID."); setLoading(false); return; }
-    //         try {
-    //             setLoading(true); setError(null);
-    //             const data = await getBrandDetails(brandId);
-    //             setBrand(data);
-    //         } catch (err) {
-    //             console.error("Lỗi khi fetch chi tiết brand:", err);
-    //             setError(`Không thể tải dữ liệu cho brand ID: ${brandId}. Vui lòng thử lại.`);
-    //         } finally {
-    //             setLoading(false);
-    //         }
-    //     };
-    //     fetchDetails();
-    // }, [brandId]);
 
     useEffect(() => {
         const fetchDetails = async () => {
-            if (!brandId) { 
-                setError("Không tìm thấy Brand ID."); 
-                setLoading(false); 
-                return; 
+            if (!brandId || !customDateRange[0] || !customDateRange[1]) {
+                return;
             }
             try {
-                setLoading(true); 
+                setLoading(true);
                 setError(null);
-                
-                // 1. Lấy dữ liệu JSON từ API (có thể từ cache hoặc DB)
-                const dataFromApi = await getBrandDetails(brandId);
-                
-                // 2. "Hồi sinh" lại các trường ngày tháng từ chuỗi thành đối tượng dayjs
+                const dataFromApi = await getBrandDetails(brandId, customDateRange[0], customDateRange[1]);
                 const revivedData = reviveDates(dataFromApi);
-                
-                // 3. Set state với dữ liệu đã được xử lý
                 setBrand(revivedData);
-
             } catch (err) {
                 console.error("Lỗi khi fetch chi tiết brand:", err);
-                setError(`Không thể tải dữ liệu cho brand ID: ${brandId}. Vui lòng thử lại.`);
+                if (err.response && err.response.status === 404) {
+                    navigate('/'); 
+                } else {
+                    setError(`Không thể tải dữ liệu cho brand ID: ${brandId}. Vui lòng thử lại.`);
+                }
             } finally {
                 setLoading(false);
             }
         };
         fetchDetails();
-    }, [brandId]);
+    }, [brandId, customDateRange, navigate]);
 
     if (loading) { return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>; }
     if (error) { return <Alert severity="error">{error}</Alert>; }
-    if (!brand) { return <Alert severity="warning">Không có dữ liệu cho brand này.</Alert>; }
+    if (!brand) { return null; /* Hoặc có thể trả về một Spinner khác */ }
 
     const kpiGroups = [
         {

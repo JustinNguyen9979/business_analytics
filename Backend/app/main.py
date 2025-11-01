@@ -54,7 +54,7 @@ def read_brand(brand_id: int, start_date: date, end_date: date, db: Session = De
     if not db_brand: 
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
 
-    brand_pydantic = schemas.Brand.from_orm(db_brand)
+    brand_pydantic = schemas.Brand.model_validate(db_brand)
     brand_dict = json.loads(brand_pydantic.model_dump_json()) # Chuyển thành dict
 
     try:
