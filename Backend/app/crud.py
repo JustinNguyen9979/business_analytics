@@ -2,7 +2,7 @@
 
 import json
 from sqlalchemy.orm import Session
-from sqlalchemy import func, union_all, select
+from sqlalchemy import func, union_all, select, or_
 import models, schemas
 from datetime import date, timedelta
 from cache import redis_client
@@ -54,10 +54,81 @@ def _calculate_daily_kpis_from_db(db: Session, brand_id: int, target_date: date)
         
         # === KHỐI TÍNH TOÁN VẬN HÀNH (Dựa trên ngày đặt hàng) ===
         totalOrders = len(set(o.order_code for o in orders_placed_in_day))
-        # (Các chỉ số vận hành khác sẽ được bổ sung ở đây)
+        
+        # 1. Xác định các mã đơn hàng bị hủy và hoàn trong ngày
+        cancelled_order_codes = {
+            o.order_code for o in orders_placed_in_day 
+            if o.status and ( 'hủy' in o.status.lower() or 'cancel' in o.status.lower() )
+        }
+        
+        refunded_order_codes = {
+            r.order_code for r in revenues_in_day 
+            if r.details and r.details.get('Mã yêu cầu hoàn tiền') not in (None, 'nan', '')
+        }
+
+        # 2. Tính số lượng đơn hàng
+        cancelledOrders = len(cancelled_order_codes)
+        refundedOrders = len(refunded_order_codes)
+        completedOrders = max(0, totalOrders - cancelledOrders - refundedOrders)
+
+        # Tính AOV, UPT, Unique SKUs Sold
+        totalQuantitySoldInCompletedOrders = 0
+        unique_skus_sold_set = set()
+        
+        # 4. Lặp qua các đơn hàng đặt trong ngày để lấy dữ liệu cho đơn chốt
+        for order in orders_placed_in_day:
+            # Chỉ xét các đơn hàng không bị hủy và không bị hoàn
+            if order.order_code not in cancelled_order_codes and order.order_code not in refunded_order_codes:
+                # Cộng dồn tổng số lượng sản phẩm từ các đơn chốt
+                totalQuantitySoldInCompletedOrders += order.total_quantity
+                
+                # Trích xuất SKU từ `details` để đếm số SKU duy nhất
+                if order.details and 'items' in order.details:
+                    for item in order.details['items']:
+                        if item.get('sku'):
+                            unique_skus_sold_set.add(item['sku'])
+
+        # 5. Tính toán các chỉ số mới
+        aov = (gmv / completedOrders) if completedOrders > 0 else 0
+        upt = (totalQuantitySoldInCompletedOrders / completedOrders) if completedOrders > 0 else 0
+        uniqueSkusSold = len(unique_skus_sold_set)
+        # ==========================================================
 
         # === KHỐI TÍNH TOÁN KHÁCH HÀNG (Dựa trên ngày đặt hàng) ===
-        # (Các chỉ số khách hàng sẽ được bổ sung ở đây)
+        # 1. Lấy danh sách khách hàng duy nhất có đơn trong ngày
+        usernames_today = {o.username for o in orders_placed_in_day if o.username}
+        totalCustomers = len(usernames_today)
+        newCustomers = 0
+        
+        if usernames_today:
+            # 2. Với mỗi khách, tìm ngày đặt hàng đầu tiên của họ
+            # Đây là một truy vấn tối ưu, lấy ngày đầu tiên cho TẤT CẢ các khách hàng trong 1 lần gọi DB
+            first_order_dates_query = db.query(
+                models.Order.username,
+                func.min(models.Order.order_date).label('first_date')
+            ).filter(
+                models.Order.brand_id == brand_id,
+                models.Order.username.in_(usernames_today)
+            ).group_by(models.Order.username).all()
+
+            first_order_map = {username: first_date for username, first_date in first_order_dates_query}
+
+            # 3. Đếm xem có bao nhiêu khách hàng có ngày đầu tiên là hôm nay
+            for username in usernames_today:
+                if first_order_map.get(username) == target_date:
+                    newCustomers += 1
+
+        # 4. Tính các chỉ số còn lại
+        returningCustomers = totalCustomers - newCustomers
+        
+        # === KHỐI TỔNG HỢP & TÍNH CÁC CHỈ SỐ PHỤ THUỘC ===
+        totalCost = cogs + executionCost + adSpend
+        profit = netRevenue - totalCost
+        
+        # 5. Tính các chỉ số phái sinh từ Khách hàng
+        cac = (adSpend / newCustomers) if newCustomers > 0 else 0
+        retentionRate = (returningCustomers / totalCustomers) if totalCustomers > 0 else 0
+        ltv = (profit / totalCustomers) if totalCustomers > 0 else 0
 
         # === KHỐI TỔNG HỢP & TÍNH CÁC CHỈ SỐ PHỤ THUỘC ===
         totalCost = cogs + executionCost + adSpend
@@ -71,6 +142,7 @@ def _calculate_daily_kpis_from_db(db: Session, brand_id: int, target_date: date)
         # --- BƯỚC 2: TẠO DICTIONARY KẾT QUẢ ---
         daily_kpis = {field: 0 for field in schemas.KpiSet.model_fields.keys()}
         daily_kpis.update({
+            # Tài chính
             "gmv": gmv,
             "netRevenue": netRevenue,
             "cogs": cogs,
@@ -78,10 +150,30 @@ def _calculate_daily_kpis_from_db(db: Session, brand_id: int, target_date: date)
             "adSpend": adSpend,
             "totalCost": totalCost,
             "profit": profit,
-            "totalOrders": totalOrders,
+
+            # Tỷ lệ tài chính
             "roi": roi,
             "profitMargin": profitMargin,
             "takeRate": takeRate,
+
+            # Vận hành
+            "totalOrders": totalOrders,
+            "completedOrders": completedOrders,
+            "cancelledOrders": cancelledOrders,
+            "refundedOrders": refundedOrders,
+            "aov": aov,
+            "upt": upt,
+            "uniqueSkusSold": uniqueSkusSold,
+
+            "totalQuantitySold": totalQuantitySoldInCompletedOrders,
+
+            # Khách hàng
+            "totalCustomers": totalCustomers,
+            "newCustomers": newCustomers,
+            "returningCustomers": returningCustomers,
+            "cac": cac,
+            "retentionRate": retentionRate,
+            "ltv": ltv,
         })
         return daily_kpis
         
@@ -116,38 +208,158 @@ def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: da
     cache_keys = [f"kpi_daily:{brand_id}:{day.isoformat()}" for day in all_days]
     
     cached_daily_kpis_json = redis_client.mget(cache_keys)
-    final_kpis = {field: 0 for field in schemas.KpiSet.model_fields.keys()}
-    days_to_calculate_live = []
+    
+    # <<< SỬA LỖI 1 & 2: CHỈ CỘNG DỒN CÁC CHỈ SỐ GỐC, LOẠI BỎ AOV/UPT/SKU VÀ THÊM totalQuantitySold >>>
+    aggregated_base_kpis = {
+        # Tài chính
+        "gmv": 0, "netRevenue": 0, "cogs": 0, "executionCost": 0,
+        "adSpend": 0, "totalCost": 0, "profit": 0,
+        # Vận hành
+        "totalOrders": 0, "completedOrders": 0, "cancelledOrders": 0, "refundedOrders": 0,
+        "totalQuantitySold": 0 # Chỉ số gốc mới để tính UPT
+    }
 
+    days_to_calculate_live = []
     for i, daily_kpi_json in enumerate(cached_daily_kpis_json):
         if daily_kpi_json:
             try:
                 daily_kpi = json.loads(daily_kpi_json)
-                for key, value in daily_kpi.items():
-                    if key in final_kpis: final_kpis[key] += value
+                for key in aggregated_base_kpis.keys():
+                    aggregated_base_kpis[key] += daily_kpi.get(key, 0)
             except (json.JSONDecodeError, TypeError):
                 days_to_calculate_live.append(all_days[i])
         else:
             days_to_calculate_live.append(all_days[i])
 
     if days_to_calculate_live:
+        # ... (phần code xử lý cache miss giữ nguyên)
         print(f"API: Cache miss cho các ngày: {[d.isoformat() for d in days_to_calculate_live]}. Tính toán 'sống'...")
         for day in days_to_calculate_live:
             live_kpis = _calculate_daily_kpis_from_db(db, brand_id, day)
             cache_key = f"kpi_daily:{brand_id}:{day.isoformat()}"
             redis_client.setex(cache_key, timedelta(days=1), json.dumps(live_kpis))
-            for key, value in live_kpis.items():
-                if key in final_kpis: final_kpis[key] += value
+            for key in aggregated_base_kpis.keys():
+                aggregated_base_kpis[key] += live_kpis.get(key, 0)
         
-        # === KÍCH HOẠT WORKER NGẦM ===
-        # Nếu phát hiện có ngày bị thiếu trong cache, ra lệnh cho worker chạy nền
-        # để kiểm tra và tính toán lại toàn bộ dữ liệu cho brand này.
         print(f"API: Phát hiện cache lỗi thời cho brand ID {brand_id}. Kích hoạt worker tự sửa chữa.")
         process_brand_data.delay(brand_id)
-        # ==============================
+
+    final_kpis = schemas.KpiSet.model_validate(aggregated_base_kpis).model_dump()
+
+    totalCustomers = db.query(func.count(models.Order.username.distinct()))\
+        .filter(
+            models.Order.brand_id == brand_id,
+            models.Order.order_date.between(start_date, end_date)
+        ).scalar() or 0
+
+    # 1.2. Lấy số khách hàng mới trong giai đoạn (khách có đơn đầu tiên trong giai đoạn này)
+    # Dùng subquery để tìm ngày đầu tiên của mỗi khách hàng, sau đó lọc những ai có ngày đầu tiên trong giai đoạn đang xét
+    subquery = db.query(
+        models.Order.username,
+        func.min(models.Order.order_date).label('first_order_date')
+    ).filter(models.Order.brand_id == brand_id).group_by(models.Order.username).subquery()
+
+    newCustomers = db.query(func.count(subquery.c.username)).filter(
+        subquery.c.first_order_date.between(start_date, end_date)
+    ).scalar() or 0
+    
+    
+    total_profit_final = final_kpis['profit']
+    total_adspend_final = final_kpis['adSpend']
+
+    # 1.3. Tính các chỉ số còn lại
+    returningCustomers = totalCustomers - newCustomers
+    cac = (total_adspend_final / newCustomers) if newCustomers > 0 else 0
+    retentionRate = (returningCustomers / totalCustomers) if totalCustomers > 0 else 0
+    ltv = (total_profit_final / totalCustomers) if totalCustomers > 0 else 0
+    
+    # Lấy các giá trị đã tổng hợp
+    gmv = final_kpis['gmv']
+    completed_orders_final = final_kpis['completedOrders']
+    total_quantity_sold_final = final_kpis['totalQuantitySold']
+    total_orders_final = final_kpis['totalOrders']
+
+    # Tính toán lại các tỷ lệ tài chính
+    final_kpis['roi'] = (final_kpis['profit'] / final_kpis['totalCost']) if final_kpis['totalCost'] > 0 else 0
+    final_kpis['profitMargin'] = (final_kpis['profit'] / final_kpis['netRevenue']) if final_kpis['netRevenue'] != 0 else 0
+    final_kpis['takeRate'] = (final_kpis['executionCost'] / gmv) if gmv > 0 else 0
+
+    # Tính lại các tỷ lệ vận hành
+    final_kpis['completionRate'] = (completed_orders_final / total_orders_final) if total_orders_final > 0 else 0
+    final_kpis['cancellationRate'] = (final_kpis['cancelledOrders'] / total_orders_final) if total_orders_final > 0 else 0
+    final_kpis['refundRate'] = (final_kpis['refundedOrders'] / total_orders_final) if total_orders_final > 0 else 0
+
+    # Tính lại AOV và UPT dựa trên tổng số liệu
+    final_kpis['aov'] = (gmv / completed_orders_final) if completed_orders_final > 0 else 0
+    final_kpis['upt'] = (total_quantity_sold_final / completed_orders_final) if completed_orders_final > 0 else 0
+
+    final_kpis['totalCustomers'] = totalCustomers
+    final_kpis['newCustomers'] = newCustomers
+    final_kpis['returningCustomers'] = returningCustomers
+    final_kpis['cac'] = cac
+    final_kpis['retentionRate'] = retentionRate
+    final_kpis['ltv'] = ltv
+
+    # Phần tính lại số SKU duy nhất bằng truy vấn DB đã rất chính xác, giữ nguyên
+    refunded_codes_in_period = {
+        code for code, in db.query(models.Revenue.order_code)\
+            .filter(
+                models.Revenue.brand_id == brand_id,
+                models.Revenue.transaction_date.between(start_date, end_date),
+                models.Revenue.details['Mã yêu cầu hoàn tiền'].as_string() != 'nan',
+                models.Revenue.details['Mã yêu cầu hoàn tiền'].as_string() != ''
+            ).all()
+    }
+    completed_orders_in_period = db.query(models.Order)\
+        .filter(
+            models.Order.brand_id == brand_id,
+            models.Order.order_date.between(start_date, end_date),
+            ~or_(
+                models.Order.status.ilike('%hủy%'),
+                models.Order.status.ilike('%cancel%')
+            ),
+            ~models.Order.order_code.in_(refunded_codes_in_period)
+        ).all()
+        
+    unique_skus_in_period = set()
+    for order in completed_orders_in_period:
+        if order.details and 'items' in order.details:
+            for item in order.details['items']:
+                if item.get('sku'):
+                    unique_skus_in_period.add(item['sku'])
+    
+    final_kpis['uniqueSkusSold'] = len(unique_skus_in_period)
     
     brand.kpis = final_kpis
     return brand
+
+def recalculate_brand_data_sync(db: Session, brand_id: int):
+    """
+    Hàm này chạy đồng bộ: Xóa cache, tính toán lại và lưu cache mới.
+    Được gọi trực tiếp từ API endpoint.
+    """
+    print(f"SYNC RECALC: Bắt đầu tính toán lại đồng bộ cho brand ID {brand_id}.")
+    
+    # 1. Xóa tất cả cache cũ của brand này
+    keys_to_delete = redis_client.keys(f"kpi_daily:{brand_id}:*")
+    if keys_to_delete:
+        redis_client.delete(*keys_to_delete)
+        print(f"SYNC RECALC: Đã xóa {len(keys_to_delete)} cache keys cho brand ID {brand_id}.")
+
+    # 2. Lấy tất cả các ngày có hoạt động
+    all_activity_dates = get_all_activity_dates(db, brand_id=brand_id)
+    if not all_activity_dates:
+        print(f"SYNC RECALC: Không tìm thấy ngày nào có hoạt động cho brand ID {brand_id}.")
+        return {"message": f"Brand ID {brand_id} không có dữ liệu để tính toán."}
+    
+    # 3. Lặp qua từng ngày và tính toán lại (giống hệt worker)
+    print(f"SYNC RECALC: Sẽ tính toán lại cho brand ID {brand_id} vào {len(all_activity_dates)} ngày.")
+    for target_date in all_activity_dates:
+        # Tái sử dụng hàm `calculate_and_cache_daily_kpis`
+        calculate_and_cache_daily_kpis(db, brand_id=brand_id, target_date=target_date)
+        
+    print(f"SYNC RECALC: Hoàn thành tính toán lại đồng bộ cho brand ID {brand_id}.")
+    return {"message": "Dữ liệu đã được tính toán lại và làm mới thành công!"}
 
 def get_brand(db: Session, brand_id: int):
     return db.query(models.Brand).filter(models.Brand.id == brand_id).first()

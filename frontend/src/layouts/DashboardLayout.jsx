@@ -19,9 +19,9 @@ import PriceCheckIcon from '@mui/icons-material/PriceCheck';
 import ImportDialog from '../components/import/ImportDialog';
 import SingleImportDialog from '../components/import/SingleImportDialog';
 import { uploadShopeeFiles, uploadCostFile } from '../services/api';
-import { useNotification } from '../context/NotificationContext';
 import RefreshIcon from '@mui/icons-material/Refresh'; 
 import { recalculateBrandData } from '../services/api';
+
 
 
 const drawerWidth = 240;
@@ -98,7 +98,8 @@ export default function DashboardLayout() {
   const [isMultiImportDialogOpen, setMultiImportDialogOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [isSingleImportDialogOpen, setSingleImportDialogOpen] = useState(false);
-  const { showNotification } = useNotification();
+  const [isRecalculating, setIsRecalculating] = useState(false);
+
 
   const handleDrawerToggle = () => setOpen(!open);
   const handleImportMenuToggle = () => setImportMenuOpen(!isImportMenuOpen);
@@ -113,19 +114,25 @@ export default function DashboardLayout() {
   };
 
   const handleRecalculate = async () => {
-    if (!brandId) return;
+    if (!brandId || isRecalculating) return;
+    
+    setIsRecalculating(true); // Bắt đầu chạy, nút bấm sẽ bị vô hiệu hóa
+
     try {
-        showNotification("Đang gửi yêu cầu tính toán lại...", "info");
-        const response = await recalculateBrandData(brandId);
-        showNotification(response.message, "success");
-        // Sau khi yêu cầu, tự động tải lại trang sau 2 giây để hiển thị trạng thái loading
-        setTimeout(() => {
-            navigate(0); // Tải lại trang hiện tại
-        }, 2000);
+        // Lệnh await này bây giờ sẽ thực sự CHỜ cho đến khi backend tính xong
+        await recalculateBrandData(brandId);
+        
+        // Sau khi thành công, tự động tải lại trang để lấy dữ liệu mới
+        navigate(0); 
     } catch (error) {
+        // Nếu có lỗi, vẫn hiển thị lỗi và cho phép người dùng thử lại
         const errorMessage = error.response?.data?.detail || "Lỗi khi yêu cầu tính toán lại.";
-        showNotification(errorMessage, "error");
-    }
+        // Cân nhắc dùng alert() hoặc một component thông báo lỗi riêng nếu cần
+        alert(`Đã xảy ra lỗi: ${errorMessage}`);
+        setIsRecalculating(false);
+    } 
+    // Không cần khối finally nữa, vì sau khi thành công trang sẽ reload
+    // và state isRecalculating sẽ tự reset về false
   };
 
   const handleMultiUpload = async (files) => {
@@ -231,11 +238,29 @@ export default function DashboardLayout() {
             </ListItem>
 
             <ListItem disablePadding sx={{ display: 'block' }}>
-                <ListItemButton onClick={handleRecalculate} sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5, color: 'warning.main' }}>
-                    <ListItemIcon sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center', color: 'warning.main' }}>
+                <ListItemButton 
+                    onClick={handleRecalculate} 
+                    disabled={isRecalculating} // Vô hiệu hóa nút khi đang chạy
+                    sx={{ 
+                        minHeight: 48, 
+                        justifyContent: open ? 'initial' : 'center', 
+                        px: 2.5, 
+                        // Đổi màu để người dùng biết là đang có tác vụ
+                        color: isRecalculating ? 'text.secondary' : 'warning.main' 
+                    }}
+                >
+                    <ListItemIcon sx={{ 
+                        minWidth: 0, 
+                        mr: open ? 3 : 'auto', 
+                        justifyContent: 'center', 
+                        color: isRecalculating ? 'text.secondary' : 'warning.main' 
+                    }}>
                         <RefreshIcon />
                     </ListItemIcon>
-                    <ListItemText primary="Tính toán lại" sx={{ opacity: open ? 1 : 0 }} />
+                    <ListItemText 
+                        primary={isRecalculating ? "Đang xử lý..." : "Tải lại dữ liệu"} 
+                        sx={{ opacity: open ? 1 : 0 }} 
+                    />
                 </ListItemButton>
             </ListItem>
 

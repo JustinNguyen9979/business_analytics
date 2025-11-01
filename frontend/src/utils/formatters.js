@@ -10,7 +10,8 @@ export const formatCurrency = (value) => {
     if (typeof value !== 'number' || !isFinite(value)) {
         return '0 đ';
     }
-    return value.toLocaleString('vi-VN') + ' đ';
+    return Math.round(value).toLocaleString('vi-VN') + ' đ';
+
 };
 
 /**
