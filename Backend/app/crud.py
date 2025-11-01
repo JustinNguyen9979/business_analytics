@@ -1,57 +1,154 @@
 # FILE: backend/app/crud.py (PHIÊN BẢN CUỐI CÙNG - ỔN ĐỊNH)
 
+import json
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_
+from sqlalchemy import func, union_all, select
 import models, schemas
-from datetime import date
+from datetime import date, timedelta
+from cache import redis_client
+import math as Math
 
-# === HÀM get_brand_details ĐÃ ĐƯỢC VIẾT LẠI HOÀN TOÀN THEO CÁCH ỔN ĐỊNH ===
-def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: date):
-    """
-    Sử dụng lại logic truy vấn "siêu tập hợp" ổn định và hiệu quả nhất.
-    Toàn bộ logic cache đã được chuyển ra ngoài main.py.
-    """
-    # Lấy danh sách order_code từ các giao dịch tài chính trong kỳ
-    financial_order_codes_query = db.query(models.Revenue.order_code).filter(
-        models.Revenue.brand_id == brand_id,
-        models.Revenue.transaction_date.between(start_date, end_date)
-    ).distinct()
-    financial_order_codes = [code for code, in financial_order_codes_query]
 
-    # Lấy đối tượng Brand và eager-load các mối quan hệ đã được lọc
-    brand = db.query(models.Brand).filter(models.Brand.id == brand_id).first()
-    if not brand:
-        return None
+def parseFloat(value): # Hàm helper
+    try: return float(str(value).replace(',', ''))
+    except (ValueError, TypeError): return 0.0
 
-    # Tải "siêu tập hợp" các đơn hàng liên quan
-    brand.orders = db.query(models.Order).filter(
-        models.Order.brand_id == brand_id,
-        or_(
-            models.Order.order_date.between(start_date, end_date),
-            models.Order.order_code.in_(financial_order_codes)
+def _calculate_daily_kpis_from_db(db: Session, brand_id: int, target_date: date):
+    """Hàm tính toán KPI cho MỘT ngày duy nhất, với logic đã được sửa lại hoàn toàn."""
+    try:
+        # Lấy dữ liệu thô theo từng dòng thời gian
+        orders_placed_in_day = db.query(models.Order).filter(models.Order.brand_id == brand_id, models.Order.order_date == target_date).all()
+        revenues_in_day = db.query(models.Revenue).filter(models.Revenue.brand_id == brand_id, models.Revenue.transaction_date == target_date).all()
+        ads_in_day = db.query(models.Ad).filter(models.Ad.brand_id == brand_id, models.Ad.ad_date == target_date).all()
+
+        # === KHỐI TÍNH TOÁN TÀI CHÍNH (Dựa trên ngày giao dịch) ===
+        gmv = sum(r.gmv for r in revenues_in_day)
+        netRevenue = sum(r.net_revenue for r in revenues_in_day)
+        
+        order_codes_from_revenues = {r.order_code for r in revenues_in_day if r.order_code}
+        cogs = 0
+        if order_codes_from_revenues:
+            financial_orders = db.query(models.Order).filter(models.Order.brand_id == brand_id, models.Order.order_code.in_(order_codes_from_revenues)).all()
+            cogs = sum(o.cogs for o in financial_orders)
+
+        total_fees_and_subsidies = sum(
+            parseFloat(r.details.get('Phí cố định', 0)) +
+            parseFloat(r.details.get('Phí Dịch Vụ', 0)) +
+            parseFloat(r.details.get('Phí thanh toán', 0)) +
+            parseFloat(r.details.get('Phí vận chuyển thực tế', 0)) +
+            parseFloat(r.details.get('Mã ưu đãi do Người Bán chịu', 0)) +
+            parseFloat(r.details.get('Phí hoa hồng Tiếp thị liên kết', 0)) +
+            parseFloat(r.details.get('Phí trả hàng', 0)) +
+            parseFloat(r.details.get('Phí trả hàng cho người bán', 0)) +
+            parseFloat(r.details.get('Phí dịch vụ PiShip', 0)) +
+            parseFloat(r.details.get('Phí vận chuyển được trợ giá từ Shopee', 0)) +
+            parseFloat(r.details.get('Phí vận chuyển được hoàn bởi PiShip', 0))
+            for r in revenues_in_day if r.details is not None
         )
-    ).all()
+        # Chi phí thực thi là giá trị dương của tổng các khoản phí
+        executionCost = abs(total_fees_and_subsidies)
+        
+        # === KHỐI TÍNH TOÁN MARKETING (Dựa trên ngày quảng cáo) ===
+        adSpend = sum(a.expense for a in ads_in_day)
+        # (Các chỉ số marketing khác sẽ được bổ sung ở đây khi có đủ dữ liệu)
+        
+        # === KHỐI TÍNH TOÁN VẬN HÀNH (Dựa trên ngày đặt hàng) ===
+        totalOrders = len(set(o.order_code for o in orders_placed_in_day))
+        # (Các chỉ số vận hành khác sẽ được bổ sung ở đây)
 
-    # Tải các doanh thu trong kỳ
-    brand.revenues = db.query(models.Revenue).filter(
-        models.Revenue.brand_id == brand_id,
-        models.Revenue.transaction_date.between(start_date, end_date)
-    ).all()
+        # === KHỐI TÍNH TOÁN KHÁCH HÀNG (Dựa trên ngày đặt hàng) ===
+        # (Các chỉ số khách hàng sẽ được bổ sung ở đây)
 
-    # Tải các quảng cáo trong kỳ
-    brand.ads = db.query(models.Ad).filter(
-        models.Ad.brand_id == brand_id,
-        models.Ad.ad_date.between(start_date, end_date)
-    ).all()
+        # === KHỐI TỔNG HỢP & TÍNH CÁC CHỈ SỐ PHỤ THUỘC ===
+        totalCost = cogs + executionCost + adSpend
+        profit = netRevenue - cogs  # Lợi nhuận gộp = Doanh thu ròng - Giá vốn
+        
+        # Công thức tính ROI, Tỷ suất lợi nhuận, Take Rate
+        roi = (profit / totalCost) if totalCost > 0 else 0
+        profitMargin = (profit / netRevenue) if netRevenue != 0 else 0
+        takeRate = (executionCost / gmv) if gmv > 0 else 0
+        
+        # --- BƯỚC 2: TẠO DICTIONARY KẾT QUẢ ---
+        daily_kpis = {field: 0 for field in schemas.KpiSet.model_fields.keys()}
+        daily_kpis.update({
+            "gmv": gmv,
+            "netRevenue": netRevenue,
+            "cogs": cogs,
+            "executionCost": executionCost,
+            "adSpend": adSpend,
+            "totalCost": totalCost,
+            "profit": profit,
+            "totalOrders": totalOrders,
+            "roi": roi,
+            "profitMargin": profitMargin,
+            "takeRate": takeRate,
+        })
+        return daily_kpis
+        
+    except Exception as e:
+        print(f"!!! LỖI NGHIÊM TRỌNG KHI TÍNH TOÁN KPI CHO NGÀY {target_date}: {e}")
+        return {field: 0 for field in schemas.KpiSet.model_fields.keys()}
+
+def get_all_activity_dates(db: Session, brand_id: int):
+    order_dates = db.query(models.Order.order_date.label("activity_date")).filter(models.Order.brand_id == brand_id, models.Order.order_date.isnot(None))
+    revenue_dates = db.query(models.Revenue.transaction_date.label("activity_date")).filter(models.Revenue.brand_id == brand_id, models.Revenue.transaction_date.isnot(None))
+    ad_dates = db.query(models.Ad.ad_date.label("activity_date")).filter(models.Ad.brand_id == brand_id, models.Ad.ad_date.isnot(None))
+    all_dates_union = union_all(order_dates, revenue_dates, ad_dates).alias("all_dates")
+    distinct_dates_query = select(all_dates_union.c.activity_date).distinct()
+    return sorted([d for d, in db.execute(distinct_dates_query).fetchall()])
+
+def get_all_brand_ids(db: Session):
+    """Lấy danh sách ID của tất cả các brand."""
+    return [id for id, in db.query(models.Brand.id).all()]
+
+def calculate_and_cache_daily_kpis(db: Session, brand_id: int, target_date: date):
+    daily_kpis = _calculate_daily_kpis_from_db(db, brand_id, target_date)
+    cache_key = f"kpi_daily:{brand_id}:{target_date.isoformat()}"
+    redis_client.setex(cache_key, timedelta(days=90), json.dumps(daily_kpis))
+    print(f"WORKER: Đã cache xong KPI cho key: {cache_key}")
+
+def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: date):
+    from celery_worker import process_brand_data
+    brand = get_brand(db, brand_id)
+    if not brand: return None
+
+    all_days = [start_date + timedelta(days=x) for x in range((end_date - start_date).days + 1)]
+    cache_keys = [f"kpi_daily:{brand_id}:{day.isoformat()}" for day in all_days]
     
-    # Tải các dữ liệu không cần lọc
-    brand.products = db.query(models.Product).filter(models.Product.brand_id == brand_id).all()
-    brand.customers = db.query(models.Customer).filter(models.Customer.brand_id == brand_id).all()
+    cached_daily_kpis_json = redis_client.mget(cache_keys)
+    final_kpis = {field: 0 for field in schemas.KpiSet.model_fields.keys()}
+    days_to_calculate_live = []
 
+    for i, daily_kpi_json in enumerate(cached_daily_kpis_json):
+        if daily_kpi_json:
+            try:
+                daily_kpi = json.loads(daily_kpi_json)
+                for key, value in daily_kpi.items():
+                    if key in final_kpis: final_kpis[key] += value
+            except (json.JSONDecodeError, TypeError):
+                days_to_calculate_live.append(all_days[i])
+        else:
+            days_to_calculate_live.append(all_days[i])
+
+    if days_to_calculate_live:
+        print(f"API: Cache miss cho các ngày: {[d.isoformat() for d in days_to_calculate_live]}. Tính toán 'sống'...")
+        for day in days_to_calculate_live:
+            live_kpis = _calculate_daily_kpis_from_db(db, brand_id, day)
+            cache_key = f"kpi_daily:{brand_id}:{day.isoformat()}"
+            redis_client.setex(cache_key, timedelta(days=1), json.dumps(live_kpis))
+            for key, value in live_kpis.items():
+                if key in final_kpis: final_kpis[key] += value
+        
+        # === KÍCH HOẠT WORKER NGẦM ===
+        # Nếu phát hiện có ngày bị thiếu trong cache, ra lệnh cho worker chạy nền
+        # để kiểm tra và tính toán lại toàn bộ dữ liệu cho brand này.
+        print(f"API: Phát hiện cache lỗi thời cho brand ID {brand_id}. Kích hoạt worker tự sửa chữa.")
+        process_brand_data.delay(brand_id)
+        # ==============================
+    
+    brand.kpis = final_kpis
     return brand
 
-
-# --- CÁC HÀM CÒN LẠI GIỮ NGUYÊN ---
 def get_brand(db: Session, brand_id: int):
     return db.query(models.Brand).filter(models.Brand.id == brand_id).first()
 

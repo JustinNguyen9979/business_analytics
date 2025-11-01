@@ -16,6 +16,28 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
     restart: unless-stopped
 
+  # === SERVICE WORKER CHỈ LÀM VIỆC ===
+  worker:
+    build: { context: ./backend }
+    # Bỏ cờ -B
+    command: celery -A celery_worker.celery_app worker --loglevel=info -P gevent
+    volumes: [ ./backend/app:/app ]
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+    depends_on: [ db, cache, backend ]
+    restart: unless-stopped
+
+  # === SERVICE BEAT MỚI CHỈ ĐỂ LẬP LỊCH ===
+  beat:
+    build: { context: ./backend }
+    # Lệnh riêng cho beat
+    command: celery -A celery_worker.celery_app beat --loglevel=info
+    volumes: [ ./backend/app:/app ]
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+    depends_on: [ db, cache, backend ]
+    restart: unless-stopped
+
   frontend:
     build:
       context: ./frontend
@@ -44,8 +66,7 @@ services:
   cache:
     image: redis:6.2-alpine
     restart: always
-    ports:
-      - '6379:6379' # Mở port để có thể kết nối từ bên ngoài nếu cần
+    ports: [ '6379:6379' ]
     command: redis-server --save 20 1 --loglevel warning
 
 volumes:

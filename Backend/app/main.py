@@ -7,6 +7,7 @@ from typing import List, Optional
 from database import SessionLocal, engine
 from datetime import date
 from cache import redis_client
+from celery_worker import process_brand_data
 
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="CEO Dashboard API by Julice")
@@ -29,48 +30,39 @@ def create_brand_api(brand: schemas.BrandCreate, db: Session = Depends(get_db)):
          raise HTTPException(status_code=400, detail="Brand đã tồn tại")
     return new_brand
 
-# @app.get("/brands/{brand_id}", response_model=schemas.Brand)
-# def read_brand(brand_id: int, db: Session = Depends(get_db)):
-#     db_brand = crud.get_brand(db, brand_id=brand_id)
-#     if not db_brand: raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
-#     return db_brand
-
-@app.get("/brands/{brand_id}") # Bỏ response_model để trả về dict
+@app.get("/brands/{brand_id}", response_model=schemas.BrandWithKpis) # Dùng schema mới
 def read_brand(
     brand_id: int, 
     start_date: date, 
     end_date: date, 
     db: Session = Depends(get_db)
 ):
-    # Quay lại logic cache đơn giản và hiệu quả
-    cache_key = f"brand_details:{brand_id}:{start_date.isoformat()}:{end_date.isoformat()}"
-    
-    try:
-        cached_data = redis_client.get(cache_key)
-        if cached_data:
-            print(f"CACHE HIT: Trả về dữ liệu từ cache cho key: {cache_key}")
-            return json.loads(cached_data)
-    except redis.exceptions.ConnectionError as e:
-        print(f"Lỗi kết nối Redis khi GET: {e}. Bỏ qua cache.")
-
-    print(f"CACHE MISS: Query database cho key: {cache_key}")
     db_brand = crud.get_brand_details(db, brand_id=brand_id, start_date=start_date, end_date=end_date)
-    
     if not db_brand: 
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+    return db_brand
 
-    # Dùng model_validate để chuyển đổi object SQLAlchemy sang Pydantic model
-    brand_pydantic = schemas.Brand.model_validate(db_brand)
-    # Dùng model_dump để chuyển Pydantic model sang dictionary
-    brand_dict = brand_pydantic.model_dump(mode='json')
+@app.post("/brands/{brand_id}/recalculate", status_code=status.HTTP_202_ACCEPTED)
+def recalculate_brand_data(brand_id: int, db: Session = Depends(get_db)):
+    """
+    Endpoint để xóa cache của một brand và kích hoạt worker tính toán lại.
+    """
+    # 1. Kiểm tra xem brand có tồn tại không
+    if not crud.get_brand(db, brand_id):
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
 
-    try:
-        # Lưu dictionary đã được chuyển đổi vào cache
-        redis_client.setex(cache_key, 600, json.dumps(brand_dict, default=str))
-    except redis.exceptions.ConnectionError as e:
-        print(f"Lỗi kết nối Redis khi SET: {e}. Không thể lưu cache.")
+    # 2. Xóa tất cả các cache key liên quan đến brand này
+    # Lấy tất cả các key có dạng "kpi_daily:brand_id:*"
+    keys_to_delete = redis_client.keys(f"kpi_daily:{brand_id}:*")
+    if keys_to_delete:
+        redis_client.delete(*keys_to_delete)
+        print(f"RECALC: Đã xóa {len(keys_to_delete)} cache keys cho brand ID {brand_id}.")
 
-    return brand_dict
+    # 3. Kích hoạt worker để tính toán lại từ đầu
+    process_brand_data.delay(brand_id)
+    print(f"RECALC: Đã kích hoạt worker tính toán lại cho brand ID {brand_id}.")
+
+    return {"message": "Yêu cầu tính toán lại đã được gửi. Dữ liệu sẽ được cập nhật sau vài phút."}
 
 @app.post("/upload/{platform}/{brand_id}")
 async def upload_platform_data(
@@ -122,7 +114,10 @@ async def upload_platform_data(
     if not results:
         raise HTTPException(status_code=400, detail="Không có file nào được cung cấp để xử lý.")
 
-    return {"message": f"Xử lý file cho nền tảng '{platform}' hoàn tất!", "results": results}
+    process_brand_data.delay(brand_id)
+    print(f"MAIN: Đã kích hoạt worker xử lý dữ liệu cho brand ID {brand_id}")
+
+    return {"message": f"Xử lý file cho nền tảng '{platform}' hoàn tất! Dữ liệu đang được tính toán nền.", "results": results}
 
 
 @app.delete("/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)

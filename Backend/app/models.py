@@ -17,9 +17,9 @@ class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True, index=True)
     sku = Column(String, index=True)
-    name = Column(String, nullable=True)
-    cost_price = Column(Integer, default=0) 
-    brand_id = Column(Integer, ForeignKey("brands.id"))
+    name = Column(String, nullable=True, index=True)
+    cost_price = Column(Integer, default=0, index=True) 
+    brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
     
     owner_brand = relationship("Brand", back_populates="products")
 
@@ -27,10 +27,10 @@ class Customer(Base):
     __tablename__ = "customers"
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, index=True)           # Từ 'Người Mua'
-    city = Column(String, nullable=True)            # Từ 'Tỉnh/Thành phố'
-    district_1 = Column(String, nullable=True)      # Từ 'TP / Quận / Huyện'
-    district_2 = Column(String, nullable=True)      # Từ 'Quận'
-    brand_id = Column(Integer, ForeignKey("brands.id"))
+    city = Column(String, nullable=True, index=True)            # Từ 'Tỉnh/Thành phố'
+    district_1 = Column(String, nullable=True, index=True)      # Từ 'TP / Quận / Huyện'
+    district_2 = Column(String, nullable=True, index=True)      # Từ 'Quận'
+    brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
 
     owner_brand = relationship("Brand", back_populates="customers")
 
@@ -41,12 +41,12 @@ class Order(Base):
     # --- Các cột cốt lõi anh yêu cầu ---
     order_code = Column(String, index=True)
     order_date = Column(Date, nullable=True, index=True)
-    status = Column(String, nullable=True)
+    status = Column(String, nullable=True, index=True)
     username = Column(String, index=True, nullable=True)
-    total_quantity = Column(Integer, default=0)
-    cogs = Column(Float, default=0.0)
+    total_quantity = Column(Integer, default=0, index=True)
+    cogs = Column(Float, default=0.0, index=True)
     source = Column(String, nullable=False, index=True)
-    brand_id = Column(Integer, ForeignKey("brands.id"))
+    brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
     details = Column(JSONB, nullable=True)
     
     owner_brand = relationship("Brand", back_populates="orders")
@@ -57,13 +57,13 @@ class Ad(Base):
     # --- Cột cốt lõi ---
     campaign_name = Column(String, index=True)
     ad_date = Column(Date, nullable=True, index=True)
-    impressions = Column(Integer, default=0)
-    clicks = Column(Integer, default=0)
-    expense = Column(Float, default=0.0)
-    orders = Column(Integer, default=0) # Tên chung cho "conversions"
-    gmv = Column(Float, default=0.0)
+    impressions = Column(Integer, default=0, index=True)
+    clicks = Column(Integer, default=0, index=True)
+    expense = Column(Float, default=0.0, index=True)
+    orders = Column(Integer, default=0, index=True) # Tên chung cho "conversions"
+    gmv = Column(Float, default=0.0, index=True)
     source = Column(String, nullable=False, index=True)
-    brand_id = Column(Integer, ForeignKey("brands.id"))
+    brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
     # --- Cột JSONB ---
     details = Column(JSONB, nullable=True)
     
@@ -76,10 +76,10 @@ class Revenue(Base):
     # --- Cột cốt lõi ---
     order_code = Column(String, index=True)
     transaction_date = Column(Date, nullable=True, index=True)
-    net_revenue = Column(Float, default=0.0)
-    gmv = Column(Float, default=0.0)
+    net_revenue = Column(Float, default=0.0, index=True)
+    gmv = Column(Float, default=0.0, index=True)
     source = Column(String, nullable=False, index=True)
-    brand_id = Column(Integer, ForeignKey("brands.id"))
+    brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
     # --- Cột JSONB ---
     details = Column(JSONB, nullable=True)
 

@@ -1,3 +1,4 @@
+# FILE: Backend/requirements.txt (PHIÊN BẢN HOÀN CHỈNH CHO WORKER)
 fastapi
 uvicorn[standard]
 sqlalchemy
@@ -10,3 +11,7 @@ requests
 plotly
 redis
 aioredis
+
+# THÊM CÁC THƯ VIỆN CHO WORKER
+celery[redis]
+gevent
