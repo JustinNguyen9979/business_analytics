@@ -20,6 +20,8 @@ import ImportDialog from '../components/import/ImportDialog';
 import SingleImportDialog from '../components/import/SingleImportDialog';
 import { uploadShopeeFiles, uploadCostFile } from '../services/api';
 import { useNotification } from '../context/NotificationContext';
+import RefreshIcon from '@mui/icons-material/Refresh'; 
+import { recalculateBrandData } from '../services/api';
 
 
 const drawerWidth = 240;
@@ -105,9 +107,27 @@ export default function DashboardLayout() {
     setSelectedPlatform(platform);
     setMultiImportDialogOpen(true);
   };
+
   const handleCloseMultiImportDialog = () => {
     setMultiImportDialogOpen(false);
   };
+
+  const handleRecalculate = async () => {
+    if (!brandId) return;
+    try {
+        showNotification("Đang gửi yêu cầu tính toán lại...", "info");
+        const response = await recalculateBrandData(brandId);
+        showNotification(response.message, "success");
+        // Sau khi yêu cầu, tự động tải lại trang sau 2 giây để hiển thị trạng thái loading
+        setTimeout(() => {
+            navigate(0); // Tải lại trang hiện tại
+        }, 2000);
+    } catch (error) {
+        const errorMessage = error.response?.data?.detail || "Lỗi khi yêu cầu tính toán lại.";
+        showNotification(errorMessage, "error");
+    }
+  };
+
   const handleMultiUpload = async (files) => {
         if (selectedPlatform !== 'Shopee') {
             // Thay thế alert cũ
@@ -207,6 +227,15 @@ export default function DashboardLayout() {
                         <DashboardIcon />
                     </ListItemIcon>
                     <ListItemText primary="Tổng quan" sx={{ opacity: open ? 1 : 0 }} />
+                </ListItemButton>
+            </ListItem>
+
+            <ListItem disablePadding sx={{ display: 'block' }}>
+                <ListItemButton onClick={handleRecalculate} sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5, color: 'warning.main' }}>
+                    <ListItemIcon sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center', color: 'warning.main' }}>
+                        <RefreshIcon />
+                    </ListItemIcon>
+                    <ListItemText primary="Tính toán lại" sx={{ opacity: open ? 1 : 0 }} />
                 </ListItemButton>
             </ListItem>
 

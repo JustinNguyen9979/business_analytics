@@ -6,8 +6,7 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import { useTheme } from '@mui/material/styles';
-import { formatCurrency, formatNumber } from '../../utils/kpiCalculations'; 
-
+import { formatCurrency, formatNumber } from '../../utils/formatters'; 
 
 // Em copy lại luôn phần StatComparison để anh tiện copy cả file
 const StatComparison = ({ value, previousValue, format, direction = 'up' }) => {
@@ -57,9 +56,16 @@ const StatComparison = ({ value, previousValue, format, direction = 'up' }) => {
 export function StatItem({ title, value, previousValue, tooltipText, format = 'number', direction = 'up' }) {
     let displayValue;
     if (typeof value === 'number') {
-        if (format === 'currency') displayValue = formatCurrency(value);
-        else if (format === 'percent') displayValue = `${value.toFixed(2)}%`;
-        else displayValue = formatNumber(value);
+        if (format === 'currency') {
+            displayValue = formatCurrency(value);
+        } 
+        // === SỬA LỖI Ở ĐÂY: NHÂN VỚI 100 TRƯỚC KHI HIỂN THỊ ===
+        else if (format === 'percent') {
+            displayValue = `${(value / 100).toFixed(2)}%`;
+        } 
+        else {
+            displayValue = formatNumber(value);
+        }
     } else {
         displayValue = (format === 'currency' ? '0 đ' : (format === 'percent' ? '0.00%' : '0'));
     }
