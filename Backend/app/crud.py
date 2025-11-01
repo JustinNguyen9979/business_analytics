@@ -1,7 +1,8 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager, selectinload
 import models, schemas
 from datetime import datetime
 import pandas as pd
+from sqlalchemy import Date
 
 # (Các hàm của Brand, Product không đổi)
 def get_brand(db: Session, brand_id: int): return db.query(models.Brand).filter(models.Brand.id == brand_id).first()
