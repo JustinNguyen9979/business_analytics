@@ -71,6 +71,8 @@ class KpiSet(BaseModel):
     completionRate: float = 0
     refundRate: float = 0
     cancellationRate: float = 0
+    totalQuantitySold: int = 0
+
     # Khách hàng
     totalCustomers: int = 0
     newCustomers: int = 0

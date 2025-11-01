@@ -42,27 +42,22 @@ def read_brand(
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
     return db_brand
 
-@app.post("/brands/{brand_id}/recalculate", status_code=status.HTTP_202_ACCEPTED)
+@app.post("/brands/{brand_id}/recalculate", status_code=status.HTTP_200_OK) # Đổi status code thành 200 OK
 def recalculate_brand_data(brand_id: int, db: Session = Depends(get_db)):
     """
-    Endpoint để xóa cache của một brand và kích hoạt worker tính toán lại.
+    Endpoint để tính toán lại toàn bộ dữ liệu của một brand một cách ĐỒNG BỘ.
+    Hàm này sẽ block cho đến khi tính toán xong.
     """
     # 1. Kiểm tra xem brand có tồn tại không
     if not crud.get_brand(db, brand_id):
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
 
-    # 2. Xóa tất cả các cache key liên quan đến brand này
-    # Lấy tất cả các key có dạng "kpi_daily:brand_id:*"
-    keys_to_delete = redis_client.keys(f"kpi_daily:{brand_id}:*")
-    if keys_to_delete:
-        redis_client.delete(*keys_to_delete)
-        print(f"RECALC: Đã xóa {len(keys_to_delete)} cache keys cho brand ID {brand_id}.")
-
-    # 3. Kích hoạt worker để tính toán lại từ đầu
-    process_brand_data.delay(brand_id)
-    print(f"RECALC: Đã kích hoạt worker tính toán lại cho brand ID {brand_id}.")
-
-    return {"message": "Yêu cầu tính toán lại đã được gửi. Dữ liệu sẽ được cập nhật sau vài phút."}
+    # 2. Gọi hàm tính toán đồng bộ mới từ crud.py
+    # Hàm này sẽ tự xóa cache, tính toán và lưu lại cache mới.
+    result = crud.recalculate_brand_data_sync(db, brand_id=brand_id)
+    
+    # 3. Trả về kết quả sau khi đã chạy xong
+    return result
 
 @app.post("/upload/{platform}/{brand_id}")
 async def upload_platform_data(

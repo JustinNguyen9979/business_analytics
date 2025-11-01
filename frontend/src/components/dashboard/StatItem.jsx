@@ -61,7 +61,7 @@ export function StatItem({ title, value, previousValue, tooltipText, format = 'n
         } 
         // === SỬA LỖI Ở ĐÂY: NHÂN VỚI 100 TRƯỚC KHI HIỂN THỊ ===
         else if (format === 'percent') {
-            displayValue = `${(value / 100).toFixed(2)}%`;
+            displayValue = `${(value * 100).toFixed(2)}%`;
         } 
         else {
             displayValue = formatNumber(value);
