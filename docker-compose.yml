@@ -11,6 +11,7 @@ services:
       - "8000:8000"
     depends_on:
       - db
+      - cache
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
     restart: unless-stopped
@@ -39,6 +40,13 @@ services:
     ports:
       - "${POSTGRES_PORT}:${POSTGRES_PORT}"
     restart: unless-stopped
+
+  cache:
+    image: redis:6.2-alpine
+    restart: always
+    ports:
+      - '6379:6379' # Mở port để có thể kết nối từ bên ngoài nếu cần
+    command: redis-server --save 20 1 --loglevel warning
 
 volumes:
   postgres_data:

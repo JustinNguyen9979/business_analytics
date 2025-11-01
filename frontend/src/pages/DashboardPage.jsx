@@ -11,6 +11,21 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
 import { calculateAllKpis } from '../utils/kpiCalculations';
 
+const reviveDates = (data) => {
+    if (!data) return data;
+    // Chuyển đổi ngày tháng trong revenues, ads, orders
+    (data.revenues || []).forEach(item => {
+        if (item.transaction_date) item.transaction_date = dayjs(item.transaction_date);
+    });
+    (data.ads || []).forEach(item => {
+        if (item.ad_date) item.ad_date = dayjs(item.ad_date);
+    });
+    (data.orders || []).forEach(item => {
+        if (item.order_date) item.order_date = dayjs(item.order_date);
+    });
+    return data;
+};
+
 const ChartPlaceholder = ({ title }) => (
     <Paper variant="placeholder" elevation={0}>
         <Typography variant="h6" color="text.secondary">{title}</Typography>
@@ -28,6 +43,7 @@ const getPreviousPeriod = (startDate, endDate) => {
 function DashboardPage() {
     const { brandId } = useParams();
     const [brand, setBrand] = useState(null);
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [customDateRange, setCustomDateRange] = useState([null, null]);
@@ -100,18 +116,48 @@ function DashboardPage() {
         console.log("Custom date range changed to:", newDateRange);
     };
 
-    useEffect(() => {
-        handleTimeRangeChange(null, 'month');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    // useEffect(() => {
+    //     handleTimeRangeChange(null, 'month');
+    // // eslint-disable-next-line react-hooks/exhaustive-deps
+    // }, []);
+
+    // useEffect(() => {
+    //     const fetchDetails = async () => {
+    //         if (!brandId) { setError("Không tìm thấy Brand ID."); setLoading(false); return; }
+    //         try {
+    //             setLoading(true); setError(null);
+    //             const data = await getBrandDetails(brandId);
+    //             setBrand(data);
+    //         } catch (err) {
+    //             console.error("Lỗi khi fetch chi tiết brand:", err);
+    //             setError(`Không thể tải dữ liệu cho brand ID: ${brandId}. Vui lòng thử lại.`);
+    //         } finally {
+    //             setLoading(false);
+    //         }
+    //     };
+    //     fetchDetails();
+    // }, [brandId]);
 
     useEffect(() => {
         const fetchDetails = async () => {
-            if (!brandId) { setError("Không tìm thấy Brand ID."); setLoading(false); return; }
+            if (!brandId) { 
+                setError("Không tìm thấy Brand ID."); 
+                setLoading(false); 
+                return; 
+            }
             try {
-                setLoading(true); setError(null);
-                const data = await getBrandDetails(brandId);
-                setBrand(data);
+                setLoading(true); 
+                setError(null);
+                
+                // 1. Lấy dữ liệu JSON từ API (có thể từ cache hoặc DB)
+                const dataFromApi = await getBrandDetails(brandId);
+                
+                // 2. "Hồi sinh" lại các trường ngày tháng từ chuỗi thành đối tượng dayjs
+                const revivedData = reviveDates(dataFromApi);
+                
+                // 3. Set state với dữ liệu đã được xử lý
+                setBrand(revivedData);
+
             } catch (err) {
                 console.error("Lỗi khi fetch chi tiết brand:", err);
                 setError(`Không thể tải dữ liệu cho brand ID: ${brandId}. Vui lòng thử lại.`);
@@ -332,6 +378,5 @@ function DashboardPage() {
         </Box>
     );
 }
-
 
 export default DashboardPage;
