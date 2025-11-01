@@ -46,9 +46,27 @@ const theme = createTheme({
                     borderRadius: 10,
                     textTransform: 'none',
                     transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+                    
+                    // === PHẦN CODE MỚI THÊM VÀO ===
+                    // Ghi đè style cho nút khi ở trạng thái disabled
+                    "&.Mui-disabled": {
+                        // Nút Hủy (variant="text" hoặc "outlined")
+                        color: 'rgba(255, 255, 255, 0.5)',
+                        cursor: 'not-allowed',
+                        pointerEvents: 'auto'
+                    }
+                    // ==============================
                 },
                 containedPrimary: {
-                    boxShadow: '0 6px 18px rgba(0,179,255,0.08)'
+                    boxShadow: '0 6px 18px rgba(0,179,255,0.08)',
+                    
+                    // === PHẦN CODE MỚI THÊM VÀO ===
+                    // Ghi đè style cho nút "Đang xử lý..." (variant="contained")
+                    "&.Mui-disabled": {
+                        backgroundColor: 'rgba(255, 255, 255, 0.12)',
+                        color: 'rgba(255, 255, 255, 0.7)',
+                    }
+                    // ==============================
                 }
             }
         },
