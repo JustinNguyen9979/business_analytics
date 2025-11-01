@@ -3,7 +3,6 @@ import redis
 import crud, models, schemas, shopee_parser
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, status
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
 from typing import List, Optional
 from database import SessionLocal, engine
 from datetime import date
@@ -13,10 +12,9 @@ models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="CEO Dashboard API by Julice")
 def get_db(): 
     db = SessionLocal(); 
-    try: 
-        yield db 
-    finally: 
-        db.close()
+    try: yield db 
+    finally: db.close()
+
 
 @app.get("/")
 def read_root(): return {"message": "Chào mừng đến với CEO Dashboard API!"}
@@ -37,8 +35,14 @@ def create_brand_api(brand: schemas.BrandCreate, db: Session = Depends(get_db)):
 #     if not db_brand: raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
 #     return db_brand
 
-@app.get("/brands/{brand_id}") # BỎ response_model=schemas.Brand
-def read_brand(brand_id: int, start_date: date, end_date: date, db: Session = Depends(get_db)):
+@app.get("/brands/{brand_id}") # Bỏ response_model để trả về dict
+def read_brand(
+    brand_id: int, 
+    start_date: date, 
+    end_date: date, 
+    db: Session = Depends(get_db)
+):
+    # Quay lại logic cache đơn giản và hiệu quả
     cache_key = f"brand_details:{brand_id}:{start_date.isoformat()}:{end_date.isoformat()}"
     
     try:
@@ -51,19 +55,21 @@ def read_brand(brand_id: int, start_date: date, end_date: date, db: Session = De
 
     print(f"CACHE MISS: Query database cho key: {cache_key}")
     db_brand = crud.get_brand_details(db, brand_id=brand_id, start_date=start_date, end_date=end_date)
+    
     if not db_brand: 
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
 
+    # Dùng model_validate để chuyển đổi object SQLAlchemy sang Pydantic model
     brand_pydantic = schemas.Brand.model_validate(db_brand)
-    brand_dict = json.loads(brand_pydantic.model_dump_json()) # Chuyển thành dict
+    # Dùng model_dump để chuyển Pydantic model sang dictionary
+    brand_dict = brand_pydantic.model_dump(mode='json')
 
     try:
-        # Lưu chuỗi JSON vào cache
+        # Lưu dictionary đã được chuyển đổi vào cache
         redis_client.setex(cache_key, 600, json.dumps(brand_dict, default=str))
     except redis.exceptions.ConnectionError as e:
         print(f"Lỗi kết nối Redis khi SET: {e}. Không thể lưu cache.")
 
-    # LUÔN TRẢ VỀ DICTIONARY
     return brand_dict
 
 @app.post("/upload/{platform}/{brand_id}")
