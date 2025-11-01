@@ -23,12 +23,24 @@ const reviveDates = (data) => {
     return data;
 };
 
-const getPreviousPeriod = (startDate, endDate) => {
+const getPreviousPeriod = (startDate, endDate, timeRange) => {
     if (!startDate || !endDate) return [null, null];
-    const diff = endDate.diff(startDate, 'day');
-    const prevEndDate = startDate.subtract(1, 'day').endOf('day');
-    const prevStartDate = prevEndDate.subtract(diff, 'day').startOf('day');
-    return [prevStartDate, prevEndDate];
+
+    switch (timeRange) {
+        case 'today':
+            return [startDate.subtract(1, 'day').startOf('day'), endDate.subtract(1, 'day').endOf('day')];
+        case 'week':
+            return [startDate.subtract(1, 'week').startOf('week'), endDate.subtract(1, 'week').endOf('week')];
+        case 'month':
+             return [startDate.subtract(1, 'month').startOf('month'), startDate.subtract(1, 'month').endOf('month')];
+        case 'year':
+            return [startDate.subtract(1, 'year').startOf('year'), startDate.subtract(1, 'year').endOf('year')];
+        default: // Xử lý cho khoảng thời gian tùy chỉnh
+            const diff = endDate.diff(startDate, 'day');
+            const prevEndDate = startDate.subtract(1, 'day').endOf('day');
+            const prevStartDate = prevEndDate.subtract(diff, 'day').startOf('day');
+            return [prevStartDate, prevEndDate];
+    }
 };
 
 const ChartPlaceholder = ({ title }) => (
@@ -45,11 +57,17 @@ function DashboardPage() {
     // ======================================
 
     const [brand, setBrand] = useState(null);
+    const [previousBrandData, setPreviousBrandData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [customDateRange, setCustomDateRange] = useState([dayjs().startOf('month'), dayjs()]);
-    const [timeRange, setTimeRange] = useState('month');
-    
+    // const [customDateRange, setCustomDateRange] = useState([dayjs().startOf('year'), dayjs()]);
+
+    const [customDateRange, setCustomDateRange] = useState([dayjs().startOf('year'), dayjs()]);
+    // State "tạm thời" - chỉ dùng cho giao diện DatePicker
+    const [tempDateRange, setTempDateRange] = useState(customDateRange);
+
+    const [timeRange, setTimeRange] = useState('year');
+
     const theme = useTheme();
     const isCompactLayout = useMediaQuery(theme.breakpoints.down('lg'));
     
@@ -59,68 +77,62 @@ function DashboardPage() {
     const handleClickMenu = (event) => setAnchorEl(event.currentTarget);
     const handleCloseMenu = () => setAnchorEl(null);
 
+    useEffect(() => {
+        setTempDateRange(customDateRange);
+    }, [customDateRange]);
+
     const { currentKpis, previousKpis } = useMemo(() => {
-        if (!brand || !customDateRange[0] || !customDateRange[1]) {
-            return { currentKpis: {}, previousKpis: {} };
-        }
         const currentData = calculateAllKpis(brand, customDateRange);
-        const previousPeriod = getPreviousPeriod(customDateRange[0], customDateRange[1]);
-        const previousData = calculateAllKpis(brand, previousPeriod);
+        // Dùng state `previousBrandData` để tính toán cho kỳ trước
+        const previousData = calculateAllKpis(previousBrandData, getPreviousPeriod(customDateRange[0], customDateRange[1], timeRange));
         return { currentKpis: currentData, previousKpis: previousData };
-    }, [brand, customDateRange]);
+    }, [brand, previousBrandData, customDateRange, timeRange]);
 
     const handleTimeRangeChange = (event, newValue) => {
         if (!newValue) return;
-        let start = dayjs();
-        let end = dayjs();
-
+        let start = dayjs(), end = dayjs();
         switch (newValue) {
-            case 'today':
-                start = dayjs().startOf('day'); end = dayjs().endOf('day'); break;
-            case 'week':
-                start = dayjs().startOf('week'); end = dayjs().endOf('week'); break;
-            case 'month':
-                start = dayjs().startOf('month'); end = dayjs(); break;
-            case 'year':
-                start = dayjs().startOf('year'); end = dayjs(); break;
+            case 'today': start = dayjs().startOf('day'); end = dayjs().endOf('day'); break;
+            case 'week': start = dayjs().startOf('week'); end = dayjs().endOf('week'); break;
+            case 'month': start = dayjs().startOf('month'); end = dayjs(); break;
+            case 'year': start = dayjs().startOf('year'); end = dayjs(); break;
             default: break;
         }
         setTimeRange(newValue);
-        setCustomDateRange([start, end]);
+        setCustomDateRange([start, end]); // Cập nhật state đã xác nhận
         handleCloseMenu();
     };
 
-    const handleCustomDateChange = (newDateRange) => {
+    const handleAcceptDateChange = (newDateRange) => {
         if (newDateRange[0] && newDateRange[1] && dayjs(newDateRange[0]).isValid() && dayjs(newDateRange[1]).isValid()) {
-            setCustomDateRange(newDateRange);
+            setCustomDateRange(newDateRange); // Cập nhật state đã xác nhận
             setTimeRange(null);
         }
     };
 
     useEffect(() => {
-        const fetchDetails = async () => {
-            if (!brandId || !customDateRange[0] || !customDateRange[1]) {
-                return;
-            }
+        const fetchDetailsForBothPeriods = async () => {
+            if (!brandId || !customDateRange[0] || !customDateRange[1]) return;
+            setLoading(true); setError(null);
+            const [currentStart, currentEnd] = customDateRange;
+            const [prevStart, prevEnd] = getPreviousPeriod(currentStart, currentEnd, timeRange);
             try {
-                setLoading(true);
-                setError(null);
-                const dataFromApi = await getBrandDetails(brandId, customDateRange[0], customDateRange[1]);
-                const revivedData = reviveDates(dataFromApi);
-                setBrand(revivedData);
+                const [currentDataResponse, previousDataResponse] = await Promise.all([
+                    getBrandDetails(brandId, currentStart, currentEnd),
+                    (prevStart && prevEnd) ? getBrandDetails(brandId, prevStart, prevEnd) : Promise.resolve(null)
+                ]);
+                setBrand(reviveDates(currentDataResponse));
+                setPreviousBrandData(reviveDates(previousDataResponse));
             } catch (err) {
                 console.error("Lỗi khi fetch chi tiết brand:", err);
-                if (err.response && err.response.status === 404) {
-                    navigate('/'); 
-                } else {
-                    setError(`Không thể tải dữ liệu cho brand ID: ${brandId}. Vui lòng thử lại.`);
-                }
+                if (err.response && err.response.status === 404) { navigate('/'); } 
+                else { setError(`Không thể tải dữ liệu cho brand ID: ${brandId}. Vui lòng thử lại.`); }
             } finally {
                 setLoading(false);
             }
         };
-        fetchDetails();
-    }, [brandId, customDateRange, navigate]);
+        fetchDetailsForBothPeriods();
+    }, [brandId, customDateRange, timeRange, navigate]); // Bỏ timeRange khỏi dependency cũng được
 
     if (loading) { return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}><CircularProgress /></Box>; }
     if (error) { return <Alert severity="error">{error}</Alert>; }
@@ -201,25 +213,36 @@ function DashboardPage() {
                     </Typography>
                     
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', justifyContent: { xs: 'center', lg: 'flex-end' } }}>
-                        <DatePicker 
+                        <DatePicker
                             label="Từ ngày"
-                            value={customDateRange[0]}
-                            onChange={(date) => handleCustomDateChange([date, customDateRange[1]])}
-                            maxDate={customDateRange[1]}
-                            openTo="day"
-                            views={['year', 'month', 'day']}
+                            value={tempDateRange[0]} // Hiển thị giá trị TẠM THỜI
+                            onChange={(date) => setTempDateRange([date, tempDateRange[1]])} // Cập nhật giá trị TẠM THỜI
+                            onAccept={(date) => handleAcceptDateChange([date, tempDateRange[1]])} // XÁC NHẬN giá trị cuối cùng
+                            onClose={() => setTempDateRange(customDateRange)} // Hủy bỏ thay đổi khi đóng
+                            maxDate={tempDateRange[1]}
                             format="DD/MM/YYYY"
-                            sx={{ width: 150 }} // Chỉ giữ lại prop sx nếu cần
+                            views={['year', 'month', 'day']}
+                            closeOnSelect={false}
+                            slotProps={{
+                                textField: { sx: { width: 150 } },
+                                actionBar: { actions: ['cancel', 'accept'] }
+                            }}
                         />
-                        <DatePicker 
+
+                        <DatePicker
                             label="Đến ngày"
-                            value={customDateRange[1]}
-                            onChange={(date) => handleCustomDateChange([customDateRange[0], date])}
-                            minDate={customDateRange[0]}
-                            openTo="day"
-                            views={['year', 'month', 'day']}
+                            value={tempDateRange[1]} // Hiển thị giá trị TẠM THỜI
+                            onChange={(date) => setTempDateRange([tempDateRange[0], date])} // Cập nhật giá trị TẠM THỜI
+                            onAccept={(date) => handleAcceptDateChange([tempDateRange[0], date])} // XÁC NHẬN giá trị cuối cùng
+                            onClose={() => setTempDateRange(customDateRange)} // Hủy bỏ thay đổi khi đóng
+                            minDate={tempDateRange[0]}
                             format="DD/MM/YYYY"
-                            sx={{ width: 150 }} // Chỉ giữ lại prop sx nếu cần
+                            views={['year', 'month', 'day']}
+                            closeOnSelect={false}
+                            slotProps={{
+                                textField: { sx: { width: 150 } },
+                                actionBar: { actions: ['cancel', 'accept'] }
+                            }}
                         />
                         
                         {isCompactLayout ? (
