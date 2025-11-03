@@ -3,10 +3,12 @@
 import React from 'react';
 import Plot from 'react-plotly.js';
 import { useTheme } from '@mui/material/styles';
-import { Paper, Typography } from '@mui/material';
+import { Paper, Typography, Box } from '@mui/material';
 import dayjs from 'dayjs';
 
-function RevenueProfitChart({ data, comparisonData, chartRevision }) {
+
+
+function RevenueProfitChart({ data, comparisonData, chartRevision, controls, filterType }) {
     const theme = useTheme();
 
     if (!data || data.length === 0) {
@@ -17,25 +19,14 @@ function RevenueProfitChart({ data, comparisonData, chartRevision }) {
         );
     }
 
-    // --- LOGIC XỬ LÝ DỮ LIỆU ĐÃ ĐƯỢC DỌN DẸP VÀ SỬA LỖI ---
+    const isMonthlyView = filterType === 'year' || filterType === 'quarter';
 
-    const firstDate = dayjs(data[0].date);
-    const lastDate = dayjs(data[data.length - 1].date);
-    const rangeInDays = lastDate.diff(firstDate, 'days');
-    const MONTHLY_THRESHOLD_DAYS = 90;
-    const isMonthlyView = rangeInDays > MONTHLY_THRESHOLD_DAYS;
-
-    // Bổ sung hàm bị thiếu
     const aggregateDataIfNeeded = (inputData) => {
         if (!isMonthlyView) return inputData;
         const monthlyAggregates = inputData.reduce((acc, current) => {
             const monthKey = dayjs(current.date).format('YYYY-MM');
             if (!acc[monthKey]) {
-                acc[monthKey] = {
-                    date: dayjs(current.date).startOf('month').toDate(),
-                    netRevenue: 0,
-                    profit: 0,
-                };
+                acc[monthKey] = { date: dayjs(current.date).startOf('month').toDate(), netRevenue: 0, profit: 0 };
             }
             acc[monthKey].netRevenue += current.netRevenue;
             acc[monthKey].profit += current.profit;
@@ -65,12 +56,14 @@ function RevenueProfitChart({ data, comparisonData, chartRevision }) {
             line: { color: theme.palette.primary.main, width: 2, dash: 'dot' },
             opacity: 0.6, connectgaps: false,
             hovertemplate: 'DTR (Kỳ trước): <b style="color: #FFD700;">%{y:,.0f} đ</b><extra></extra>',
+            legendgroup: 'group1',
         },
         {
             x: comparisonDates, y: comparisonProfits, type: 'scatter', mode: 'lines', name: 'Lợi nhuận (Kỳ trước)',
             line: { color: '#28a545', width: 2, dash: 'dot' },
             opacity: 0.6, connectgaps: false,
             hovertemplate: 'LN (Kỳ trước): <b style="color: #FFD700;">%{y:,.0f} đ</b><extra></extra>',
+            legendgroup: 'group2',
         },
         {
             x: currentDates, y: currentRevenues, type: 'scatter', mode: 'lines+markers', name: 'Doanh thu ròng',
@@ -78,6 +71,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision }) {
             marker: { color: theme.palette.primary.main, size: 3 },
             connectgaps: false,
             hovertemplate: 'Doanh thu ròng: <b style="color: #FFD700;">%{y:,.0f} đ</b><extra></extra>',
+            legendgroup: 'group3',
         },
         {
             x: currentDates, y: currentProfits, type: 'scatter', mode: 'lines+markers', name: 'Lợi nhuận',
@@ -85,32 +79,19 @@ function RevenueProfitChart({ data, comparisonData, chartRevision }) {
             marker: { color: '#28a545', size: 3 },
             connectgaps: false,
             hovertemplate: 'Lợi nhuận: <b style="color: #FFD700;">%{y:,.0f} đ</b><extra></extra>',
+            legendgroup: 'group4',
         }
     ];
 
-    let xaxisConfig = {};
-
-    if (isMonthlyView) {
-        xaxisConfig = {
-            tickmode: 'auto',
-            nticks: 12,
-            tickformat: '%b %Y'
-        };
-    } else {
-        xaxisConfig = {
-            tickmode: 'array',
-            tickvals: currentDates,
-            ticktext: currentDates.map(d => dayjs(d).format('DD')),
-        };
-    }
-
     const layout = {
-        title: { text: 'Biểu đồ Doanh thu ròng & Lợi nhuận', font: { color: theme.palette.text.primary, size: 18 } },
         autosize: true,
         paper_bgcolor: 'transparent',
         plot_bgcolor: 'transparent',
         xaxis: {
-            ...xaxisConfig,
+            tickmode: 'linear',
+            tick0: currentDates[0],
+            dtick: isMonthlyView ? 'M1' : 'D1',
+            tickformat: isMonthlyView ? '%b' : '%d',
             color: theme.palette.text.secondary,
             gridcolor: theme.palette.divider,
             showspikes: false,
@@ -121,8 +102,9 @@ function RevenueProfitChart({ data, comparisonData, chartRevision }) {
             hoverformat: ',.0f đ', 
             rangeslider: { visible: false },
             showspikes: false,
+            zeroline: false,
         },
-        legend: { font: { color: theme.palette.text.secondary, size: 14 } },
+        legend: { font: { color: theme.palette.text.secondary, size: 14 }, tracegroupgap: 10 },
         margin: { l: 80, r: 40, b: 40, t: 60 },
         hovermode: 'x',
         hoverlabel: {
@@ -139,16 +121,21 @@ function RevenueProfitChart({ data, comparisonData, chartRevision }) {
     };
 
     return (
-        <Paper variant="glass" sx={{ p: 2, height: '450px' }}>
-            <Plot
-                data={chartData}
-                layout={layout}
-                useResizeHandler={true}
-                style={{ width: '100%', height: '100%' }}
-                config={{ displayModeBar: false, responsive: true }}
-                revision={chartRevision}
-            />
-        </Paper>
+        <Box>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {controls}
+            </Box>
+            <Box sx={{ height: '450px' }}>
+                <Plot
+                    data={chartData}
+                    layout={layout}
+                    useResizeHandler={true}
+                    style={{ width: '100%', height: '100%' }}
+                    config={{ displayModeBar: false, responsive: true }}
+                    revision={chartRevision}
+                />
+            </Box>
+        </Box>
     );
 }
 
