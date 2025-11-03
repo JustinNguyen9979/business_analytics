@@ -84,3 +84,13 @@ class KpiSet(BaseModel):
 class BrandWithKpis(BrandInfo):
     kpis: KpiSet
     model_config = ConfigDict(from_attributes=True)
+
+class DailyKpi(BaseModel):
+    """Định nghĩa dữ liệu KPI cho một ngày duy nhất để vẽ biểu đồ."""
+    date: date
+    netRevenue: float = 0
+    profit: float = 0
+
+class DailyKpiResponse(BaseModel):
+    """Cấu trúc dữ liệu trả về cho API biểu đồ."""
+    data: List[DailyKpi]

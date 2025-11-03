@@ -4,14 +4,18 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { 
     Typography, Box, Grid, Paper, Divider, CircularProgress, 
-    Alert, Button, Popover, List, ListItemButton, ListItemText, useTheme, useMediaQuery 
+    Alert, Button, Popover, List, ListItemButton, ListItemText, useTheme 
 } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
-import { getBrandDetails } from '../services/api';
+import { getBrandDetails, getBrandDailyKpis } from '../services/api';
 import { StatItem } from '../components/dashboard/StatItem';
+import { kpiGroups, dateShortcuts } from '../config/dashboardConfig';
 import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
+import RevenueProfitChart from '../components/charts/RevenueProfitChart';
+import ChartPlaceholder from '../components/common/ChartPlaceholder';
+
 
 // Hàm getPreviousPeriod đã được đơn giản hóa
 const getPreviousPeriod = (startDate, endDate) => {
@@ -22,17 +26,13 @@ const getPreviousPeriod = (startDate, endDate) => {
     return [prevStartDate, prevEndDate];
 };
 
-const ChartPlaceholder = ({ title }) => (
-    <Paper variant="placeholder" elevation={0} sx={{ p: 2, textAlign: 'center' }}>
-        <Typography variant="h6" color="text.secondary">{title}</Typography>
-        <Typography variant="body2" color="text.secondary">(Chức năng đang được phát triển)</Typography>
-    </Paper>
-);
-
 function DashboardPage() {
     const { brandId } = useParams();
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
+    const theme = useTheme(); 
+
+    const [dailyChartData, setDailyChartData] = useState([]);
 
     const initializeDateRange = () => {
         const start = searchParams.get('start');
@@ -52,7 +52,6 @@ function DashboardPage() {
     const [customDateRange, setCustomDateRange] = useState(initializeDateRange);
     const [tempDateRange, setTempDateRange] = useState(customDateRange);
     const [anchorEl, setAnchorEl] = useState(null);
-    const theme = useTheme(); 
 
     // === CÁC HÀM XỬ LÝ SỰ KIỆN ===
     const handleOpenPicker = (event) => {
@@ -69,17 +68,6 @@ function DashboardPage() {
         });
     };
 
-    const dateShortcuts = [
-        { label: 'Hôm nay', getValue: () => [dayjs().startOf('day'), dayjs().endOf('day')] },
-        { label: 'Hôm qua', getValue: () => [dayjs().subtract(1, 'day').startOf('day'), dayjs().subtract(1, 'day').endOf('day')] },
-        { label: '7 ngày qua', getValue: () => [dayjs().subtract(6, 'days').startOf('day'), dayjs().endOf('day')] },
-        { label: '28 ngày qua', getValue: () => [dayjs().subtract(27, 'days').startOf('day'), dayjs().endOf('day')] },
-        { label: 'Tuần hiện tại', getValue: () => [dayjs().startOf('week'), dayjs().endOf('week')] },
-        { label: 'Tháng hiện tại', getValue: () => [dayjs().startOf('month'), dayjs().endOf('day')] },
-        { label: 'Tháng trước', getValue: () => [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] },
-        { label: 'Năm nay', getValue: () => [dayjs().startOf('year'), dayjs().endOf('day')] },
-    ];
-
     const handleShortcutClick = (getValue) => {
         const newRange = getValue();
         setCustomDateRange(newRange);
@@ -95,7 +83,7 @@ function DashboardPage() {
 
     // === HÀM LẤY DỮ LIỆU TỪ API ===
     useEffect(() => {
-        const fetchDetailsForBothPeriods = async () => {
+        const fetchAllData = async () => {
             if (!brandId || !customDateRange[0] || !customDateRange[1]) return;
             setLoading(true);
             setError(null);
@@ -103,20 +91,23 @@ function DashboardPage() {
             const [prevStart, prevEnd] = getPreviousPeriod(currentStart, currentEnd);
 
             try {
-                const [currentDataResponse, previousDataResponse] = await Promise.all([
+                const [
+                    currentDataResponse, 
+                    previousDataResponse,
+                    dailyDataResponse
+                ] = await Promise.all([
                     getBrandDetails(brandId, currentStart, currentEnd),
-                    (prevStart && prevEnd) ? getBrandDetails(brandId, prevStart, prevEnd) : Promise.resolve(null)
+                    (prevStart && prevEnd) ? getBrandDetails(brandId, prevStart, prevEnd) : Promise.resolve(null),
+                    getBrandDailyKpis(brandId, currentStart, currentEnd)
                 ]);
 
                 if (currentDataResponse) {
                     setBrandInfo({ id: currentDataResponse.id, name: currentDataResponse.name });
                     setCurrentKpis(currentDataResponse.kpis);
                 }
-                if (previousDataResponse) {
-                    setPreviousKpis(previousDataResponse.kpis);
-                } else {
-                    setPreviousKpis(null);
-                }
+
+                setPreviousKpis(previousDataResponse ? previousDataResponse.kpis : null);
+                setDailyChartData(dailyDataResponse || []);
 
             } catch (err) {
                 console.error("Lỗi khi fetch chi tiết brand:", err);
@@ -126,7 +117,7 @@ function DashboardPage() {
                 setLoading(false);
             }
         };
-        fetchDetailsForBothPeriods();
+        fetchAllData();
     }, [brandId, customDateRange, navigate]);
 
     // === CÁC TRẠNG THÁI RENDER ===
@@ -134,63 +125,9 @@ function DashboardPage() {
     if (error) { return <Alert severity="error">{error}</Alert>; }
     if (!currentKpis || !brandInfo.name) { return null; }
 
-    const kpiGroups = [
-        {
-            groupTitle: 'Tài chính',
-            items: [
-                { key: 'netRevenue', title: 'DOANH THU RÒNG', format: 'currency' },
-                { key: 'gmv', title: 'GMV', format: 'currency', tooltipText: 'Gross Merchandise Value - Tổng giá trị hàng hóa đã bán (chưa trừ chi phí).' },
-                { key: 'totalCost', title: 'TỔNG CHI PHÍ', format: 'currency', tooltipText: 'Tổng chi phí bao gồm Giá vốn và Chi phí Thực thi.', direction: 'down' },
-                { key: 'cogs', title: 'GIÁ VỐN (COGS)', format: 'currency', tooltipText: 'Cost of Goods Sold - Chi phí giá vốn hàng bán.' },
-                { key: 'executionCost', title: 'CHI PHÍ THỰC THI', format: 'currency', direction: 'down' },
-                { key: 'profit', title: 'LỢI NHUẬN GỘP', format: 'currency' },
-                { key: 'roi', title: 'ROI (%)', format: 'percent', tooltipText: 'Return on Investment - Tỷ suất lợi nhuận trên tổng chi phí. Công thức: (Lợi nhuận / Tổng chi phí) * 100.' },
-                { key: 'profitMargin', title: 'TỶ SUẤT LỢI NHUẬN (%)', format: 'percent', tooltipText: 'Tỷ lệ lợi nhuận so với doanh thu. Công thức: (Lợi nhuận / Doanh thu Ròng) * 100.' },
-                { key: 'takeRate', title: 'TAKE RATE (%)', format: 'percent', tooltipText: 'Tỷ lệ phần trăm chi phí thực thi so với GMV. Công thức: (Chi phí Thực thi / GMV) * 100.', direction: 'down' },
-            ]
-        },
-        {
-            groupTitle: 'Marketing',
-            items: [
-                { key: 'adSpend', title: 'CHI PHÍ ADS', format: 'currency' },
-                { key: 'roas', title: 'ROAS', format: 'number', tooltipText: 'Return on Ad Spend - Doanh thu trên chi phí quảng cáo. Công thức: Doanh thu từ Ads / Chi phí Ads.' },
-                { key: 'cpo', title: 'CPO', format: 'currency', tooltipText: 'Cost Per Order - Chi phí để có được một đơn hàng từ quảng cáo.' },
-                { key: 'ctr', title: 'CTR (%)', format: 'percent', tooltipText: 'Click-Through Rate - Tỷ lệ nhấp chuột vào quảng cáo.' },
-                { key: 'cpc', title: 'CPC', format: 'currency', tooltipText: 'Cost Per Click - Chi phí cho mỗi lượt nhấp chuột vào quảng cáo.' },
-                { key: 'conversionRate', title: 'TỶ LỆ CHUYỂN ĐỔI (%)', format: 'percent' },
-            ]
-        },
-        {
-            groupTitle: 'Vận hành',
-            items: [
-                { key: 'totalOrders', title: 'TỔNG ĐƠN', format: 'number' },
-                { key: 'completedOrders', title: 'ĐƠN CHỐT', format: 'number' },
-                { key: 'cancelledOrders', title: 'ĐƠN HỦY', format: 'number', direction: 'down' },
-                { key: 'refundedOrders', title: 'ĐƠN HOÀN', format: 'number', direction: 'down' },
-                { key: 'aov', title: 'AOV', format: 'currency', tooltipText: 'Average Order Value - Giá trị trung bình của một đơn hàng.' },
-                { key: 'upt', title: 'UPT', format: 'number', tooltipText: 'Units Per Transaction - Số sản phẩm trung bình trên một đơn hàng.' },
-                { key: 'uniqueSkusSold', title: 'SỐ SKU ĐÃ BÁN', format: 'number', tooltipText: 'Số loại sản phẩm khác nhau đã được bán.' },
-                { key: 'completionRate', title: 'Tỷ lệ Chốt', format: 'percent', tooltipText: 'Tỷ lệ giữa số đơn chốt và tổng số đơn.' },
-                { key: 'refundRate', title: 'TỶ LỆ HOÀN', format: 'percent', direction: 'down' },
-                { key: 'cancellationRate', title: 'TỶ LỆ HỦY', format: 'percent', direction: 'down' },
-            ]
-        },
-        {
-            groupTitle: 'Khách hàng',
-            items: [
-                { key: 'totalCustomers', title: 'TỔNG KHÁCH', format: 'number' },
-                { key: 'newCustomers', title: 'KHÁCH MỚI', format: 'number' },
-                { key: 'returningCustomers', title: 'KHÁCH QUAY LẠI', format: 'number' },
-                { key: 'cac', title: 'CAC', format: 'currency', tooltipText: 'Customer Acquisition Cost - Chi phí để có được một khách hàng mới.' },
-                { key: 'retentionRate', title: 'TỶ LỆ QL (%)', format: 'percent' },
-                { key: 'ltv', title: 'LTV', format: 'currency', tooltipText: 'Customer Lifetime Value - Lợi nhuận trung bình một khách hàng mang lại.' },
-            ]
-        }
-    ];
-
     // === PHẦN GIAO DIỆN (JSX) ===
     return (
-        <Box>
+        <Box sx={{ px: 1 }}>
             <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: 700 }}>
                 Báo cáo Kinh doanh: {brandInfo.name}
             </Typography>
@@ -312,11 +249,17 @@ function DashboardPage() {
                 </Box>
             </Paper>
 
-            <Grid container spacing={3}>
-                <Grid item xs={12}>
-                    <ChartPlaceholder title="Biểu đồ Doanh thu & Lợi nhuận"/>
+            <Grid container spacing={3} >
+                    <Grid item xs={12}>
+                        {/* <<< BƯỚC 3: KIỂM TRA DỮ LIỆU BIỂU ĐỒ TRƯỚC KHI RENDER >>> */}
+                        {dailyChartData && dailyChartData.length > 0 ? (
+                            <RevenueProfitChart data={dailyChartData} />
+                        ) : (
+                            // Nếu không có dữ liệu, hiển thị placeholder
+                            <ChartPlaceholder title="Biểu đồ Doanh thu & Lợi nhuận" />
+                        )}
+                    </Grid>
                 </Grid>
-            </Grid>
         </Box>
     );
 }

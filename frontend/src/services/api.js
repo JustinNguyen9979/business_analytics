@@ -132,3 +132,18 @@ export const uploadCostFile = async (brandId, costFile) => {
         throw error;
     }
 };
+
+export const getBrandDailyKpis = async (brandId, startDate, endDate) => {
+    try {
+        const response = await apiClient.get(`/brands/${brandId}/daily-kpis`, {
+            params: {
+                start_date: startDate.format('YYYY-MM-DD'),
+                end_date: endDate.format('YYYY-MM-DD'),
+            },
+        });
+        return response.data.data; // Trả về mảng data bên trong response
+    } catch (error) {
+        console.error(`Error fetching daily KPIs for brand ${brandId}:`, error);
+        throw error;
+    }
+};

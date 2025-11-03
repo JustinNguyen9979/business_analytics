@@ -135,3 +135,17 @@ def clone_brand_api(brand_id: int, db: Session = Depends(get_db)):
     if not cloned:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand để nhân bản")
     return cloned
+
+@app.get("/brands/{brand_id}/daily-kpis", response_model=schemas.DailyKpiResponse)
+def read_brand_daily_kpis(
+    brand_id: int, 
+    start_date: date, 
+    end_date: date, 
+    db: Session = Depends(get_db)
+):
+    """Endpoint để lấy dữ liệu KPI hàng ngày cho việc vẽ biểu đồ."""
+    if not crud.get_brand(db, brand_id):
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+    
+    daily_data = crud.get_daily_kpis_for_range(db, brand_id, start_date, end_date)
+    return {"data": daily_data}

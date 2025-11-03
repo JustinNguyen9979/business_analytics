@@ -466,3 +466,45 @@ def clone_brand(db: Session, brand_id: int):
     db.commit()
     db.refresh(cloned_brand)
     return cloned_brand
+
+def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_date: date):
+    """
+    Lấy danh sách KPI hàng ngày cho một brand trong một khoảng thời gian.
+    Hàm này sẽ ưu tiên lấy từ cache, nếu không có sẽ tính toán trực tiếp.
+    """
+    all_days = [start_date + timedelta(days=x) for x in range((end_date - start_date).days + 1)]
+    cache_keys = [f"kpi_daily:{brand_id}:{day.isoformat()}" for day in all_days]
+    
+    cached_data = redis_client.mget(cache_keys)
+    daily_kpi_list = []
+
+    for i, daily_kpi_json in enumerate(cached_data):
+        target_date = all_days[i]
+        if daily_kpi_json:
+            try:
+                kpis = json.loads(daily_kpi_json)
+                daily_kpi_list.append({
+                    "date": target_date,
+                    "netRevenue": kpis.get("netRevenue", 0),
+                    "profit": kpis.get("profit", 0)
+                })
+            except (json.JSONDecodeError, TypeError):
+                # Nếu cache bị lỗi, tính toán lại
+                live_kpis = _calculate_daily_kpis_from_db(db, brand_id, target_date)
+                daily_kpi_list.append({
+                    "date": target_date,
+                    "netRevenue": live_kpis.get("netRevenue", 0),
+                    "profit": live_kpis.get("profit", 0)
+                })
+        else:
+            # Nếu cache miss, tính toán lại
+            live_kpis = _calculate_daily_kpis_from_db(db, brand_id, target_date)
+            daily_kpi_list.append({
+                "date": target_date,
+                "netRevenue": live_kpis.get("netRevenue", 0),
+                "profit": live_kpis.get("profit", 0)
+            })
+            # Cache lại kết quả vừa tính
+            calculate_and_cache_daily_kpis(db, brand_id, target_date)
+
+    return daily_kpi_list
