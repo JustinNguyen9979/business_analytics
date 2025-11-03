@@ -21,7 +21,7 @@ import SingleImportDialog from '../components/import/SingleImportDialog';
 import { uploadShopeeFiles, uploadCostFile } from '../services/api';
 import RefreshIcon from '@mui/icons-material/Refresh'; 
 import { recalculateBrandData } from '../services/api';
-
+import { useLayout } from '../context/LayoutContext';
 
 
 const drawerWidth = 240;
@@ -93,15 +93,18 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
 export default function DashboardLayout() {
   const { brandId } = useParams();
   const navigate = useNavigate();
-  const [open, setOpen] = useState(true);
+  // const [open, setOpen] = useState(true);
   const [isImportMenuOpen, setImportMenuOpen] = useState(false);
   const [isMultiImportDialogOpen, setMultiImportDialogOpen] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState('');
   const [isSingleImportDialogOpen, setSingleImportDialogOpen] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
+  const { isSidebarOpen, setIsSidebarOpen } = useLayout();
+
+  const handleDrawerToggle = () => setIsSidebarOpen(!isSidebarOpen);
 
 
-  const handleDrawerToggle = () => setOpen(!open);
+  // const handleDrawerToggle = () => setOpen(!open);
   const handleImportMenuToggle = () => setImportMenuOpen(!isImportMenuOpen);
 
   const handleOpenMultiImportDialog = (platform) => {
@@ -187,7 +190,7 @@ export default function DashboardLayout() {
       <CssBaseline />
       <AuroraBackground />
       
-      <AppBar position="fixed" open={open}>
+      <AppBar position="fixed" open={isSidebarOpen}>
         <Toolbar>
           <IconButton
             color="inherit"
@@ -196,7 +199,7 @@ export default function DashboardLayout() {
             edge="start"
             sx={{
               marginRight: 5,
-              ...(open && { display: 'none' }),
+              ...(isSidebarOpen && { display: 'none' }),
             }}
           >
             <MenuIcon />
@@ -207,24 +210,24 @@ export default function DashboardLayout() {
         </Toolbar>
       </AppBar>
 
-      <Drawer variant="permanent" open={open}>
+      <Drawer variant="permanent" open={isSidebarOpen}>
         <DrawerHeader>
-            <Box sx={{ display: 'flex', alignItems: 'center', mr: 'auto', pl: 1, opacity: open ? 1 : 0, transition: 'opacity 0.2s' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mr: 'auto', pl: 1, opacity: isSidebarOpen ? 1 : 0, transition: 'opacity 0.2s' }}>
                 <QueryStatsIcon sx={{ color: 'primary.main', mr: 1.5, fontSize: 30 }} />
                 <Typography variant="h6" noWrap>Analytics</Typography>
             </Box>
-            <IconButton onClick={handleDrawerToggle} sx={{ opacity: open ? 1 : 0, color: 'inherit' }}>
+            <IconButton onClick={handleDrawerToggle} sx={{ opacity: isSidebarOpen ? 1 : 0, color: 'inherit' }}>
                 <ChevronLeftIcon />
             </IconButton>
         </DrawerHeader>
         <Divider />
         <List>
             <ListItem disablePadding sx={{ display: 'block' }}>
-                <ListItemButton component={RouterLink} to="/" sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
-                    <ListItemIcon sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center', color: 'primary.main' }}>
+                <ListItemButton component={RouterLink} to="/" sx={{ minHeight: 48, justifyContent: isSidebarOpen ? 'initial' : 'center', px: 2.5 }}>
+                    <ListItemIcon sx={{ minWidth: 0, mr: isSidebarOpen ? 3 : 'auto', justifyContent: 'center', color: 'primary.main' }}>
                         <ArrowBackIcon />
                     </ListItemIcon>
-                    <ListItemText primary="Quay lại Sảnh chính" sx={{ opacity: open ? 1 : 0 }} />
+                    <ListItemText primary="Quay lại Sảnh chính" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
                 </ListItemButton>
             </ListItem>
         
@@ -270,11 +273,11 @@ export default function DashboardLayout() {
                         <CloudUploadIcon />
                     </ListItemIcon>
                     <ListItemText primary="Import Dữ liệu" sx={{ opacity: open ? 1 : 0 }} />
-                    {open ? (isImportMenuOpen ? <ExpandLess /> : <ExpandMore />) : null}
+                    {isSidebarOpen ? (isImportMenuOpen ? <ExpandLess /> : <ExpandMore />) : null}
                 </ListItemButton>
             </ListItem>
             
-            <Collapse in={isImportMenuOpen && open} timeout="auto" unmountOnExit>
+            <Collapse in={isImportMenuOpen && isSidebarOpen} timeout="auto" unmountOnExit>
                 <List component="div" disablePadding>
                     <ListItemButton sx={{ pl: 4 }} onClick={handleOpenSingleImportDialog}>
                         <ListItemIcon><PriceCheckIcon /></ListItemIcon>

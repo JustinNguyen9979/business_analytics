@@ -1,29 +1,32 @@
-// FILE: frontend/src/pages/DashboardPage.jsx 
+// FILE: frontend/src/pages/DashboardPage.jsx (PHIÊN BẢN SỬA LỖI anchorEl)
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useOutletContext } from 'react-router-dom';
 import { 
     Typography, Box, Grid, Paper, Divider, CircularProgress, 
-    Alert, Button, Popover, List, ListItemButton, ListItemText, useTheme 
+    Alert, Button, useTheme
 } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import { StaticDatePicker } from '@mui/x-date-pickers/StaticDatePicker';
+import { useLayout } from '../context/LayoutContext';
 import { getBrandDetails, getBrandDailyKpis } from '../services/api';
 import { StatItem } from '../components/dashboard/StatItem';
-import { kpiGroups, dateShortcuts } from '../config/dashboardConfig';
+import { kpiGroups } from '../config/dashboardConfig';
 import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
 import RevenueProfitChart from '../components/charts/RevenueProfitChart';
 import ChartPlaceholder from '../components/common/ChartPlaceholder';
+import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 
-
-// Hàm getPreviousPeriod đã được đơn giản hóa
 const getPreviousPeriod = (startDate, endDate) => {
     if (!startDate || !endDate) return [null, null];
-    const diff = endDate.diff(startDate, 'day');
-    const prevEndDate = startDate.subtract(1, 'day').endOf('day');
-    const prevStartDate = prevEndDate.subtract(diff, 'day').startOf('day');
-    return [prevStartDate, prevEndDate];
+
+    const duration = endDate.diff(startDate, 'day') + 1;
+
+    // Logic mới: Trừ đi đúng khoảng thời gian (số ngày, tháng, năm) thay vì chỉ số ngày
+    const prevEndDate = startDate.clone().subtract(1, 'day');
+    const prevStartDate = prevEndDate.clone().subtract(duration - 1, 'day');
+    
+    return [prevStartDate.startOf('day'), prevEndDate.endOf('day')];
 };
 
 function DashboardPage() {
@@ -31,8 +34,6 @@ function DashboardPage() {
     const navigate = useNavigate();
     const [searchParams, setSearchParams] = useSearchParams();
     const theme = useTheme(); 
-
-    const [dailyChartData, setDailyChartData] = useState([]);
 
     const initializeDateRange = () => {
         const start = searchParams.get('start');
@@ -43,23 +44,28 @@ function DashboardPage() {
         return [dayjs().startOf('year'), dayjs()];
     };
 
-    // === CÁC STATE CẦN THIẾT ===
     const [brandInfo, setBrandInfo] = useState({ name: '' });
     const [currentKpis, setCurrentKpis] = useState(null);
     const [previousKpis, setPreviousKpis] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [dailyChartData, setDailyChartData] = useState([]);
     const [customDateRange, setCustomDateRange] = useState(initializeDateRange);
-    const [tempDateRange, setTempDateRange] = useState(customDateRange);
+    const [previousDailyChartData, setPreviousDailyChartData] = useState([]);
+    const [chartRevision, setChartRevision] = useState(0);
+    const { isSidebarOpen } = useLayout();
+    
+    // Chỉ sử dụng anchorEl để điều khiển Menu
     const [anchorEl, setAnchorEl] = useState(null);
-
+    const openFilter = Boolean(anchorEl);
+    
     // === CÁC HÀM XỬ LÝ SỰ KIỆN ===
-    const handleOpenPicker = (event) => {
-        setTempDateRange(customDateRange);
+    const handleOpenFilterMenu = (event) => {
         setAnchorEl(event.currentTarget);
     };
-    const handleClosePicker = () => setAnchorEl(null);
-    const openPicker = Boolean(anchorEl);
+    const handleCloseFilterMenu = () => {
+        setAnchorEl(null);
+    };
 
     const updateUrl = (newDateRange) => {
         setSearchParams({
@@ -68,20 +74,23 @@ function DashboardPage() {
         });
     };
 
-    const handleShortcutClick = (getValue) => {
-        const newRange = getValue();
+    const handleApplyFilter = (newRange) => {
         setCustomDateRange(newRange);
         updateUrl(newRange);
-        handleClosePicker();
+        handleCloseFilterMenu(); // Đóng menu sau khi áp dụng
     };
 
-    const handleApplyCustomDate = () => {
-        setCustomDateRange(tempDateRange);
-        updateUrl(tempDateRange);
-        handleClosePicker();
-    };
+    useEffect(() => {
+        // Đặt một khoảng trễ nhỏ để chờ animation của sidebar hoàn tất
+        const timer = setTimeout(() => {
+            // Tăng giá trị revision để buộc biểu đồ phải vẽ lại
+            setChartRevision(prev => prev + 1);
+        }, 300); // 300ms là đủ cho hầu hết các animation
 
-    // === HÀM LẤY DỮ LIỆU TỪ API ===
+        return () => clearTimeout(timer);
+    }, [isSidebarOpen]);
+
+    // === HÀM LẤY DỮ LIỆU TỪ API (giữ nguyên) ===
     useEffect(() => {
         const fetchAllData = async () => {
             if (!brandId || !customDateRange[0] || !customDateRange[1]) return;
@@ -91,14 +100,20 @@ function DashboardPage() {
             const [prevStart, prevEnd] = getPreviousPeriod(currentStart, currentEnd);
 
             try {
-                const [
+                const [ 
                     currentDataResponse, 
-                    previousDataResponse,
-                    dailyDataResponse
+                    previousDataResponse, 
+                    dailyDataResponse, 
+                    previousDailyDataResponse 
                 ] = await Promise.all([
+                    // 1. Lấy KPI kỳ hiện tại
                     getBrandDetails(brandId, currentStart, currentEnd),
+                    // 2. Lấy KPI kỳ trước
                     (prevStart && prevEnd) ? getBrandDetails(brandId, prevStart, prevEnd) : Promise.resolve(null),
-                    getBrandDailyKpis(brandId, currentStart, currentEnd)
+                    // 3. Lấy dữ liệu biểu đồ kỳ hiện tại
+                    getBrandDailyKpis(brandId, currentStart, currentEnd),
+                    // 4. Lấy dữ liệu biểu đồ kỳ trước
+                    (prevStart && prevEnd) ? getBrandDailyKpis(brandId, prevStart, prevEnd) : Promise.resolve(null)
                 ]);
 
                 if (currentDataResponse) {
@@ -108,6 +123,7 @@ function DashboardPage() {
 
                 setPreviousKpis(previousDataResponse ? previousDataResponse.kpis : null);
                 setDailyChartData(dailyDataResponse || []);
+                setPreviousDailyChartData(previousDailyDataResponse || []);
 
             } catch (err) {
                 console.error("Lỗi khi fetch chi tiết brand:", err);
@@ -127,7 +143,7 @@ function DashboardPage() {
 
     // === PHẦN GIAO DIỆN (JSX) ===
     return (
-        <Box sx={{ px: 1 }}>
+        <Box sx={{ px: 1, display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: 700 }}>
                 Báo cáo Kinh doanh: {brandInfo.name}
             </Typography>
@@ -140,82 +156,9 @@ function DashboardPage() {
                         <Typography variant="body1" color="text.secondary">
                            {`${dayjs(customDateRange[0]).format('DD/MM/YYYY')} - ${dayjs(customDateRange[1]).format('DD/MM/YYYY')}`}
                         </Typography>
-                        <Button variant="outlined" onClick={handleOpenPicker} startIcon={<CalendarMonthIcon />}>
+                        <Button variant="outlined" onClick={handleOpenFilterMenu} startIcon={<CalendarMonthIcon />}>
                             Bộ lọc
                         </Button>
-                        <Popover
-                            open={openPicker}
-                            anchorEl={anchorEl}
-                            onClose={handleClosePicker}
-                            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-                            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-                            PaperProps={{ sx: { mt: 1, borderRadius: 3, backdropFilter: 'blur(15px)', backgroundColor: 'rgba(30, 41, 59, 0.8)' } }}
-                        >
-                            <Box sx={{ display: 'flex' }}>
-                                {/* Cột trái: Chỉ chứa các lựa chọn nhanh */}
-                                <Box sx={{ borderRight: 1, borderColor: 'divider', width: 160 }}>
-                                    <List>
-                                        {dateShortcuts.map(({ label, getValue }) => (
-                                            <ListItemButton key={label} onClick={() => handleShortcutClick(getValue)}>
-                                                <ListItemText primary={label} />
-                                            </ListItemButton>
-                                        ))}
-                                    </List>
-                                </Box>
-                                
-                                {/* <<< BƯỚC 2: TÁI CẤU TRÚC CỘT PHẢI ĐỂ CHỨA CẢ LỊCH VÀ NÚT ÁP DỤNG >>> */}
-                                <Box sx={{ display: 'flex', flexDirection: 'column' }}>
-                                    {/* Phần lịch */}
-                                    <Box sx={{ display: 'flex' }}>
-                                        <StaticDatePicker
-                                            displayStaticWrapperAs="desktop"
-                                            value={tempDateRange[0]}
-                                            onChange={(newValue) => {
-                                                const newRange = [newValue, tempDateRange[1]];
-                                                if (newValue.isAfter(tempDateRange[1])) {
-                                                    newRange[1] = newValue;
-                                                }
-                                                setTempDateRange(newRange);
-                                            }}
-                                            maxDate={tempDateRange[1]}
-                                            views={['year', 'month', 'day']}
-                                            slotProps={{ 
-                                                actionBar: { actions: [] },
-                                                calendarHeader: {
-                                                    sx: {
-                                                        '& .MuiPickersArrowSwitcher-button': { color: 'text.secondary' },
-                                                        '& .MuiPickersCalendarHeader-label': { color: 'text.primary' },
-                                                        '& .MuiPickersCalendarHeader-switchViewIcon': { color: 'text.secondary' },
-                                                    }
-                                                }
-                                            }}
-                                        />
-                                        <StaticDatePicker
-                                            displayStaticWrapperAs="desktop"
-                                            value={tempDateRange[1]}
-                                            onChange={(newValue) => setTempDateRange([tempDateRange[0], newValue])}
-                                            minDate={tempDateRange[0]}
-                                            views={['year', 'month', 'day']}
-                                            slotProps={{ 
-                                                actionBar: { actions: [] },
-                                                calendarHeader: {
-                                                    sx: {
-                                                        '& .MuiPickersArrowSwitcher-button': { color: 'text.secondary' },
-                                                        '& .MuiPickersCalendarHeader-label': { color: 'text.primary' },
-                                                        '& .MuiPickersCalendarHeader-switchViewIcon': { color: 'text.secondary' },
-                                                    }
-                                                }
-                                            }}
-                                        />
-                                    </Box>
-                                    
-                                    {/* Phần nút Áp dụng được đặt ở dưới */}
-                                    <Box sx={{ p: 2, pt: 1, display: 'flex', justifyContent: 'flex-end', borderTop: 1, borderColor: 'divider' }}>
-                                        <Button variant="contained" onClick={handleApplyCustomDate}>Áp dụng</Button>
-                                    </Box>
-                                </Box>
-                            </Box>
-                        </Popover>
                     </Box>
                 </Box>
                 
@@ -249,17 +192,26 @@ function DashboardPage() {
                 </Box>
             </Paper>
 
-            <Grid container spacing={3} >
-                    <Grid item xs={12}>
-                        {/* <<< BƯỚC 3: KIỂM TRA DỮ LIỆU BIỂU ĐỒ TRƯỚC KHI RENDER >>> */}
-                        {dailyChartData && dailyChartData.length > 0 ? (
-                            <RevenueProfitChart data={dailyChartData} />
-                        ) : (
-                            // Nếu không có dữ liệu, hiển thị placeholder
-                            <ChartPlaceholder title="Biểu đồ Doanh thu & Lợi nhuận" />
-                        )}
-                    </Grid>
-                </Grid>
+            <Box sx={{ width: '100%', mt: 1 }}>
+                {dailyChartData && dailyChartData.length > 0 ? (
+                    <RevenueProfitChart 
+                        data={dailyChartData} 
+                        comparisonData={previousDailyChartData} 
+                        // <<< THAY ĐỔI 5: Truyền "lệnh làm mới" xuống biểu đồ >>>
+                        chartRevision={chartRevision}
+                    />
+                ) : (
+                    <ChartPlaceholder title="Biểu đồ Doanh thu ròng & Lợi nhuận" />
+                )}
+            </Box>
+            
+            <DateRangeFilterMenu
+                open={openFilter}
+                anchorEl={anchorEl}
+                onClose={handleCloseFilterMenu}
+                initialDateRange={customDateRange}
+                onApply={handleApplyFilter}
+            />
         </Box>
     );
 }
