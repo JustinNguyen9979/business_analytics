@@ -9,6 +9,7 @@ import { useLayout } from '../context/LayoutContext';
 import { getBrandDetails, getBrandDailyKpis } from '../services/api';
 import { StatItem } from '../components/dashboard/StatItem';
 import { kpiGroups } from '../config/dashboardConfig';
+import { processChartData } from '../utils/chartDataProcessor';
 import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
 import quarterOfYear from 'dayjs/plugin/quarterOfYear';
@@ -51,6 +52,7 @@ function DashboardPage() {
     });
     const [dailyChartData, setDailyChartData] = useState([]);
     const [previousDailyChartData, setPreviousDailyChartData] = useState([]);
+    const [chartAggregationType, setChartAggregationType] = useState('month');
     
     // --- STATE CHUNG ---
     const [brandInfo, setBrandInfo] = useState({ name: '' });
@@ -93,8 +95,16 @@ function DashboardPage() {
                 if (kpiResponse) setBrandInfo({ id: kpiResponse.id, name: kpiResponse.name });
                 setCurrentKpis(kpiResponse ? kpiResponse.kpis : null);
                 setPreviousKpis(prevKpiResponse ? prevKpiResponse.kpis : null);
-                setDailyChartData(chartResponse || []);
-                setPreviousDailyChartData(prevChartResponse || []);
+
+                // === DÒNG CODE ĐÃ ĐƯỢC SỬA LẠI CHO ĐÚNG ===
+                const processedCurrent = processChartData(chartResponse, chartDateRange);
+                const processedPrevious = processChartData(prevChartResponse, chartDateRange);
+
+                // Cập nhật state bằng dữ liệu ĐÃ XỬ LÝ
+                setDailyChartData(processedCurrent.aggregatedData);
+                setPreviousDailyChartData(processedPrevious.aggregatedData);
+                setChartAggregationType(processedCurrent.aggregationType);
+                // ==========================================
             } catch (err) {
                 setError("Không thể tải dữ liệu.");
                 console.error("Lỗi khi fetch:", err);
@@ -200,6 +210,8 @@ function DashboardPage() {
                                 comparisonData={previousDailyChartData}
                                 chartRevision={chartRevision}
                                 filterType={chartDateRange.type}
+                                dateRange={chartDateRange.range}
+                                aggregationType={chartAggregationType}
                             />
                         ) : <ChartPlaceholder />
                     )}

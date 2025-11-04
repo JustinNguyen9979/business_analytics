@@ -7,8 +7,7 @@ import { Paper, Typography, Box } from '@mui/material';
 import dayjs from 'dayjs';
 
 
-
-function RevenueProfitChart({ data, comparisonData, chartRevision, controls, filterType }) {
+function RevenueProfitChart({ data, comparisonData, chartRevision, controls, aggregationType, dateRange }) {
     const theme = useTheme();
 
     if (!data || data.length === 0) {
@@ -19,35 +18,24 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, controls, fil
         );
     }
 
-    const isMonthlyView = filterType === 'year' || filterType === 'quarter';
-
-    const aggregateDataIfNeeded = (inputData) => {
-        if (!isMonthlyView) return inputData;
-        const monthlyAggregates = inputData.reduce((acc, current) => {
-            const monthKey = dayjs(current.date).format('YYYY-MM');
-            if (!acc[monthKey]) {
-                acc[monthKey] = { date: dayjs(current.date).startOf('month').toDate(), netRevenue: 0, profit: 0 };
-            }
-            acc[monthKey].netRevenue += current.netRevenue;
-            acc[monthKey].profit += current.profit;
-            return acc;
-        }, {});
-        return Object.values(monthlyAggregates);
-    };
-
     // Xử lý dữ liệu kỳ hiện tại
-    const currentPoints = aggregateDataIfNeeded(data);
+    const currentPoints = data; // Dùng trực tiếp
     const currentDates = currentPoints.map(d => dayjs(d.date).toDate());
     const currentRevenues = currentPoints.map(d => d.netRevenue);
     const currentProfits = currentPoints.map(d => d.profit);
-
+    
     // Xử lý dữ liệu kỳ trước
-    const comparisonPoints = (comparisonData && comparisonData.length > 0) ? aggregateDataIfNeeded(comparisonData) : [];
-    const dateOffset = (comparisonData && comparisonData.length > 0) ? dayjs(data[0].date).diff(dayjs(comparisonData[0].date), 'milliseconds') : 0;
+    const comparisonPoints = (comparisonData && comparisonData.length > 0) ? comparisonData : [];
+    
+    let dateOffset = 0;
+    // Tính toán độ lệch thời gian để hiển thị 2 kỳ trên cùng 1 trục X
+    if (data.length > 0 && comparisonData && comparisonData.length > 0) {
+       dateOffset = dayjs(data[0].date).diff(dayjs(comparisonData[0].date), 'milliseconds');
+    }
+    
     const comparisonDates = comparisonPoints.map(d => dayjs(d.date).add(dateOffset, 'milliseconds').toDate());
     const comparisonRevenues = comparisonPoints.map(d => d.netRevenue);
     const comparisonProfits = comparisonPoints.map(d => d.profit);
-
 
     // --- ĐỊNH NGHĨA BIỂU ĐỒ ---
     const chartData = [
@@ -83,15 +71,47 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, controls, fil
         }
     ];
 
+    const getXAxisConfig = () => {
+        // Luôn bắt đầu từ ngày đầu tiên trong dữ liệu
+        const tick0 = currentDates.length > 0 ? currentDates[0] : new Date();
+
+        switch (aggregationType) {
+            // Xem theo NĂM -> hiển thị tất cả các tháng
+            case 'month':
+                return {
+                    tickmode: 'linear', // Bắt buộc hiển thị theo khoảng cách đều
+                    tick0: tick0,
+                    dtick: 'M1',      // Khoảng cách là 1 tháng ('M1')
+                    tickformat: '%b', // Hiển thị tên tháng (Jan, Feb,...)
+                };
+
+            // Xem theo QUÝ hoặc 3+ THÁNG -> hiển thị các tuần
+            case 'week':
+                return {
+                    tickmode: 'linear',
+                    tick0: tick0,
+                    dtick: 7 * 24 * 60 * 60 * 1000, // Khoảng cách là 7 ngày
+                    tickformat: '%d/%m',
+                };
+            
+            // Xem theo 1-2 THÁNG -> hiển thị tất cả các ngày
+            case 'day':
+            default:
+                return {
+                    tickmode: 'linear',
+                    tick0: tick0,
+                    dtick: 24 * 60 * 60 * 1000, // Khoảng cách là 1 ngày
+                    tickformat: '%d',           // Chỉ hiển thị số ngày cho đỡ rối
+                };
+        }
+    }
+
     const layout = {
         autosize: true,
         paper_bgcolor: 'transparent',
         plot_bgcolor: 'transparent',
         xaxis: {
-            tickmode: 'linear',
-            tick0: currentDates[0],
-            dtick: isMonthlyView ? 'M1' : 'D1',
-            tickformat: isMonthlyView ? '%b' : '%d',
+            ...getXAxisConfig(), // Áp dụng cấu hình động
             color: theme.palette.text.secondary,
             gridcolor: theme.palette.divider,
             showspikes: false,
