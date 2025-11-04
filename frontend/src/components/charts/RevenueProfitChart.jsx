@@ -28,7 +28,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, controls, agg
     const comparisonPoints = (comparisonData && comparisonData.length > 0) ? comparisonData : [];
     
     let dateOffset = 0;
-    // Tính toán độ lệch thời gian để hiển thị 2 kỳ trên cùng 1 trục X
+    // Tính toán độ lệch thời gian để dịch chuyển dữ liệu kỳ trước lên trục thời gian của kỳ này
     if (data.length > 0 && comparisonData && comparisonData.length > 0) {
        dateOffset = dayjs(data[0].date).diff(dayjs(comparisonData[0].date), 'milliseconds');
     }

@@ -1,66 +1,52 @@
 // FILE: frontend/src/pages/DashboardPage.jsx (PHIÊN BẢN HOÀN THIỆN)
 
-import React, { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, useTheme } from '@mui/material';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
+import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import dayjs from 'dayjs';
+
+// 1. IMPORT CUSTOM HOOK MỚI
+import { useDashboardData } from '../components/dashboard/useDashboardData';
+import { useTheme } from '@mui/material/styles';
 
 import { useLayout } from '../context/LayoutContext';
-import { getBrandDetails, getBrandDailyKpis } from '../services/api';
 import { StatItem } from '../components/dashboard/StatItem';
 import { kpiGroups } from '../config/dashboardConfig';
-import { processChartData } from '../utils/chartDataProcessor';
-import dayjs from 'dayjs';
-import 'dayjs/locale/vi';
-import quarterOfYear from 'dayjs/plugin/quarterOfYear';
-dayjs.extend(quarterOfYear);
-
 import RevenueProfitChart from '../components/charts/RevenueProfitChart';
 import ChartPlaceholder from '../components/common/ChartPlaceholder';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import ChartTimeFilter from '../components/common/ChartTimeFilter';
 
-const getPreviousPeriod = (startDate, endDate) => {
-    if (!startDate || !endDate) return [null, null];
-    const duration = endDate.diff(startDate, 'day') + 1;
-    const prevEndDate = startDate.clone().subtract(1, 'day');
-    const prevStartDate = prevEndDate.clone().subtract(duration - 1, 'day');
-    return [prevStartDate.startOf('day'), prevEndDate.endOf('day')];
-};
-
 function DashboardPage() {
+    const theme = useTheme();
     const { brandId } = useParams();
-    const navigate = useNavigate();
     const { isSidebarOpen } = useLayout();
     const [searchParams, setSearchParams] = useSearchParams();
-    const theme = useTheme();
-
-    // --- STATE CHO KPI ---
+    
+    // --- STATE QUẢN LÝ LỰA CHỌN CỦA NGƯỜI DÙNG (VẪN GIỮ LẠI Ở ĐÂY) ---
     const [kpiDateRange, setKpiDateRange] = useState(() => {
         const start = searchParams.get('start');
         const end = searchParams.get('end');
         return (start && end) ? [dayjs(start), dayjs(end)] : [dayjs().subtract(27, 'days').startOf('day'), dayjs().endOf('day')];
     });
-    const [currentKpis, setCurrentKpis] = useState(null);
-    const [previousKpis, setPreviousKpis] = useState(null);
-    const [kpiAnchorEl, setKpiAnchorEl] = useState(null);
-
-    // --- STATE CHO CHART ---
     const [chartDateRange, setChartDateRange] = useState({
         range: [dayjs().startOf('year'), dayjs().endOf('year')],
         type: 'year'
     });
-    const [dailyChartData, setDailyChartData] = useState([]);
-    const [previousDailyChartData, setPreviousDailyChartData] = useState([]);
-    const [chartAggregationType, setChartAggregationType] = useState('month');
     
-    // --- STATE CHUNG ---
-    const [brandInfo, setBrandInfo] = useState({ name: '' });
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    // State cho UI Popover/Menu
+    const [kpiAnchorEl, setKpiAnchorEl] = useState(null);
     const [chartRevision, setChartRevision] = useState(0);
 
-    // --- HANDLERS ---
+    // 2. GỌI CUSTOM HOOK ĐỂ LẤY TOÀN BỘ DỮ LIỆU VÀ TRẠNG THÁI
+    const { loading, error, brandInfo, kpiData, chartData } = useDashboardData(
+        brandId,
+        kpiDateRange,
+        chartDateRange
+    );
+
+    // --- CÁC HÀM XỬ LÝ SỰ KIỆN CỦA UI (KHÔNG THAY ĐỔI) ---
     const handleOpenKpiFilter = (event) => setKpiAnchorEl(event.currentTarget);
     const handleCloseKpiFilter = () => setKpiAnchorEl(null);
     const handleApplyKpiFilter = (newRange) => {
@@ -72,56 +58,16 @@ function DashboardPage() {
         setChartDateRange({ range: newRange, type: type });
     }, []);
 
-    // --- FETCH DATA ---
-    useEffect(() => {
-        const fetchAllData = async () => {
-            if (!brandId) return;
-            setLoading(true);
-            setError(null);
-
-            const [kpiStart, kpiEnd] = kpiDateRange;
-            const [prevKpiStart, prevKpiEnd] = getPreviousPeriod(kpiStart, kpiEnd);
-            const [chartStart, chartEnd] = chartDateRange.range;
-            const [prevChartStart, prevChartEnd] = getPreviousPeriod(chartStart, chartEnd);
-
-            try {
-                const [kpiResponse, prevKpiResponse, chartResponse, prevChartResponse] = await Promise.all([
-                    getBrandDetails(brandId, kpiStart, kpiEnd),
-                    getBrandDetails(brandId, prevKpiStart, prevKpiEnd),
-                    getBrandDailyKpis(brandId, chartStart, chartEnd),
-                    getBrandDailyKpis(brandId, prevChartStart, prevChartEnd)
-                ]);
-
-                if (kpiResponse) setBrandInfo({ id: kpiResponse.id, name: kpiResponse.name });
-                setCurrentKpis(kpiResponse ? kpiResponse.kpis : null);
-                setPreviousKpis(prevKpiResponse ? prevKpiResponse.kpis : null);
-
-                // === DÒNG CODE ĐÃ ĐƯỢC SỬA LẠI CHO ĐÚNG ===
-                const processedCurrent = processChartData(chartResponse, chartDateRange);
-                const processedPrevious = processChartData(prevChartResponse, chartDateRange);
-
-                // Cập nhật state bằng dữ liệu ĐÃ XỬ LÝ
-                setDailyChartData(processedCurrent.aggregatedData);
-                setPreviousDailyChartData(processedPrevious.aggregatedData);
-                setChartAggregationType(processedCurrent.aggregationType);
-                // ==========================================
-            } catch (err) {
-                setError("Không thể tải dữ liệu.");
-                console.error("Lỗi khi fetch:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchAllData();
-    }, [brandId, kpiDateRange, chartDateRange, navigate]);
-
+    // Effect để vẽ lại biểu đồ khi sidebar thay đổi (không thay đổi)
     useEffect(() => {
         const timer = setTimeout(() => setChartRevision(prev => prev + 1), 300);
         return () => clearTimeout(timer);
     }, [isSidebarOpen]);
 
+    // --- PHẦN RENDER GIAO DIỆN ---
     if (error) return <Alert severity="error">{error}</Alert>;
-    if (loading && !currentKpis) { 
+    // 3. SỬ DỤNG KẾT QUẢ TRẢ VỀ TỪ HOOK
+    if (loading && !kpiData.current) { 
         return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>; 
     }
 
@@ -145,7 +91,7 @@ function DashboardPage() {
                 
                 <Divider sx={{ mb: 3 }} />
                 
-                {currentKpis ? (
+                {kpiData.current ? (
                     <Box sx={{ 
                         display: 'grid',
                         gridTemplateColumns: {
@@ -178,8 +124,8 @@ function DashboardPage() {
                                         <StatItem 
                                             key={kpi.key} 
                                             title={kpi.title} 
-                                            value={currentKpis[kpi.key]} 
-                                            previousValue={previousKpis ? previousKpis[kpi.key] : 0}
+                                            value={kpiData.current[kpi.key]} 
+                                            previousValue={kpiData.previous ? kpiData.previous[kpi.key] : 0}
                                             format={kpi.format}
                                             tooltipText={kpi.tooltipText}
                                             direction={kpi.direction}
@@ -204,14 +150,14 @@ function DashboardPage() {
                 
                 <Box sx={{ px: 3, pb: 3, pt: 1 }}>
                     {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', height: 450 }}><CircularProgress /></Box> : (
-                        dailyChartData.length > 0 ? (
+                        chartData.current.length > 0 ? (
                             <RevenueProfitChart 
-                                data={dailyChartData} 
-                                comparisonData={previousDailyChartData}
+                                data={chartData.current} 
+                                comparisonData={chartData.previous}
                                 chartRevision={chartRevision}
                                 filterType={chartDateRange.type}
                                 dateRange={chartDateRange.range}
-                                aggregationType={chartAggregationType}
+                                aggregationType={chartData.aggregationType}
                             />
                         ) : <ChartPlaceholder />
                     )}

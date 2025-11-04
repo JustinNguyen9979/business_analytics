@@ -198,7 +198,7 @@ function ChartTimeFilter({ onFilterChange }) {
                             ))}
                         </List>
                     </Box>
-                    
+
                     {/* --- CỘT NĂM --- */}
                     <Box sx={{ borderRight: 1, borderColor: 'divider', width: 140 }}>
                         <List component="nav" dense>
@@ -206,8 +206,7 @@ function ChartTimeFilter({ onFilterChange }) {
                                 <ListItemButton
                                     key={year}
                                     onMouseEnter={() => setHoverYear(year)}
-                                    onClick={() => handleYearClick(year)}
-                                    // <<< SỬA LẠI LOGIC HIỂN THỊ STYLE >>>
+                                    onClick={() => applyFilter([dayjs().year(year).startOf('year'), dayjs().year(year).endOf('year')], 'year')}
                                     sx={activeFilter.type === 'year' && activeFilter.range[0].year() === year ? selectedSx : hoverSx}
                                 >
                                     <ListItemText primary={`Năm ${year}`} />
