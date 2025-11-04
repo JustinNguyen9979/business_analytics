@@ -1,14 +1,139 @@
-// FILE: frontend/src/components/charts/RevenueProfitChart.jsx (PHIÊN BẢN SỬA LỖI CRASH CUỐI CÙNG)
+// FILE: frontend/src/components/charts/RevenueProfitChart.jsx (PHIÊN BẢN ANIMATION "CHẠY TỪ DƯỚI LÊN")
 
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Plot from 'react-plotly.js';
 import { useTheme } from '@mui/material/styles';
 import { Paper, Typography, Box } from '@mui/material';
 import dayjs from 'dayjs';
 
+// Hàm "Easing" để animation mượt hơn (bắt đầu chậm, tăng tốc rồi chậm lại ở cuối)
+const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-function RevenueProfitChart({ data, comparisonData, chartRevision, controls, aggregationType, dateRange }) {
+function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationType }) {
     const theme = useTheme();
+    const [animatedData, setAnimatedData] = useState([]);
+    const animationFrameId = useRef(null);
+
+    useEffect(() => {
+        // Hủy animation cũ nếu có
+        if (animationFrameId.current) {
+            cancelAnimationFrame(animationFrameId.current);
+        }
+        
+        if (!data || data.length === 0) {
+            setAnimatedData([]);
+            return;
+        }
+
+        // --- HÀM TẠO CẤU TRÚC DỮ LIỆU ---
+        const createChartTraces = (currentData, comparisonData) => {
+            const currentPoints = currentData;
+            const currentDates = currentPoints.map(d => dayjs(d.date).toDate());
+            const currentRevenues = currentPoints.map(d => d.netRevenue);
+            const currentProfits = currentPoints.map(d => d.profit);
+
+            const comparisonPoints = comparisonData || [];
+            let dateOffset = 0;
+            if (currentData.length > 0 && comparisonData && comparisonData.length > 0) {
+                dateOffset = dayjs(currentData[0].date).diff(dayjs(comparisonData[0].date), 'milliseconds');
+            }
+            const comparisonDates = comparisonPoints.map(d => dayjs(d.date).add(dateOffset, 'milliseconds').toDate());
+            const comparisonRevenues = comparisonPoints.map(d => d.netRevenue);
+            const comparisonProfits = comparisonPoints.map(d => d.profit);
+
+            const traceStyles = {
+                comparisonRevenue: { type: 'scatter', mode: 'lines', name: 'Doanh thu ròng (Kỳ trước)', line: { color: theme.palette.primary.main, width: 2, dash: 'dot' }, opacity: 0.6, connectgaps: false, hovertemplate: 'DTR (Kỳ trước): <b>%{y:,.0f} đ</b><extra></extra>', legendgroup: 'group1' },
+                comparisonProfit: { type: 'scatter', mode: 'lines', name: 'Lợi nhuận (Kỳ trước)', line: { color: '#28a545', width: 2, dash: 'dot' }, opacity: 0.6, connectgaps: false, hovertemplate: 'LN (Kỳ trước): <b>%{y:,.0f} đ</b><extra></extra>', legendgroup: 'group2' },
+                currentRevenue: { type: 'scatter', mode: 'lines+markers', name: 'Doanh thu ròng', line: { color: theme.palette.primary.main, width: 2 }, marker: { color: theme.palette.primary.main, size: 3 }, connectgaps: false, hovertemplate: 'Doanh thu ròng: <b>%{y:,.0f} đ</b><extra></extra>', legendgroup: 'group3' },
+                currentProfit: { type: 'scatter', mode: 'lines+markers', name: 'Lợi nhuận', line: { color: '#28a545', width: 2 }, marker: { color: '#28a545', size: 3 }, connectgaps: false, hovertemplate: 'Lợi nhuận: <b>%{y:,.0f} đ</b><extra></extra>', legendgroup: 'group4' },
+            };
+
+            return [
+                { x: comparisonDates, y: comparisonRevenues, ...traceStyles.comparisonRevenue },
+                { x: comparisonDates, y: comparisonProfits, ...traceStyles.comparisonProfit },
+                { x: currentDates, y: currentRevenues, ...traceStyles.currentRevenue },
+                { x: currentDates, y: currentProfits, ...traceStyles.currentProfit },
+            ];
+        };
+
+        // --- LOGIC ANIMATION MỚI SỬ DỤNG requestAnimationFrame ---
+        const finalTraces = createChartTraces(data, comparisonData);
+        const duration = 800;
+        let startTime = null;
+
+        const animate = (timestamp) => {
+            if (!startTime) startTime = timestamp;
+            const elapsed = timestamp - startTime;
+            const rawProgress = Math.min(elapsed / duration, 1);
+            const progress = easeInOutCubic(rawProgress);
+
+            const currentFrameData = finalTraces.map(trace => ({
+                ...trace,
+                y: trace.y.map(endValue => endValue * progress),
+            }));
+            
+            setAnimatedData(currentFrameData);
+
+            if (rawProgress < 1) {
+                animationFrameId.current = requestAnimationFrame(animate);
+            }
+        };
+
+        animationFrameId.current = requestAnimationFrame(animate);
+
+        return () => {
+            if (animationFrameId.current) {
+                cancelAnimationFrame(animationFrameId.current);
+            }
+        };
+
+    }, [data, comparisonData, theme]);
+
+
+    // --- PHẦN LAYOUT ---
+    const allYValues = [
+        ...(data?.map(d => d.netRevenue) || []),
+        ...(data?.map(d => d.profit) || []),
+        ...(comparisonData?.map(d => d.netRevenue) || []),
+        ...(comparisonData?.map(d => d.profit) || [])
+    ];
+    const maxY = allYValues.length > 0 ? Math.max(...allYValues) : 1;
+    const yAxisRangeMax = maxY > 0 ? maxY * 1.1 : 1;
+
+    const getXAxisConfig = () => { 
+        const tick0 = data.length > 0 ? dayjs(data[0].date).toDate() : new Date();
+        switch (aggregationType) {
+            case 'month': return { tickmode: 'linear', tick0: tick0, dtick: 'M1', tickformat: '%b', };
+            case 'week': return { tickmode: 'linear', tick0: tick0, dtick: 7 * 24 * 60 * 60 * 1000, tickformat: 'Tuần %W', };
+            case 'day': default: return { tickmode: 'linear', tick0: tick0, dtick: 24 * 60 * 60 * 1000, tickformat: '%d', };
+        }
+    };
+
+    const layout = {
+        autosize: true,
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        // Bỏ transition đi vì ta tự quản lý animation
+        xaxis: {
+            ...getXAxisConfig(),
+            color: theme.palette.text.secondary,
+            gridcolor: theme.palette.divider,
+            showspikes: false,
+        },
+        yaxis: {
+            range: [0, yAxisRangeMax],
+            color: theme.palette.text.secondary,
+            gridcolor: theme.palette.divider,
+            hoverformat: ',.0f đ',
+            showspikes: false,
+            zeroline: false,
+            rangeslider: { visible: false },
+        },
+        legend: { font: { color: theme.palette.text.secondary, size: 14 }, tracegroupgap: 10 },
+        margin: { l: 80, r: 40, b: 40, t: 60 },
+        hovermode: 'x',
+        hoverlabel: { bgcolor: 'rgba(10, 25, 41, 0.9)', bordercolor: theme.palette.divider, font: { family: 'Inter, Roboto, sans-serif', size: 14, color: '#d9d7cbff' }, namelength: -1, align: 'left',},
+    };
 
     if (!data || data.length === 0) {
         return (
@@ -18,136 +143,11 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, controls, agg
         );
     }
 
-    // Xử lý dữ liệu kỳ hiện tại
-    const currentPoints = data; // Dùng trực tiếp
-    const currentDates = currentPoints.map(d => dayjs(d.date).toDate());
-    const currentRevenues = currentPoints.map(d => d.netRevenue);
-    const currentProfits = currentPoints.map(d => d.profit);
-    
-    // Xử lý dữ liệu kỳ trước
-    const comparisonPoints = (comparisonData && comparisonData.length > 0) ? comparisonData : [];
-    
-    let dateOffset = 0;
-    // Tính toán độ lệch thời gian để dịch chuyển dữ liệu kỳ trước lên trục thời gian của kỳ này
-    if (data.length > 0 && comparisonData && comparisonData.length > 0) {
-       dateOffset = dayjs(data[0].date).diff(dayjs(comparisonData[0].date), 'milliseconds');
-    }
-    
-    const comparisonDates = comparisonPoints.map(d => dayjs(d.date).add(dateOffset, 'milliseconds').toDate());
-    const comparisonRevenues = comparisonPoints.map(d => d.netRevenue);
-    const comparisonProfits = comparisonPoints.map(d => d.profit);
-
-    // --- ĐỊNH NGHĨA BIỂU ĐỒ ---
-    const chartData = [
-        {
-            x: comparisonDates, y: comparisonRevenues, type: 'scatter', mode: 'lines', name: 'Doanh thu ròng (Kỳ trước)',
-            line: { color: theme.palette.primary.main, width: 2, dash: 'dot' },
-            opacity: 0.6, connectgaps: false,
-            hovertemplate: 'DTR (Kỳ trước): <b style="color: #FFD700;">%{y:,.0f} đ</b><extra></extra>',
-            legendgroup: 'group1',
-        },
-        {
-            x: comparisonDates, y: comparisonProfits, type: 'scatter', mode: 'lines', name: 'Lợi nhuận (Kỳ trước)',
-            line: { color: '#28a545', width: 2, dash: 'dot' },
-            opacity: 0.6, connectgaps: false,
-            hovertemplate: 'LN (Kỳ trước): <b style="color: #FFD700;">%{y:,.0f} đ</b><extra></extra>',
-            legendgroup: 'group2',
-        },
-        {
-            x: currentDates, y: currentRevenues, type: 'scatter', mode: 'lines+markers', name: 'Doanh thu ròng',
-            line: { color: theme.palette.primary.main, width: 2 },
-            marker: { color: theme.palette.primary.main, size: 3 },
-            connectgaps: false,
-            hovertemplate: 'Doanh thu ròng: <b style="color: #FFD700;">%{y:,.0f} đ</b><extra></extra>',
-            legendgroup: 'group3',
-        },
-        {
-            x: currentDates, y: currentProfits, type: 'scatter', mode: 'lines+markers', name: 'Lợi nhuận',
-            line: { color: '#28a545', width: 2 },
-            marker: { color: '#28a545', size: 3 },
-            connectgaps: false,
-            hovertemplate: 'Lợi nhuận: <b style="color: #FFD700;">%{y:,.0f} đ</b><extra></extra>',
-            legendgroup: 'group4',
-        }
-    ];
-
-    const getXAxisConfig = () => {
-        // Luôn bắt đầu từ ngày đầu tiên trong dữ liệu
-        const tick0 = currentDates.length > 0 ? currentDates[0] : new Date();
-
-        switch (aggregationType) {
-            // Xem theo NĂM -> hiển thị tất cả các tháng
-            case 'month':
-                return {
-                    tickmode: 'linear', // Bắt buộc hiển thị theo khoảng cách đều
-                    tick0: tick0,
-                    dtick: 'M1',      // Khoảng cách là 1 tháng ('M1')
-                    tickformat: '%b', // Hiển thị tên tháng (Jan, Feb,...)
-                };
-
-            // Xem theo QUÝ hoặc 3+ THÁNG -> hiển thị các tuần
-            case 'week':
-                return {
-                    tickmode: 'linear',
-                    tick0: tick0,
-                    dtick: 7 * 24 * 60 * 60 * 1000, // Khoảng cách là 7 ngày
-                    tickformat: '%d/%m',
-                };
-            
-            // Xem theo 1-2 THÁNG -> hiển thị tất cả các ngày
-            case 'day':
-            default:
-                return {
-                    tickmode: 'linear',
-                    tick0: tick0,
-                    dtick: 24 * 60 * 60 * 1000, // Khoảng cách là 1 ngày
-                    tickformat: '%d',           // Chỉ hiển thị số ngày cho đỡ rối
-                };
-        }
-    }
-
-    const layout = {
-        autosize: true,
-        paper_bgcolor: 'transparent',
-        plot_bgcolor: 'transparent',
-        xaxis: {
-            ...getXAxisConfig(), // Áp dụng cấu hình động
-            color: theme.palette.text.secondary,
-            gridcolor: theme.palette.divider,
-            showspikes: false,
-        },
-        yaxis: {
-            color: theme.palette.text.secondary,
-            gridcolor: theme.palette.divider,
-            hoverformat: ',.0f đ', 
-            rangeslider: { visible: false },
-            showspikes: false,
-            zeroline: false,
-        },
-        legend: { font: { color: theme.palette.text.secondary, size: 14 }, tracegroupgap: 10 },
-        margin: { l: 80, r: 40, b: 40, t: 60 },
-        hovermode: 'x',
-        hoverlabel: {
-            bgcolor: 'rgba(10, 25, 41, 0.9)', 
-            bordercolor: theme.palette.divider, 
-            font: { 
-                family: 'Inter, Roboto, sans-serif',
-                size: 14,
-                color: '#d9d7cbff' 
-            },
-            namelength: -1, 
-            align: 'left',
-        },
-    };
-
     return (
         <Box>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                {controls}
-            </Box>
             <Box sx={{ height: '450px' }}>
                 <Plot
-                    data={chartData}
+                    data={animatedData}
                     layout={layout}
                     useResizeHandler={true}
                     style={{ width: '100%', height: '100%' }}

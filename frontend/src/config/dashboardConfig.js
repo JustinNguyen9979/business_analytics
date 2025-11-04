@@ -15,8 +15,8 @@ export const kpiGroups = [
         {
             groupTitle: 'Tài chính',
             items: [
-                { key: 'netRevenue', title: 'DOANH THU RÒNG', format: 'currency' },
                 { key: 'gmv', title: 'GMV', format: 'currency', tooltipText: 'Gross Merchandise Value - Tổng giá trị hàng hóa đã bán (chưa trừ chi phí).' },
+                { key: 'netRevenue', title: 'DOANH THU RÒNG', format: 'currency' },
                 { key: 'totalCost', title: 'TỔNG CHI PHÍ', format: 'currency', tooltipText: 'Tổng chi phí bao gồm Giá vốn và Chi phí Thực thi.', direction: 'down' },
                 { key: 'cogs', title: 'GIÁ VỐN (COGS)', format: 'currency', tooltipText: 'Cost of Goods Sold - Chi phí giá vốn hàng bán.' },
                 { key: 'executionCost', title: 'CHI PHÍ THỰC THI', format: 'currency', direction: 'down' },

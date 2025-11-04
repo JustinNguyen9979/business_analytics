@@ -7,6 +7,7 @@ import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
 import { useTheme } from '@mui/material/styles';
 import { formatCurrency, formatNumber } from '../../utils/formatters'; 
+import { useCountUp } from '../../hooks/useCountUp';
 
 // Em copy lại luôn phần StatComparison để anh tiện copy cả file
 const StatComparison = ({ value, previousValue, format, direction = 'up' }) => {
@@ -54,17 +55,18 @@ const StatComparison = ({ value, previousValue, format, direction = 'up' }) => {
 };
 
 export function StatItem({ title, value, previousValue, tooltipText, format = 'number', direction = 'up' }) {
+    const animatedValue = useCountUp(value, 1200);
     let displayValue;
-    if (typeof value === 'number') {
+    if (typeof animatedValue === 'number') {
         if (format === 'currency') {
-            displayValue = formatCurrency(value);
+            displayValue = formatCurrency(animatedValue);
         } 
         // === SỬA LỖI Ở ĐÂY: NHÂN VỚI 100 TRƯỚC KHI HIỂN THỊ ===
         else if (format === 'percent') {
-            displayValue = `${(value * 100).toFixed(2)}%`;
+            displayValue = `${(animatedValue * 100).toFixed(2)}%`;
         } 
         else {
-            displayValue = formatNumber(value);
+            displayValue = formatNumber(animatedValue);
         }
     } else {
         displayValue = (format === 'currency' ? '0 đ' : (format === 'percent' ? '0.00%' : '0'));

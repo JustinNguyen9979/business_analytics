@@ -3,26 +3,37 @@
 import React, { useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { Link as RouterLink, Outlet, useParams, useNavigate } from 'react-router-dom';
-import { Box, Drawer as MuiDrawer, AppBar as MuiAppBar, Toolbar, List, Typography, Divider, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText, CssBaseline, Collapse } from '@mui/material';
+import { Box, Drawer as MuiDrawer, AppBar as MuiAppBar, Toolbar, List, Typography, Divider, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText, CssBaseline, Collapse, ListSubheader } from '@mui/material';
+
+// --- BƯỚC 1: IMPORT THÊM CÁC ICON CẦN THIẾT ---
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import DashboardIcon from '@mui/icons-material/Dashboard';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
-import AuroraBackground from '../components/ui/AuroraBackground';
-import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import ExpandLess from '@mui/icons-material/ExpandLess';
 import ExpandMore from '@mui/icons-material/ExpandMore';
+import SettingsIcon from '@mui/icons-material/Settings';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import WebIcon from '@mui/icons-material/Web';
 import PriceCheckIcon from '@mui/icons-material/PriceCheck';
+
+// Icon cho nhóm BÁO CÁO
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
+import CampaignIcon from '@mui/icons-material/Campaign';
+import LocalShippingIcon from '@mui/icons-material/LocalShipping';
+import GroupIcon from '@mui/icons-material/Group';
+
+// Icon cho nhóm CÔNG CỤ
+import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import RefreshIcon from '@mui/icons-material/Refresh';
+
+import AuroraBackground from '../components/ui/AuroraBackground';
 import ImportDialog from '../components/import/ImportDialog';
 import SingleImportDialog from '../components/import/SingleImportDialog';
-import { uploadShopeeFiles, uploadCostFile } from '../services/api';
-import RefreshIcon from '@mui/icons-material/Refresh'; 
-import { recalculateBrandData } from '../services/api';
+import { uploadShopeeFiles, uploadCostFile, recalculateBrandData } from '../services/api';
 import { useLayout } from '../context/LayoutContext';
-
+import { useNotification } from '../context/NotificationContext';
 
 const drawerWidth = 240;
 
@@ -100,7 +111,7 @@ export default function DashboardLayout() {
   const [isSingleImportDialogOpen, setSingleImportDialogOpen] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const { isSidebarOpen, setIsSidebarOpen } = useLayout();
-
+  const { showNotification } = useNotification();
   const handleDrawerToggle = () => setIsSidebarOpen(!isSidebarOpen);
 
 
@@ -221,87 +232,88 @@ export default function DashboardLayout() {
             </IconButton>
         </DrawerHeader>
         <Divider />
-        <List>
-            <ListItem disablePadding sx={{ display: 'block' }}>
-                <ListItemButton component={RouterLink} to="/" sx={{ minHeight: 48, justifyContent: isSidebarOpen ? 'initial' : 'center', px: 2.5 }}>
-                    <ListItemIcon sx={{ minWidth: 0, mr: isSidebarOpen ? 3 : 'auto', justifyContent: 'center', color: 'primary.main' }}>
-                        <ArrowBackIcon />
-                    </ListItemIcon>
-                    <ListItemText primary="Quay lại Sảnh chính" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
-                </ListItemButton>
-            </ListItem>
-        
-            <ListItem disablePadding sx={{ display: 'block' }}>
-                <ListItemButton sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
-                    <ListItemIcon sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center' }}>
-                        <DashboardIcon />
-                    </ListItemIcon>
-                    <ListItemText primary="Tổng quan" sx={{ opacity: open ? 1 : 0 }} />
-                </ListItemButton>
-            </ListItem>
-
-            <ListItem disablePadding sx={{ display: 'block' }}>
-                <ListItemButton 
-                    onClick={handleRecalculate} 
-                    disabled={isRecalculating} // Vô hiệu hóa nút khi đang chạy
-                    sx={{ 
-                        minHeight: 48, 
-                        justifyContent: open ? 'initial' : 'center', 
-                        px: 2.5, 
-                        // Đổi màu để người dùng biết là đang có tác vụ
-                        color: isRecalculating ? 'text.secondary' : 'warning.main' 
-                    }}
-                >
-                    <ListItemIcon sx={{ 
-                        minWidth: 0, 
-                        mr: open ? 3 : 'auto', 
-                        justifyContent: 'center', 
-                        color: isRecalculating ? 'text.secondary' : 'warning.main' 
-                    }}>
-                        <RefreshIcon />
-                    </ListItemIcon>
-                    <ListItemText 
-                        primary={isRecalculating ? "Đang xử lý..." : "Tải lại dữ liệu"} 
-                        sx={{ opacity: open ? 1 : 0 }} 
-                    />
-                </ListItemButton>
-            </ListItem>
-
-            <ListItem disablePadding sx={{ display: 'block' }}>
-                <ListItemButton onClick={handleImportMenuToggle} sx={{ minHeight: 48, justifyContent: open ? 'initial' : 'center', px: 2.5 }}>
-                    <ListItemIcon sx={{ minWidth: 0, mr: open ? 3 : 'auto', justifyContent: 'center' }}>
-                        <CloudUploadIcon />
-                    </ListItemIcon>
-                    <ListItemText primary="Import Dữ liệu" sx={{ opacity: open ? 1 : 0 }} />
-                    {isSidebarOpen ? (isImportMenuOpen ? <ExpandLess /> : <ExpandMore />) : null}
-                </ListItemButton>
-            </ListItem>
+        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             
-            <Collapse in={isImportMenuOpen && isSidebarOpen} timeout="auto" unmountOnExit>
-                <List component="div" disablePadding>
-                    <ListItemButton sx={{ pl: 4 }} onClick={handleOpenSingleImportDialog}>
-                        <ListItemIcon><PriceCheckIcon /></ListItemIcon>
-                        <ListItemText primary="File Giá nhập" />
-                    </ListItemButton>
-                    <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('Shopee')}>
-                        <ListItemIcon><StorefrontIcon /></ListItemIcon>
-                        <ListItemText primary="Shopee" />
-                    </ListItemButton>
-                    <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('TikTok')}>
-                        <ListItemIcon><StorefrontIcon /></ListItemIcon>
-                        <ListItemText primary="TikTok" />
-                    </ListItemButton>
-                     <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('Lazada')}>
-                        <ListItemIcon><StorefrontIcon /></ListItemIcon>
-                        <ListItemText primary="Lazada" />
-                    </ListItemButton>
-                     <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('Website')}>
-                        <ListItemIcon><WebIcon /></ListItemIcon>
-                        <ListItemText primary="Website" />
-                    </ListItemButton>
+            {/* --- Phần menu chính (ở trên) --- */}
+            <Box sx={{ overflowY: 'auto', overflowX: 'hidden' }}>
+                {/* === BƯỚC 3: TÁI CẤU TRÚC LẠI CÁC LIST === */}
+                <List subheader={isSidebarOpen ? <ListSubheader>BÁO CÁO</ListSubheader> : null}>
+                    <ListItem disablePadding>
+                        <ListItemButton sx={{ minHeight: 48 }}>
+                            <ListItemIcon><DashboardIcon /></ListItemIcon>
+                            <ListItemText primary="Tổng quan" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                        </ListItemButton>
+                    </ListItem>
+                    <ListItem disablePadding>
+                        <ListItemButton sx={{ minHeight: 48 }}>
+                            <ListItemIcon><AttachMoneyIcon /></ListItemIcon>
+                            <ListItemText primary="Tài chính" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                        </ListItemButton>
+                    </ListItem>
+                    <ListItem disablePadding>
+                        <ListItemButton sx={{ minHeight: 48 }}>
+                            <ListItemIcon><CampaignIcon /></ListItemIcon>
+                            <ListItemText primary="Marketing" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                        </ListItemButton>
+                    </ListItem>
+                    <ListItem disablePadding>
+                        <ListItemButton sx={{ minHeight: 48 }}>
+                            <ListItemIcon><LocalShippingIcon /></ListItemIcon>
+                            <ListItemText primary="Vận hành" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                        </ListItemButton>
+                    </ListItem>
+                     <ListItem disablePadding>
+                        <ListItemButton sx={{ minHeight: 48 }}>
+                            <ListItemIcon><GroupIcon /></ListItemIcon>
+                            <ListItemText primary="Khách hàng" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                        </ListItemButton>
+                    </ListItem>
                 </List>
-            </Collapse>
-        </List>
+
+                <List subheader={isSidebarOpen ? <ListSubheader>CÔNG CỤ</ListSubheader> : null}>
+                    <ListItem disablePadding>
+                        <ListItemButton onClick={handleImportMenuToggle} sx={{ minHeight: 48 }}>
+                            <ListItemIcon><CloudUploadIcon /></ListItemIcon>
+                            <ListItemText primary="Import Dữ liệu" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                            {isSidebarOpen ? (isImportMenuOpen ? <ExpandLess /> : <ExpandMore />) : null}
+                        </ListItemButton>
+                    </ListItem>
+                    <Collapse in={isImportMenuOpen && isSidebarOpen} timeout="auto" unmountOnExit>
+                        <List component="div" disablePadding>
+                            <ListItemButton sx={{ pl: 4 }} onClick={handleOpenSingleImportDialog}><ListItemText primary="File Giá nhập" /></ListItemButton>
+                            <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('Shopee')}><ListItemText primary="Shopee" /></ListItemButton>
+                            <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('Tiktok Shop')}><ListItemText primary="Tiktok Shop" /></ListItemButton>
+                            <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('Lazada')}><ListItemText primary="Lazada" /></ListItemButton>
+                        </List>
+                    </Collapse>
+                     <ListItem disablePadding>
+                        <ListItemButton onClick={handleRecalculate} disabled={isRecalculating} sx={{ minHeight: 48 }}>
+                            <ListItemIcon><RefreshIcon /></ListItemIcon>
+                            <ListItemText primary={isRecalculating ? "Đang xử lý..." : "Tải lại dữ liệu"} sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                        </ListItemButton>
+                    </ListItem>
+                </List>
+            </Box>
+
+            {/* --- Phần menu dưới cùng --- */}
+            <Box sx={{ marginTop: 'auto' }}>
+                <Divider />
+                <List>
+                    <ListItem disablePadding>
+                        <ListItemButton component={RouterLink} to="/" sx={{ minHeight: 48 }}>
+                            <ListItemIcon sx={{ color: 'primary.main' }}><ArrowBackIcon /></ListItemIcon>
+                            <ListItemText primary="Quay lại Sảnh chính" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                        </ListItemButton>
+                    </ListItem>
+                    <ListItem disablePadding>
+                        <ListItemButton sx={{ minHeight: 48 }}>
+                            <ListItemIcon><SettingsIcon /></ListItemIcon>
+                            <ListItemText primary="Cài đặt" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                        </ListItemButton>
+                    </ListItem>
+                </List>
+            </Box>
+        </Box>
       </Drawer>
 
       <Box component="main" sx={{ flexGrow: 1, p: 3, overflow: 'auto', height: '100vh' }}>
