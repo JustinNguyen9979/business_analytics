@@ -42,10 +42,37 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             const comparisonProfits = comparisonPoints.map(d => d.profit);
 
             const traceStyles = {
-                comparisonRevenue: { type: 'scatter', mode: 'lines', name: 'Doanh thu ròng (Kỳ trước)', line: { color: theme.palette.primary.main, width: 2, dash: 'dot' }, opacity: 0.6, connectgaps: false, hovertemplate: 'DTR (Kỳ trước): <b>%{y:,.0f} đ</b><extra></extra>', legendgroup: 'group1' },
-                comparisonProfit: { type: 'scatter', mode: 'lines', name: 'Lợi nhuận (Kỳ trước)', line: { color: '#28a545', width: 2, dash: 'dot' }, opacity: 0.6, connectgaps: false, hovertemplate: 'LN (Kỳ trước): <b>%{y:,.0f} đ</b><extra></extra>', legendgroup: 'group2' },
-                currentRevenue: { type: 'scatter', mode: 'lines+markers', name: 'Doanh thu ròng', line: { color: theme.palette.primary.main, width: 2 }, marker: { color: theme.palette.primary.main, size: 3 }, connectgaps: false, hovertemplate: 'Doanh thu ròng: <b>%{y:,.0f} đ</b><extra></extra>', legendgroup: 'group3' },
-                currentProfit: { type: 'scatter', mode: 'lines+markers', name: 'Lợi nhuận', line: { color: '#28a545', width: 2 }, marker: { color: '#28a545', size: 3 }, connectgaps: false, hovertemplate: 'Lợi nhuận: <b>%{y:,.0f} đ</b><extra></extra>', legendgroup: 'group4' },
+                comparisonRevenue: { type: 'scatter', mode: 'lines', name: 'Doanh thu ròng (Kỳ trước)    ', 
+                    line: { color: theme.palette.primary.main, width: 2, dash: 'dot' }, 
+                    opacity: 0.6, 
+                    connectgaps: false, 
+                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">DTR (Kỳ trước): </span><b style="color: ${theme.palette.primary.main};">%{y:,.0f} đ</b><extra></extra>`, 
+                    legendgroup: 'group1' 
+                },
+
+                comparisonProfit: { type: 'scatter', mode: 'lines', name: 'Lợi nhuận (Kỳ trước)    ', 
+                    line: { color: '#28a545', width: 2, dash: 'dot' }, 
+                    opacity: 0.6, connectgaps: false, 
+                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">LN (Kỳ trước): </span><b style="color: #28a545;">%{y:,.0f} đ</b><extra></extra>`, 
+                    legendgroup: 'group2' },
+
+                currentRevenue: { type: 'scatter', 
+                    mode: 'lines+markers', 
+                    name: 'Doanh thu ròng    ', 
+                    line: { color: theme.palette.primary.main, width: 2 }, 
+                    marker: { color: theme.palette.primary.main, size: 5 }, 
+                    connectgaps: false, 
+                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">Doanh thu ròng: </span><b style="color: ${theme.palette.primary.main};">%{y:,.0f} đ</b><extra></extra>`, 
+                    legendgroup: 'group3' },
+
+                currentProfit: { type: 'scatter', 
+                    mode: 'lines+markers', 
+                    name: 'Lợi nhuận    ', 
+                    line: { color: '#28a545', width: 2 }, 
+                    marker: { color: '#28a545', size: 5 }, 
+                    connectgaps: false, 
+                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">Lợi nhuận: </span><b style="color: #28a545;">%{y:,.0f} đ</b><extra></extra>`, 
+                    legendgroup: 'group4' },
             };
 
             return [
@@ -129,10 +156,31 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             zeroline: false,
             rangeslider: { visible: false },
         },
-        legend: { font: { color: theme.palette.text.secondary, size: 14 }, tracegroupgap: 10 },
-        margin: { l: 80, r: 40, b: 40, t: 60 },
+        legend: {
+            font: { color: theme.palette.text.secondary, size: 16 },
+            // THÊM CÁC DÒNG NÀY ĐỂ CHUYỂN CHÚ THÍCH XUỐNG DƯỚI
+            orientation: 'h',      // Hiển thị theo hàng ngang
+            yanchor: 'top',     // Neo vào cạnh dưới
+            y: -0.3,               // Đẩy nó xuống dưới trục X một chút (-0.3 là một giá trị tương đối)
+            xanchor: 'center',     // Căn giữa theo chiều ngang
+            x: 0.5,                 // Đặt ở vị trí 50% chiều rộng của biểu đồ
+            traceorder: 'normal',
+            valign: 'top',
+        },
+        // Tăng margin dưới để có không gian cho chú thích
+        margin: { l: 80, r: 40, b: 80, t: 60 },
         hovermode: 'x',
-        hoverlabel: { bgcolor: 'rgba(10, 25, 41, 0.9)', bordercolor: theme.palette.divider, font: { family: 'Inter, Roboto, sans-serif', size: 14, color: '#d9d7cbff' }, namelength: -1, align: 'left',},
+        hoverlabel: { 
+            bgcolor: 'rgba(10, 25, 41, 0.9)', 
+            bordercolor: theme.palette.divider, 
+            font: { 
+                family: 'Inter, Roboto, sans-serif', 
+                size: 14, 
+                color: '#e8d283ff' 
+            }, 
+            namelength: -1, 
+            align: 'left',
+        },
     };
 
     if (!data || data.length === 0) {

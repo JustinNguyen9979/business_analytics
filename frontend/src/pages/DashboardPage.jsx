@@ -2,9 +2,10 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button } from '@mui/material';
+import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, Grid } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import dayjs from 'dayjs';
+import CostDonutChart from '../components/charts/CostDonutChart';
 
 // 1. IMPORT CUSTOM HOOK MỚI
 import { useDashboardData } from '../components/dashboard/useDashboardData';
@@ -17,6 +18,7 @@ import RevenueProfitChart from '../components/charts/RevenueProfitChart';
 import ChartPlaceholder from '../components/common/ChartPlaceholder';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import ChartTimeFilter from '../components/common/ChartTimeFilter';
+import { getBrandDetails, getBrandDailyKpis } from '../services/api';
 
 function DashboardPage() {
     const theme = useTheme();
@@ -24,7 +26,7 @@ function DashboardPage() {
     const { isSidebarOpen } = useLayout();
     const [searchParams, setSearchParams] = useSearchParams();
     
-    // --- STATE QUẢN LÝ LỰA CHỌN CỦA NGƯỜI DÙNG (VẪN GIỮ LẠI Ở ĐÂY) ---
+    // --- STATE QUẢN LÝ LỰA CHỌN CỦA NGƯỜI DÙNG ---
     const [kpiDateRange, setKpiDateRange] = useState(() => {
         const start = searchParams.get('start');
         const end = searchParams.get('end');
@@ -34,6 +36,18 @@ function DashboardPage() {
         range: [dayjs().startOf('year'), dayjs().endOf('year')],
         type: 'year'
     });
+
+    // === THÊM MỚI: State và Handler riêng cho Donut Chart ===
+    const [donutChartDateRange, setDonutChartDateRange] = useState({
+        range: [dayjs().startOf('year'), dayjs().endOf('year')],
+        type: 'year'
+    });
+    const [donutChartKpiData, setDonutChartKpiData] = useState(null);
+    const [isDonutChartLoading, setIsDonutChartLoading] = useState(true);
+
+    const handleDonutChartFilterChange = useCallback((newRange, type) => {
+        setDonutChartDateRange({ range: newRange, type: type });
+    }, []);
     
     // State cho UI Popover/Menu
     const [kpiAnchorEl, setKpiAnchorEl] = useState(null);
@@ -63,6 +77,25 @@ function DashboardPage() {
         const timer = setTimeout(() => setChartRevision(prev => prev + 1), 300);
         return () => clearTimeout(timer);
     }, [isSidebarOpen]);
+
+    useEffect(() => {
+        const fetchDonutData = async () => {
+            if (!brandId) return;
+            setIsDonutChartLoading(true);
+            try {
+                const [start, end] = donutChartDateRange.range;
+                const data = await getBrandDetails(brandId, start, end);
+                setDonutChartKpiData(data ? data.kpis : null);
+            } catch (err) {
+                console.error("Lỗi khi tải dữ liệu Donut Chart:", err);
+                setDonutChartKpiData(null); // Reset khi có lỗi
+            } finally {
+                setIsDonutChartLoading(false);
+            }
+        };
+
+        fetchDonutData();
+    }, [brandId, donutChartDateRange]);
 
     // --- PHẦN RENDER GIAO DIỆN ---
     if (error) return <Alert severity="error">{error}</Alert>;
@@ -142,13 +175,11 @@ function DashboardPage() {
 
             <Paper variant="glass" elevation={0} sx={{ p: 1 }}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 3, pt: 3 }}>
-                    {/* 1. Đưa tiêu đề ra ngoài */}
                     <Typography variant="h6" noWrap>Biểu đồ Doanh thu ròng & Lợi nhuận</Typography>
-                    {/* 2. Đặt bộ lọc trực tiếp ở đây */}
                     <ChartTimeFilter onFilterChange={handleChartFilterChange} />
                 </Box>
                 
-                <Box sx={{ px: 3, pb: 3, pt: 1 }}>
+                <Box sx={{ pb: 3, pt: 1 }}>
                     {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', height: 450 }}><CircularProgress /></Box> : (
                         chartData.current.length > 0 ? (
                             <RevenueProfitChart 
@@ -163,6 +194,44 @@ function DashboardPage() {
                     )}
                 </Box>
             </Paper>
+
+             <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                
+                {/* BOX BÊN TRÁI: DONUT CHART (CHIẾM ĐÚNG 50% TRỪ ĐI KHOẢNG CÁCH) */}
+                <Box sx={{ width: { xs: '100%', md: 'calc(50% - 16px)' } }}>
+                    <Paper variant="glass" elevation={0} sx={{ p: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
+                            <Typography variant="h6" noWrap>Phân bổ Chi phí</Typography>
+                            <ChartTimeFilter onFilterChange={handleDonutChartFilterChange} />
+                        </Box>
+                        {/* Box này sẽ chứa biểu đồ, cho phép nó co giãn */}
+                        <Box sx={{ flexGrow: 1, minHeight: 400, position: 'relative' }}>
+                            {isDonutChartLoading ? (
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><CircularProgress /></Box>
+                            ) : donutChartKpiData ? (
+                                <CostDonutChart
+                                    cogs={donutChartKpiData.cogs}
+                                    executionCost={donutChartKpiData.executionCost}
+                                    adSpend={donutChartKpiData.adSpend}
+                                />
+                            ) : (
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><Typography color="text.secondary">Không có dữ liệu.</Typography></Box>
+                            )}
+                        </Box>
+                    </Paper>
+                </Box>
+
+                {/* BOX BÊN PHẢI: PLACEHOLDER */}
+                <Box sx={{ width: { xs: '100%', md: 'calc(50% - 16px)' } }}>
+                     <Paper 
+                        variant="glass" 
+                        elevation={0} 
+                        sx={{ p: 3, height: '100%', minHeight: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                        <Typography color="text.secondary">Biểu đồ khác sẽ hiển thị ở đây</Typography>
+                    </Paper>
+                </Box>
+            </Box>
             
             <DateRangeFilterMenu
                 open={Boolean(kpiAnchorEl)}
