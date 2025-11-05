@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { styled } from '@mui/material/styles';
 import { Link as RouterLink, Outlet, useParams, useNavigate } from 'react-router-dom';
-import { Box, Drawer as MuiDrawer, AppBar as MuiAppBar, Toolbar, List, Typography, Divider, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText, CssBaseline, Collapse, ListSubheader } from '@mui/material';
+import { Box, Drawer as MuiDrawer, AppBar as MuiAppBar, Toolbar, List, Typography, Divider, IconButton, ListItem, ListItemButton, ListItemIcon, ListItemText, CssBaseline, Collapse, ListSubheader, Container } from '@mui/material';
 
 // --- BƯỚC 1: IMPORT THÊM CÁC ICON CẦN THIẾT ---
 import MenuIcon from '@mui/icons-material/Menu';
@@ -316,9 +316,11 @@ export default function DashboardLayout() {
         </Box>
       </Drawer>
 
-      <Box component="main" sx={{ flexGrow: 1, p: 3, overflow: 'auto', height: '100vh' }}>
+      <Box component="main" sx={{ flexGrow: 1, py: 3, overflow: 'auto', height: '100vh' }}>
         <Toolbar /> 
-        <Outlet />
+        <Container maxWidth={false} disableGutters>
+          <Outlet />
+        </Container>
       </Box>
 
       <ImportDialog 
