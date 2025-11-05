@@ -147,3 +147,19 @@ export const getBrandDailyKpis = async (brandId, startDate, endDate) => {
         throw error;
     }
 };
+
+export const getTopProducts = async (brandId, startDate, endDate, limit = 10) => {
+    try {
+        const response = await apiClient.get(`/brands/${brandId}/top-products`, {
+            params: {
+                start_date: startDate.format('YYYY-MM-DD'),
+                end_date: endDate.format('YYYY-MM-DD'),
+                limit: limit,
+            },
+        });
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching top products for brand ${brandId}:`, error);
+        throw error;
+    }
+};

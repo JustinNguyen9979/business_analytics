@@ -59,6 +59,35 @@ def recalculate_brand_data(brand_id: int, db: Session = Depends(get_db)):
     # 3. Trả về kết quả sau khi đã chạy xong
     return result
 
+@app.get("/brands/{brand_id}/top-products", response_model=List[schemas.TopProduct])
+def read_top_products(
+    brand_id: int,
+    start_date: date,
+    end_date: date,
+    limit: int = 10,
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint để lấy top N sản phẩm bán chạy nhất.
+    """
+    # Kiểm tra brand có tồn tại không
+    if not crud.get_brand(db, brand_id):
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+
+    try:
+        top_products = crud.get_top_selling_products(
+            db, 
+            brand_id=brand_id, 
+            start_date=start_date, 
+            end_date=end_date, 
+            limit=limit
+        )
+        return top_products
+    except Exception as e:
+        # Nếu có lỗi không mong muốn, trả về lỗi server thay vì làm crash
+        print(f"!!! LỖI ENDPOINT TOP PRODUCTS: {e}")
+        raise HTTPException(status_code=500, detail="Lỗi server khi xử lý yêu cầu.")
+
 @app.post("/upload/{platform}/{brand_id}")
 async def upload_platform_data(
     platform: str, 

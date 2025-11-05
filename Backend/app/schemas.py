@@ -94,3 +94,10 @@ class DailyKpi(BaseModel):
 class DailyKpiResponse(BaseModel):
     """Cấu trúc dữ liệu trả về cho API biểu đồ."""
     data: List[DailyKpi]
+
+class TopProduct(BaseModel):
+    sku: str
+    name: Optional[str] = None
+    total_quantity: int
+
+    model_config = ConfigDict(from_attributes=True)

@@ -6,19 +6,18 @@ import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, Grid 
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import dayjs from 'dayjs';
 import CostDonutChart from '../components/charts/CostDonutChart';
-
-// 1. IMPORT CUSTOM HOOK MỚI
 import { useDashboardData } from '../components/dashboard/useDashboardData';
 import { useTheme } from '@mui/material/styles';
-
 import { useLayout } from '../context/LayoutContext';
 import { StatItem } from '../components/dashboard/StatItem';
 import { kpiGroups } from '../config/dashboardConfig';
+
 import RevenueProfitChart from '../components/charts/RevenueProfitChart';
+import TopProductsChart from '../components/charts/TopProductsChart';
 import ChartPlaceholder from '../components/common/ChartPlaceholder';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import ChartTimeFilter from '../components/common/ChartTimeFilter';
-import { getBrandDetails, getBrandDailyKpis } from '../services/api';
+import { getBrandDetails, getBrandDailyKpis, getTopProducts } from '../services/api';
 
 function DashboardPage() {
     const theme = useTheme();
@@ -71,6 +70,36 @@ function DashboardPage() {
     const handleChartFilterChange = useCallback((newRange, type) => {
         setChartDateRange({ range: newRange, type: type });
     }, []);
+
+    const [topProductsDateRange, setTopProductsDateRange] = useState({
+        range: [dayjs().startOf('year'), dayjs().endOf('year')],
+        type: 'year'
+    });
+    const [topProductsData, setTopProductsData] = useState([]);
+    const [isTopProductsLoading, setIsTopProductsLoading] = useState(true);
+
+    const handleTopProductsFilterChange = useCallback((newRange, type) => {
+        setTopProductsDateRange({ range: newRange, type: type });
+    }, []);
+
+    useEffect(() => {
+        const fetchTopProducts = async () => {
+            if (!brandId) return;
+            setIsTopProductsLoading(true);
+            try {
+                const [start, end] = topProductsDateRange.range;
+                const data = await getTopProducts(brandId, start, end, 10);
+                setTopProductsData(data);
+            } catch (err) {
+                console.error("Lỗi khi tải Top Products:", err);
+                setTopProductsData([]);
+            } finally {
+                setIsTopProductsLoading(false);
+            }
+        };
+
+        fetchTopProducts();
+    }, [brandId, topProductsDateRange]);
 
     // Effect để vẽ lại biểu đồ khi sidebar thay đổi (không thay đổi)
     useEffect(() => {
@@ -198,7 +227,7 @@ function DashboardPage() {
              <Box sx={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                 
                 {/* BOX BÊN TRÁI: DONUT CHART (CHIẾM ĐÚNG 50% TRỪ ĐI KHOẢNG CÁCH) */}
-                <Box sx={{ width: { xs: '100%', md: 'calc(50% - 16px)' } }}>
+                <Box sx={{ width: { xs: '100%', md: 'calc(60% - 16px)' } }}>
                     <Paper variant="glass" elevation={0} sx={{ p: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
                         <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                             <Typography variant="h6" noWrap>Phân bổ Chi phí</Typography>
@@ -222,13 +251,29 @@ function DashboardPage() {
                 </Box>
 
                 {/* BOX BÊN PHẢI: PLACEHOLDER */}
-                <Box sx={{ width: { xs: '100%', md: 'calc(50% - 16px)' } }}>
+                <Box sx={{ width: { xs: '100%', md: 'calc(40% - 16px)' } }}>
                      <Paper 
                         variant="glass" 
                         elevation={0} 
                         sx={{ p: 3, height: '100%', minHeight: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                     >
                         <Typography color="text.secondary">Biểu đồ khác sẽ hiển thị ở đây</Typography>
+                    </Paper>
+                </Box>
+
+                <Box sx={{ width: { xs: '100%', md: 'calc(60% - 16px)' } }}>
+                    <Paper variant="glass" elevation={0} sx={{ p: 1, height: '100%', display: 'flex', flexDirection: 'column' }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
+                            <Typography variant="h6" noWrap>Top SKU bán chạy</Typography>
+                            <ChartTimeFilter onFilterChange={handleTopProductsFilterChange} />
+                        </Box>
+                        <Box sx={{ flexGrow: 1, minHeight: 800, position: 'relative' }}>
+                            {isTopProductsLoading ? (
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><CircularProgress /></Box>
+                            ) : (
+                                <TopProductsChart data={topProductsData} />
+                            )}
+                        </Box>
                     </Paper>
                 </Box>
             </Box>

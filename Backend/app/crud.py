@@ -2,11 +2,13 @@
 
 import json
 from sqlalchemy.orm import Session
-from sqlalchemy import func, union_all, select, or_
+from sqlalchemy import func, union_all, select, or_, cast, Integer, String, and_
+from sqlalchemy.dialects.postgresql import JSONB
 import models, schemas
 from datetime import date, timedelta
 from cache import redis_client
 import math as Math
+import pandas as pd
 
 
 def parseFloat(value): # Hàm helper
@@ -508,3 +510,68 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
             calculate_and_cache_daily_kpis(db, brand_id, target_date)
 
     return daily_kpi_list
+
+def get_top_selling_products(db: Session, brand_id: int, start_date: date, end_date: date, limit: int = 10):
+    """
+    Lấy danh sách các sản phẩm bán chạy nhất.
+    PHIÊN BẢN SỬA LỖI CRASH WORKER: Dùng Python/Pandas để xử lý JSON, an toàn hơn SQL.
+    """
+    try:
+        # Bước 1: Chỉ truy vấn lấy các đơn hàng cần thiết, không xử lý JSON ở đây
+        orders_in_range = db.query(models.Order).filter(
+            models.Order.brand_id == brand_id,
+            models.Order.order_date.between(start_date, end_date)
+        ).all()
+
+        if not orders_in_range:
+            return []
+
+        # Bước 2: Dùng Python để duyệt và trích xuất dữ liệu item một cách an toàn
+        all_items = []
+        for order in orders_in_range:
+            # Kiểm tra an toàn: `details` có tồn tại, có key 'items', và 'items' là một list
+            if order.details and isinstance(order.details.get('items'), list):
+                for item in order.details['items']:
+                    # Kiểm tra an toàn: item là dict và có đủ key 'sku', 'quantity'
+                    if isinstance(item, dict) and item.get('sku') and item.get('quantity'):
+                        try:
+                            # Chuyển đổi số lượng sang integer, nếu lỗi thì bỏ qua item này
+                            quantity = int(item['quantity'])
+                            all_items.append({'sku': str(item['sku']), 'quantity': quantity})
+                        except (ValueError, TypeError):
+                            continue # Bỏ qua nếu quantity không phải là số
+
+        if not all_items:
+            return []
+            
+        # Bước 3: Dùng Pandas để tổng hợp dữ liệu một cách hiệu quả
+        df = pd.DataFrame(all_items)
+        top_products_df = df.groupby('sku')['quantity'].sum().nlargest(limit).reset_index()
+        
+        # Chuyển DataFrame kết quả thành danh sách dictionary
+        top_skus_list = top_products_df.to_dict('records')
+        top_skus_map = {item['sku']: item['quantity'] for item in top_skus_list}
+        skus_to_query = list(top_skus_map.keys())
+
+        # Bước 4: Lấy tên sản phẩm từ bảng Product
+        products_info = db.query(models.Product.sku, models.Product.name).filter(
+            models.Product.brand_id == brand_id,
+            models.Product.sku.in_(skus_to_query)
+        ).all()
+        product_name_map = {sku: name for sku, name in products_info}
+
+        # Bước 5: Kết hợp kết quả và trả về
+        final_results = []
+        for sku_item in top_skus_list:
+            sku = sku_item['sku']
+            final_results.append({
+                "sku": sku,
+                "total_quantity": int(sku_item['quantity']), # Ép kiểu về int cho an toàn
+                "name": product_name_map.get(sku, sku) # Nếu không có tên, dùng SKU làm tên
+            })
+        
+        return final_results
+
+    except Exception as e:
+        print(f"!!! LỖI NGHIÊM TRỌNG KHI LẤY TOP PRODUCTS: {e}")
+        return []
