@@ -116,10 +116,12 @@ function BrandLobby() {
         <>
             <AuroraBackground />
 
-            <Container 
+            <Box 
                 component="main" 
-                maxWidth="lg" 
-                sx={{ 
+                // maxWidth="lg" 
+                sx={{
+                    width: '100%', // Đảm bảo chiếm toàn bộ chiều rộng
+                    px: 40,         // Thêm padding ngang (giống DashboardPage)
                     py: 8,
                     position: 'relative',
                     zIndex: 1
@@ -204,7 +206,7 @@ function BrandLobby() {
                         <Button onClick={handleDeleteSubmit} color="error" variant="contained">XÁC NHẬN XÓA</Button>
                     </DialogActions>
                 </Dialog>
-            </Container>
+            </Box>
         </>
     );
 }
