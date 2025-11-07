@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from cache import redis_client
 import math as Math
 import pandas as pd
-
+from vietnam_address_mapping import NEW_PROVINCES, get_new_province_name
 
 def parseFloat(value): # Hàm helper
     try: return float(str(value).replace(',', ''))
@@ -514,7 +514,6 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
 def get_top_selling_products(db: Session, brand_id: int, start_date: date, end_date: date, limit: int = 10):
     """
     Lấy danh sách các sản phẩm bán chạy nhất.
-    PHIÊN BẢN SỬA LỖI CRASH WORKER: Dùng Python/Pandas để xử lý JSON, an toàn hơn SQL.
     """
     try:
         # Bước 1: Chỉ truy vấn lấy các đơn hàng cần thiết, không xử lý JSON ở đây
@@ -575,3 +574,79 @@ def get_top_selling_products(db: Session, brand_id: int, start_date: date, end_d
     except Exception as e:
         print(f"!!! LỖI NGHIÊM TRỌNG KHI LẤY TOP PRODUCTS: {e}")
         return []
+
+def normalize_city_name(city_name: str):
+    """
+    Hàm chuẩn hóa tên thành phố/tỉnh một cách thông minh.
+    Nó sẽ cố gắng khớp tên đầu vào với danh sách tỉnh/thành chuẩn từ VietMap.
+    """
+    if not city_name:
+        return None
+
+    # Chuyển thành chữ thường, bỏ dấu, và bỏ các tiền tố phổ biến
+    normalized_input = unidecode(city_name).lower().strip()
+    normalized_input = normalized_input.replace('thanh pho', '').replace('tp', '').replace('tinh', '').strip()
+    
+    # Ưu tiên 1: Tìm kiếm khớp chính xác (sau khi đã chuẩn hóa)
+    for code, details in PROVINCE_DATA.items():
+        # So sánh slug (đã bỏ dấu)
+        if details["slug"].replace('-', '') == normalized_input.replace(' ', ''):
+            # Trả về tên chuẩn có dấu
+            return details["name"]
+        # So sánh tên không dấu
+        if unidecode(details["name"]).lower() == normalized_input:
+            return details["name"]
+
+    # Ưu tiên 2: Tìm kiếm xem tên chuẩn có nằm trong chuỗi đầu vào không
+    # Ví dụ: "Thành phố Huế" -> "Huế"
+    for name in PROVINCE_NAMES:
+        if name in city_name:
+            return name
+            
+    # Nếu không tìm thấy, trả về None để có thể bỏ qua
+    return None
+
+def get_customer_distribution(db: Session, brand_id: int, start_date: date, end_date: date):
+    """
+    Lấy dữ liệu phân bổ khách hàng, tổng hợp theo 34 tỉnh/thành mới.
+    1. Lấy số lượng khách hàng duy nhất theo từng tên tỉnh/thành phố có trong DB.
+    2. Ánh xạ mỗi tên tỉnh cũ sang tỉnh mới tương ứng.
+    3. Cộng dồn số lượng khách hàng vào các tỉnh mới.
+    """
+    # Bước 1: Vẫn truy vấn như cũ để lấy dữ liệu thô
+    raw_counts = db.query(
+        models.Customer.city,
+        func.count(models.Order.username.distinct()).label('unique_customers')
+    ).join(
+        models.Customer,
+        and_(
+            models.Order.username == models.Customer.username,
+            models.Order.brand_id == models.Customer.brand_id
+        )
+    ).filter(
+        models.Order.brand_id == brand_id,
+        models.Order.order_date.between(start_date, end_date),
+        models.Customer.city.isnot(None),
+        models.Customer.city != ''
+    ).group_by(
+        models.Customer.city
+    ).all()
+
+    # Bước 2: Chuẩn bị một "xô" chứa số đếm cho 34 tỉnh mới
+    new_province_counts = {province_name: 0 for province_name in NEW_PROVINCES.keys()}
+
+    # Bước 3: Duyệt qua dữ liệu thô, ánh xạ và cộng dồn
+    for old_city_name, count in raw_counts:
+        new_province = get_new_province_name(old_city_name)
+        
+        if new_province and new_province in new_province_counts:
+            new_province_counts[new_province] += count
+    
+    # Bước 4: Chuyển đổi kết quả về định dạng API mong muốn
+    final_distribution = [
+        {"city": name, "customer_count": count}
+        for name, count in new_province_counts.items()
+        if count > 0 # Chỉ trả về các tỉnh có khách
+    ]
+    
+    return sorted(final_distribution, key=lambda item: item['customer_count'], reverse=True)

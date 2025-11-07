@@ -93,7 +93,7 @@ function TopProductsChart({ data }) {
     const desiredTicks = 7; // Mình muốn có khoảng 5 đường lưới
     const roughTick = maxXValue / desiredTicks;
     const power = Math.pow(10, Math.floor(Math.log10(roughTick)));
-    const magnitude = roughTick / power;
+    let magnitude = roughTick / power;
     if (power < 1) magnitude = 1;
     let dtick;
     if (magnitude < 1.5) {

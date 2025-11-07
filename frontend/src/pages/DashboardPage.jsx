@@ -18,6 +18,8 @@ import ChartPlaceholder from '../components/common/ChartPlaceholder';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import ChartTimeFilter from '../components/common/ChartTimeFilter';
 import { getBrandDetails, getBrandDailyKpis, getTopProducts } from '../services/api';
+import GeoMapChart from '../components/charts/GeoMapChart';
+import { getCustomerDistribution } from '../services/api';
 
 function DashboardPage() {
     const theme = useTheme();
@@ -58,6 +60,38 @@ function DashboardPage() {
         kpiDateRange,
         chartDateRange
     );
+
+    // 2. Thêm các state mới để quản lý dữ liệu và bộ lọc cho bản đồ
+    const [mapDateRange, setMapDateRange] = useState({
+        range: [dayjs().startOf('year'), dayjs().endOf('year')],
+        type: 'year'
+    });
+    const [mapData, setMapData] = useState([]);
+    const [isMapLoading, setIsMapLoading] = useState(true);
+
+    const handleMapFilterChange = useCallback((newRange, type) => {
+        setMapDateRange({ range: newRange, type: type });
+    }, []);
+
+    // 3. Thêm useEffect để tải dữ liệu cho bản đồ
+    useEffect(() => {
+        const fetchMapData = async () => {
+            if (!brandId) return;
+            setIsMapLoading(true);
+            try {
+                const [start, end] = mapDateRange.range;
+                const data = await getCustomerDistribution(brandId, start, end);
+                setMapData(data);
+            } catch (err) {
+                console.error("Lỗi khi tải dữ liệu bản đồ:", err);
+                setMapData([]);
+            } finally {
+                setIsMapLoading(false);
+            }
+        };
+
+        fetchMapData();
+    }, [brandId, mapDateRange]);
 
     // --- CÁC HÀM XỬ LÝ SỰ KIỆN CỦA UI (KHÔNG THAY ĐỔI) ---
     const handleOpenKpiFilter = (event) => setKpiAnchorEl(event.currentTarget);
@@ -100,6 +134,8 @@ function DashboardPage() {
 
         fetchTopProducts();
     }, [brandId, topProductsDateRange]);
+
+
 
     // Effect để vẽ lại biểu đồ khi sidebar thay đổi (không thay đổi)
     useEffect(() => {
@@ -267,24 +303,33 @@ function DashboardPage() {
                 {/* --- BOX CON BÊN PHẢI --- */}
                 <Box
                     sx={{
-                        width: { xs: '100%', md: 'calc(50% - 16px)' }, 
+                        width: { xs: '100%', md: 'calc(50% - 16px)' },
                         display: 'flex',
                     }}
                 >
-                    {/* KHỐI 3: PLACEHOLDER - Tái sử dụng variant="glass" */}
-                    <Paper 
-                        variant="glass" 
-                        elevation={0} 
+                    {/* THAY THẾ NỘI DUNG CŨ BẰNG KHỐI NÀY */}
+                    <Paper
+                        variant="glass"
+                        elevation={0}
                         sx={{
-                            p: 3,
+                            p: 1,
                             width: '100%',
                             flexGrow: 1,
                             display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
+                            flexDirection: 'column'
                         }}
                     >
-                        <Typography color="text.secondary">Biểu đồ khác sẽ hiển thị ở đây</Typography>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
+                            <Typography variant="h6" noWrap>Phân bổ Khách hàng</Typography>
+                            <ChartTimeFilter onFilterChange={handleMapFilterChange} />
+                        </Box>
+                        <Box sx={{ flexGrow: 1, minHeight: { xs: 500, lg: 'auto' }, position: 'relative' }}>
+                            {isMapLoading ? 
+                                (<Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><CircularProgress /></Box>) 
+                                : 
+                                (<GeoMapChart data={mapData} />)
+                            }
+                        </Box>
                     </Paper>
                 </Box>
             </Box>

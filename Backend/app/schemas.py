@@ -101,3 +101,9 @@ class TopProduct(BaseModel):
     total_quantity: int
 
     model_config = ConfigDict(from_attributes=True)
+
+class CustomerDistributionItem(BaseModel):
+    city: str
+    customer_count: int
+
+    model_config = ConfigDict(from_attributes=True)

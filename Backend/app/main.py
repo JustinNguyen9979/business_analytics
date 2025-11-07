@@ -143,6 +143,21 @@ async def upload_platform_data(
 
     return {"message": f"Xử lý file cho nền tảng '{platform}' hoàn tất! Dữ liệu đang được tính toán nền.", "results": results}
 
+@app.get("/brands/{brand_id}/customer-distribution", response_model=List[schemas.CustomerDistributionItem])
+def read_customer_distribution(
+    brand_id: int,
+    start_date: date,
+    end_date: date,
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint để lấy dữ liệu phân bổ khách hàng theo tỉnh/thành phố.
+    """
+    if not crud.get_brand(db, brand_id):
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+    
+    distribution_data = crud.get_customer_distribution(db, brand_id, start_date, end_date)
+    return distribution_data
 
 @app.delete("/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_brand_api(brand_id: int, db: Session = Depends(get_db)):

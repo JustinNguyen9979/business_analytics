@@ -6,8 +6,8 @@ import { ThemeProvider, CssBaseline } from '@mui/material';
 import theme from './theme'; 
 import { LayoutProvider } from './context/LayoutContext';
 
-// 1. IMPORT NOTIFICATION PROVIDER
 import { NotificationProvider } from './context/NotificationProvider';
+import { Tooltip } from 'react-tooltip';
 
 import BrandLobby from './pages/BrandLobby';
 import DashboardLayout from './layouts/DashboardLayout';
@@ -28,6 +28,16 @@ function App() {
                     </Routes>
                 </LayoutProvider>
             </NotificationProvider>
+            <Tooltip 
+                id="map-tooltip" // ID này phải khớp với `data-tooltip-id` trong ComposableMap
+                style={{ 
+                    backgroundColor: 'rgba(30, 41, 59, 0.8)',
+                    backdropFilter: 'blur(10px)',
+                    border: `1px solid ${theme.palette.divider}`,
+                    borderRadius: '8px',
+                    zIndex: 9999 // Đảm bảo nó nổi lên trên tất cả
+                }}
+            />
         </ThemeProvider>
     );
 }

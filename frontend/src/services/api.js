@@ -163,3 +163,18 @@ export const getTopProducts = async (brandId, startDate, endDate, limit = 10) =>
         throw error;
     }
 };
+
+export const getCustomerDistribution = async (brandId, startDate, endDate) => {
+    try {
+        const response = await apiClient.get(`/brands/${brandId}/customer-distribution`, {
+            params: {
+                start_date: startDate.format('YYYY-MM-DD'),
+                end_date: endDate.format('YYYY-MM-DD'),
+            },
+        });
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching customer distribution for brand ${brandId}:`, error);
+        throw error;
+    }
+};
