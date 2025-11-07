@@ -192,3 +192,18 @@ export const getCustomerDistribution = async (brandId, startDate, endDate) => {
         throw error;
     }
 };
+
+export const getCustomerHeatmap = async (brandId, startDate, endDate) => {
+    try {
+        const response = await apiClient.get(`/brands/${brandId}/customer-heatmap`, {
+            params: {
+                start_date: startDate.format('YYYY-MM-DD'),
+                end_date: endDate.format('YYYY-MM-DD'),
+            },
+        });
+        return response.data.points; 
+    } catch (error) {
+        console.error(`Error fetching customer heatmap for brand ${brandId}:`, error);
+        throw error;
+    }
+};

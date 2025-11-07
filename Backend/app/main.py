@@ -229,3 +229,13 @@ def read_brand_daily_kpis(
     
     daily_data = crud.get_daily_kpis_for_range(db, brand_id, start_date, end_date)
     return {"data": daily_data}
+
+@app.get("/brands/{brand_id}/customer-heatmap")
+def read_customer_heatmap(
+    brand_id: int,
+    start_date: date,
+    end_date: date,
+    db: Session = Depends(get_db)
+):
+    points = crud.get_customer_heatmap_coordinates(db, brand_id, start_date, end_date)
+    return {"points": points}

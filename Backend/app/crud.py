@@ -8,8 +8,12 @@ import models, schemas
 from datetime import date, timedelta
 from cache import redis_client
 import math as Math
+import math
 import pandas as pd
+import random
 from vietnam_address_mapping import NEW_PROVINCES, get_new_province_name
+from province_centroids import PROVINCE_CENTROIDS 
+
 
 def parseFloat(value): # Hàm helper
     try: return float(str(value).replace(',', ''))
@@ -652,3 +656,50 @@ def get_customer_distribution(db: Session, brand_id: int, start_date: date, end_
     ]
     
     return sorted(final_distribution, key=lambda item: item['customer_count'], reverse=True)
+
+
+def get_customer_heatmap_coordinates(db: Session, brand_id: int, start_date: date, end_date: date):
+    """
+    Lấy tọa độ và tên tỉnh của từng đơn hàng để vẽ bản đồ nhiệt.
+    """
+    orders_with_customer_city = db.query(
+        models.Customer.city
+    ).select_from(
+        models.Order
+    ).join(
+        models.Customer,
+        models.Order.username == models.Customer.username
+    ).filter(
+        models.Order.brand_id == brand_id,
+        models.Order.order_date.between(start_date, end_date),
+        models.Customer.city.isnot(None),
+        models.Customer.city != ''
+    ).all()
+
+    # <<< THAY ĐỔI 1: Thay vì mảng coordinates, tạo mảng heatmap_points >>>
+    heatmap_points = []
+    
+    for (city,) in orders_with_customer_city:
+        normalized_city = get_new_province_name(city)
+        if not normalized_city:
+            continue
+            
+        centroid = PROVINCE_CENTROIDS.get(normalized_city)
+        if not centroid:
+            continue
+
+        std_dev = 0.1 
+        u1 = random.random()
+        u2 = random.random()
+        z0 = math.sqrt(-2.0 * math.log(u1)) * math.cos(2.0 * math.pi * u2)
+        z1 = math.sqrt(-2.0 * math.log(u1)) * math.sin(2.0 * math.pi * u2)
+        random_lon = centroid[0] + z0 * std_dev
+        random_lat = centroid[1] + z1 * std_dev
+        
+        # <<< THAY ĐỔI 2: Thêm một object chứa cả tên và tọa độ vào mảng >>>
+        heatmap_points.append({
+            "city": normalized_city,
+            "coords": [random_lon, random_lat]
+        })
+        
+    return heatmap_points
