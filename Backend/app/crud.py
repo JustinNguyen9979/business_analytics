@@ -202,23 +202,27 @@ def calculate_and_cache_daily_kpis(db: Session, brand_id: int, target_date: date
     print(f"WORKER: Đã cache xong KPI cho key: {cache_key}")
 
 def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: date):
-    from celery_worker import process_brand_data
+    """
+    Lấy thông tin chi tiết của Brand cùng với các chỉ số KPI đã được tổng hợp.
+    Hàm này sẽ trả về một tuple: (brand_object, cache_was_missing_flag).
+    """
     brand = get_brand(db, brand_id)
-    if not brand: return None
+    if not brand:
+        # Trả về tuple (None, False) nếu không tìm thấy brand
+        return None, False
 
     all_days = [start_date + timedelta(days=x) for x in range((end_date - start_date).days + 1)]
     cache_keys = [f"kpi_daily:{brand_id}:{day.isoformat()}" for day in all_days]
     
     cached_daily_kpis_json = redis_client.mget(cache_keys)
     
-    # <<< SỬA LỖI 1 & 2: CHỈ CỘNG DỒN CÁC CHỈ SỐ GỐC, LOẠI BỎ AOV/UPT/SKU VÀ THÊM totalQuantitySold >>>
     aggregated_base_kpis = {
         # Tài chính
         "gmv": 0, "netRevenue": 0, "cogs": 0, "executionCost": 0,
         "adSpend": 0, "totalCost": 0, "profit": 0,
         # Vận hành
         "totalOrders": 0, "completedOrders": 0, "cancelledOrders": 0, "refundedOrders": 0,
-        "totalQuantitySold": 0 # Chỉ số gốc mới để tính UPT
+        "totalQuantitySold": 0 
     }
 
     days_to_calculate_live = []
@@ -233,20 +237,27 @@ def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: da
         else:
             days_to_calculate_live.append(all_days[i])
 
+    # Tạo một cờ để báo hiệu cho lớp API biết là cache có bị lỗi/thiếu hay không
+    cache_was_missing = False
     if days_to_calculate_live:
-        # ... (phần code xử lý cache miss giữ nguyên)
-        print(f"API: Cache miss cho các ngày: {[d.isoformat() for d in days_to_calculate_live]}. Tính toán 'sống'...")
+        cache_was_missing = True # Đặt cờ thành True
+        print(f"CRUD: Cache miss cho các ngày: {[d.isoformat() for d in days_to_calculate_live]}. Tính toán 'sống'...")
         for day in days_to_calculate_live:
             live_kpis = _calculate_daily_kpis_from_db(db, brand_id, day)
             cache_key = f"kpi_daily:{brand_id}:{day.isoformat()}"
+            # Cache lại kết quả vừa tính, nhưng với thời gian ngắn (1 ngày)
             redis_client.setex(cache_key, timedelta(days=1), json.dumps(live_kpis))
             for key in aggregated_base_kpis.keys():
                 aggregated_base_kpis[key] += live_kpis.get(key, 0)
         
-        print(f"API: Phát hiện cache lỗi thời cho brand ID {brand_id}. Kích hoạt worker tự sửa chữa.")
-        process_brand_data.delay(brand_id)
+        # <<< LỖI ĐÃ ĐƯỢC SỬA: XÓA DÒNG GỌI WORKER KHỎI ĐÂY >>>
+        # Dòng `process_brand_data.delay(brand_id)` đã được gỡ bỏ.
+        # Nhiệm vụ này sẽ do endpoint trong `main.py` thực hiện.
 
     final_kpis = schemas.KpiSet.model_validate(aggregated_base_kpis).model_dump()
+
+    # --- Phần tính toán các chỉ số phái sinh ---
+    # (Toàn bộ logic này giữ nguyên vì đã đúng)
 
     totalCustomers = db.query(func.count(models.Order.username.distinct()))\
         .filter(
@@ -254,8 +265,6 @@ def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: da
             models.Order.order_date.between(start_date, end_date)
         ).scalar() or 0
 
-    # 1.2. Lấy số khách hàng mới trong giai đoạn (khách có đơn đầu tiên trong giai đoạn này)
-    # Dùng subquery để tìm ngày đầu tiên của mỗi khách hàng, sau đó lọc những ai có ngày đầu tiên trong giai đoạn đang xét
     subquery = db.query(
         models.Order.username,
         func.min(models.Order.order_date).label('first_order_date')
@@ -265,33 +274,25 @@ def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: da
         subquery.c.first_order_date.between(start_date, end_date)
     ).scalar() or 0
     
-    
     total_profit_final = final_kpis['profit']
     total_adspend_final = final_kpis['adSpend']
 
-    # 1.3. Tính các chỉ số còn lại
     returningCustomers = totalCustomers - newCustomers
     cac = (total_adspend_final / newCustomers) if newCustomers > 0 else 0
     retentionRate = (returningCustomers / totalCustomers) if totalCustomers > 0 else 0
     ltv = (total_profit_final / totalCustomers) if totalCustomers > 0 else 0
     
-    # Lấy các giá trị đã tổng hợp
     gmv = final_kpis['gmv']
     completed_orders_final = final_kpis['completedOrders']
     total_quantity_sold_final = final_kpis['totalQuantitySold']
     total_orders_final = final_kpis['totalOrders']
 
-    # Tính toán lại các tỷ lệ tài chính
     final_kpis['roi'] = (final_kpis['profit'] / final_kpis['totalCost']) if final_kpis['totalCost'] > 0 else 0
     final_kpis['profitMargin'] = (final_kpis['profit'] / final_kpis['netRevenue']) if final_kpis['netRevenue'] != 0 else 0
     final_kpis['takeRate'] = (final_kpis['executionCost'] / gmv) if gmv > 0 else 0
-
-    # Tính lại các tỷ lệ vận hành
     final_kpis['completionRate'] = (completed_orders_final / total_orders_final) if total_orders_final > 0 else 0
     final_kpis['cancellationRate'] = (final_kpis['cancelledOrders'] / total_orders_final) if total_orders_final > 0 else 0
     final_kpis['refundRate'] = (final_kpis['refundedOrders'] / total_orders_final) if total_orders_final > 0 else 0
-
-    # Tính lại AOV và UPT dựa trên tổng số liệu
     final_kpis['aov'] = (gmv / completed_orders_final) if completed_orders_final > 0 else 0
     final_kpis['upt'] = (total_quantity_sold_final / completed_orders_final) if completed_orders_final > 0 else 0
 
@@ -302,7 +303,6 @@ def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: da
     final_kpis['retentionRate'] = retentionRate
     final_kpis['ltv'] = ltv
 
-    # Phần tính lại số SKU duy nhất bằng truy vấn DB đã rất chính xác, giữ nguyên
     refunded_codes_in_period = {
         code for code, in db.query(models.Revenue.order_code)\
             .filter(
@@ -333,7 +333,9 @@ def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: da
     final_kpis['uniqueSkusSold'] = len(unique_skus_in_period)
     
     brand.kpis = final_kpis
-    return brand
+    
+    # Trả về một tuple chứa object brand và cờ báo hiệu cache
+    return brand, cache_was_missing
 
 def recalculate_brand_data_sync(db: Session, brand_id: int):
     """

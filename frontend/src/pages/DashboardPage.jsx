@@ -19,7 +19,7 @@ import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import ChartTimeFilter from '../components/common/ChartTimeFilter';
 import { getBrandDetails, getBrandDailyKpis, getTopProducts } from '../services/api';
 import GeoMapChart from '../components/charts/GeoMapChart';
-import { getCustomerDistribution } from '../services/api';
+import { useCustomerDistribution } from '../hooks/useCustomerDistribution';
 
 function DashboardPage() {
     const theme = useTheme();
@@ -61,37 +61,16 @@ function DashboardPage() {
         chartDateRange
     );
 
-    // 2. Thêm các state mới để quản lý dữ liệu và bộ lọc cho bản đồ
     const [mapDateRange, setMapDateRange] = useState({
         range: [dayjs().startOf('year'), dayjs().endOf('year')],
         type: 'year'
     });
-    const [mapData, setMapData] = useState([]);
-    const [isMapLoading, setIsMapLoading] = useState(true);
 
     const handleMapFilterChange = useCallback((newRange, type) => {
         setMapDateRange({ range: newRange, type: type });
-    }, []);
+    }, [])
 
-    // 3. Thêm useEffect để tải dữ liệu cho bản đồ
-    useEffect(() => {
-        const fetchMapData = async () => {
-            if (!brandId) return;
-            setIsMapLoading(true);
-            try {
-                const [start, end] = mapDateRange.range;
-                const data = await getCustomerDistribution(brandId, start, end);
-                setMapData(data);
-            } catch (err) {
-                console.error("Lỗi khi tải dữ liệu bản đồ:", err);
-                setMapData([]);
-            } finally {
-                setIsMapLoading(false);
-            }
-        };
-
-        fetchMapData();
-    }, [brandId, mapDateRange]);
+    const { mapData, isMapLoading } = useCustomerDistribution(brandId, mapDateRange);
 
     // --- CÁC HÀM XỬ LÝ SỰ KIỆN CỦA UI (KHÔNG THAY ĐỔI) ---
     const handleOpenKpiFilter = (event) => setKpiAnchorEl(event.currentTarget);

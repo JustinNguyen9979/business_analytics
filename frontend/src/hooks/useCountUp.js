@@ -1,4 +1,4 @@
-// FILE: frontend/src/hooks/useCountUp.js (TẠO MỚI)
+// FILE: frontend/src/hooks/useCountUp.js
 
 import { useState, useEffect } from 'react';
 

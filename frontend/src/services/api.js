@@ -164,6 +164,20 @@ export const getTopProducts = async (brandId, startDate, endDate, limit = 10) =>
     }
 };
 
+export const requestCustomerDistribution = async (brandId, startDate, endDate) => {
+    try {
+        await apiClient.post(`/brands/${brandId}/async-customer-distribution`, null, {
+            params: {
+                start_date: startDate.format('YYYY-MM-DD'),
+                end_date: endDate.format('YYYY-MM-DD'),
+            },
+        });
+    } catch (error) {
+        console.error(`Error requesting customer distribution calculation for brand ${brandId}:`, error);
+        throw error;
+    }
+};
+
 export const getCustomerDistribution = async (brandId, startDate, endDate) => {
     try {
         const response = await apiClient.get(`/brands/${brandId}/customer-distribution`, {

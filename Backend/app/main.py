@@ -7,7 +7,7 @@ from typing import List, Optional
 from database import SessionLocal, engine
 from datetime import date
 from cache import redis_client
-from celery_worker import process_brand_data
+from celery_worker import process_brand_data, calculate_customer_distribution
 
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="CEO Dashboard API by Julice")
@@ -30,16 +30,28 @@ def create_brand_api(brand: schemas.BrandCreate, db: Session = Depends(get_db)):
          raise HTTPException(status_code=400, detail="Brand đã tồn tại")
     return new_brand
 
-@app.get("/brands/{brand_id}", response_model=schemas.BrandWithKpis) # Dùng schema mới
+@app.get("/brands/{brand_id}", response_model=schemas.BrandWithKpis)
 def read_brand(
     brand_id: int, 
     start_date: date, 
     end_date: date, 
     db: Session = Depends(get_db)
 ):
-    db_brand = crud.get_brand_details(db, brand_id=brand_id, start_date=start_date, end_date=end_date)
+    # <<< THAY ĐỔI LOGIC Ở ĐÂY >>>
+
+    # Hàm crud giờ trả về một tuple (brand_data, cache_was_missing)
+    db_brand, cache_was_missing = crud.get_brand_details(
+        db, brand_id=brand_id, start_date=start_date, end_date=end_date
+    )
+
     if not db_brand: 
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+    
+    # Nếu cờ cache_was_missing là True, kích hoạt worker ở đây
+    if cache_was_missing:
+        print(f"API: Phát hiện cache lỗi thời cho brand ID {brand_id}. Kích hoạt worker tự sửa chữa.")
+        process_brand_data.delay(brand_id)
+
     return db_brand
 
 @app.post("/brands/{brand_id}/recalculate", status_code=status.HTTP_200_OK) # Đổi status code thành 200 OK
@@ -143,21 +155,45 @@ async def upload_platform_data(
 
     return {"message": f"Xử lý file cho nền tảng '{platform}' hoàn tất! Dữ liệu đang được tính toán nền.", "results": results}
 
+@app.post("/brands/{brand_id}/async-customer-distribution", status_code=status.HTTP_202_ACCEPTED)
+def request_customer_distribution_calculation(
+    brand_id: int,
+    start_date: date,
+    end_date: date
+):
+    """
+    Endpoint để yêu cầu worker tính toán phân bổ khách hàng.
+    Trả về ngay lập tức.
+    """
+    calculate_customer_distribution.delay(
+        brand_id=brand_id, 
+        start_date_iso=start_date.isoformat(), 
+        end_date_iso=end_date.isoformat()
+    )
+    return {"message": "Yêu cầu tính toán đã được tiếp nhận."}
+
 @app.get("/brands/{brand_id}/customer-distribution", response_model=List[schemas.CustomerDistributionItem])
 def read_customer_distribution(
     brand_id: int,
     start_date: date,
     end_date: date,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db) # Giữ lại db để phòng trường hợp cần fallback
 ):
     """
-    Endpoint để lấy dữ liệu phân bổ khách hàng theo tỉnh/thành phố.
+    Endpoint để lấy dữ liệu phân bổ khách hàng TỪ CACHE.
     """
-    if not crud.get_brand(db, brand_id):
-        raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+    # Tạo cache key giống hệt như trong worker
+    cache_key = f"dist:{brand_id}:{start_date.isoformat()}:{end_date.isoformat()}"
     
-    distribution_data = crud.get_customer_distribution(db, brand_id, start_date, end_date)
-    return distribution_data
+    cached_result = redis_client.get(cache_key)
+    
+    if cached_result:
+        # Nếu tìm thấy trong cache, giải mã JSON và trả về
+        return json.loads(cached_result)
+    else:
+        # Nếu chưa có trong cache, trả về một danh sách rỗng
+        # Frontend sẽ hiểu là dữ liệu đang được tính toán
+        return []
 
 @app.delete("/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_brand_api(brand_id: int, db: Session = Depends(get_db)):
