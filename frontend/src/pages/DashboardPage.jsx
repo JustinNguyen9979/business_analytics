@@ -1,12 +1,14 @@
 // FILE: frontend/src/pages/DashboardPage.jsx (PHIÊN BẢN HOÀN THIỆN)
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, Grid, Stack } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import dayjs from 'dayjs';
 import CostDonutChart from '../components/charts/CostDonutChart';
-import { useDashboardData } from '../components/dashboard/useDashboardData';
+import { useKpiData } from '../hooks/useKpiData';
+import { useChartData } from '../hooks/useChartData';
+// import { useDashboardData } from '../components/dashboard/useDashboardData';
 import { useTheme } from '@mui/material/styles';
 import { useLayout } from '../context/LayoutContext';
 import { StatItem } from '../components/dashboard/StatItem';
@@ -26,70 +28,69 @@ function DashboardPage() {
     const { brandId } = useParams();
     const { isSidebarOpen } = useLayout();
     const [searchParams, setSearchParams] = useSearchParams();
-    
+
     // --- STATE QUẢN LÝ LỰA CHỌN CỦA NGƯỜI DÙNG ---
     const [kpiDateRange, setKpiDateRange] = useState(() => {
         const start = searchParams.get('start');
         const end = searchParams.get('end');
         return (start && end) ? [dayjs(start), dayjs(end)] : [dayjs().subtract(27, 'days').startOf('day'), dayjs().endOf('day')];
     });
+
     const [chartDateRange, setChartDateRange] = useState({
         range: [dayjs().startOf('year'), dayjs().endOf('year')],
         type: 'year'
     });
-
-    // === THÊM MỚI: State và Handler riêng cho Donut Chart ===
-    const [donutChartDateRange, setDonutChartDateRange] = useState({
-        range: [dayjs().startOf('year'), dayjs().endOf('year')],
-        type: 'year'
-    });
-    const [donutChartKpiData, setDonutChartKpiData] = useState(null);
-    const [isDonutChartLoading, setIsDonutChartLoading] = useState(true);
-
-    const handleDonutChartFilterChange = useCallback((newRange, type) => {
-        setDonutChartDateRange({ range: newRange, type: type });
-    }, []);
-    
-    // State cho UI Popover/Menu
-    const [kpiAnchorEl, setKpiAnchorEl] = useState(null);
-    const [chartRevision, setChartRevision] = useState(0);
-
-    // 2. GỌI CUSTOM HOOK ĐỂ LẤY TOÀN BỘ DỮ LIỆU VÀ TRẠNG THÁI
-    const { loading, error, brandInfo, kpiData, chartData } = useDashboardData(
-        brandId,
-        kpiDateRange,
-        chartDateRange
-    );
 
     const [mapDateRange, setMapDateRange] = useState({
         range: [dayjs().startOf('year'), dayjs().endOf('year')],
         type: 'year'
     });
 
-    const handleMapFilterChange = useCallback((newRange, type) => {
-        setMapDateRange({ range: newRange, type: type });
-    }, [])
-
-    const { mapData, isMapLoading } = useCustomerDistribution(brandId, mapDateRange);
-
-    // --- CÁC HÀM XỬ LÝ SỰ KIỆN CỦA UI (KHÔNG THAY ĐỔI) ---
-    const handleOpenKpiFilter = (event) => setKpiAnchorEl(event.currentTarget);
-    const handleCloseKpiFilter = () => setKpiAnchorEl(null);
-    const handleApplyKpiFilter = (newRange) => {
-        setKpiDateRange(newRange);
-        setSearchParams({ start: newRange[0].format('YYYY-MM-DD'), end: newRange[1].format('YYYY-MM-DD') });
-        handleCloseKpiFilter();
-    };
-    const handleChartFilterChange = useCallback((newRange, type) => {
-        setChartDateRange({ range: newRange, type: type });
-    }, []);
+    const [donutChartDateRange, setDonutChartDateRange] = useState({
+        range: [dayjs().startOf('year'), dayjs().endOf('year')],
+        type: 'year'
+    });
 
     const [topProductsDateRange, setTopProductsDateRange] = useState({
         range: [dayjs().startOf('year'), dayjs().endOf('year')],
         type: 'year'
     });
+
+    // --- State quản lý dữ liệu và trạng thái loading của các biểu đồ phụ ---
+    const [donutChartKpiData, setDonutChartKpiData] = useState(null);
+    const [isDonutChartLoading, setIsDonutChartLoading] = useState(true);
     const [topProductsData, setTopProductsData] = useState([]);
     const [isTopProductsLoading, setIsTopProductsLoading] = useState(true);
+
+    // --- State quản lý UI ---
+    const [kpiAnchorEl, setKpiAnchorEl] = useState(null);
+    const [chartRevision, setChartRevision] = useState(0);
+
+    // --- Dữ liệu chính từ các custom hook ---
+    const { loading: isKpiLoading, error: kpiError, brandInfo, kpiData } = useKpiData(brandId, kpiDateRange);
+    const { loading: isChartLoading, error: chartError, chartData } = useChartData(brandId, chartDateRange);
+    const { mapData, isMapLoading } = useCustomerDistribution(brandId, mapDateRange);
+
+    // --- Các hàm handler ---
+    const handleOpenKpiFilter = (event) => setKpiAnchorEl(event.currentTarget);
+    const handleCloseKpiFilter = () => setKpiAnchorEl(null);
+    const handleApplyKpiFilter = useCallback((newRange) => {
+        setKpiDateRange(newRange);
+        setSearchParams({ start: newRange[0].format('YYYY-MM-DD'), end: newRange[1].format('YYYY-MM-DD') });
+        handleCloseKpiFilter();
+    }, [setSearchParams]);
+
+    const handleChartFilterChange = useCallback((newRange, type) => {
+        setChartDateRange({ range: newRange, type: type });
+    }, []);
+
+    const handleMapFilterChange = useCallback((newRange, type) => {
+        setMapDateRange({ range: newRange, type: type });
+    }, [])
+    
+    const handleDonutChartFilterChange = useCallback((newRange, type) => {
+        setDonutChartDateRange({ range: newRange, type: type });
+    }, []);
 
     const handleTopProductsFilterChange = useCallback((newRange, type) => {
         setTopProductsDateRange({ range: newRange, type: type });
@@ -113,14 +114,13 @@ function DashboardPage() {
 
         fetchTopProducts();
     }, [brandId, topProductsDateRange]);
-
-
-
-    // Effect để vẽ lại biểu đồ khi sidebar thay đổi (không thay đổi)
+ 
     useEffect(() => {
         const timer = setTimeout(() => setChartRevision(prev => prev + 1), 300);
         return () => clearTimeout(timer);
     }, [isSidebarOpen]);
+
+     
 
     useEffect(() => {
         const fetchDonutData = async () => {
@@ -142,9 +142,11 @@ function DashboardPage() {
     }, [brandId, donutChartDateRange]);
 
     // --- PHẦN RENDER GIAO DIỆN ---
+    const error = kpiError || chartError; // Gộp lỗi từ cả hai hook
     if (error) return <Alert severity="error">{error}</Alert>;
-    // 3. SỬ DỤNG KẾT QUẢ TRẢ VỀ TỪ HOOK
-    if (loading && !kpiData.current) { 
+    
+    // Hiển thị loading nếu bất kỳ dữ liệu chính nào đang tải
+    if (isKpiLoading && !kpiData.current) { 
         return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>; 
     }
 
@@ -224,7 +226,7 @@ function DashboardPage() {
                 </Box>
                 
                 <Box sx={{ pb: 3, pt: 1 }}>
-                    {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', height: 450 }}><CircularProgress /></Box> : (
+                    {isChartLoading ? <Box sx={{ display: 'flex', justifyContent: 'center', height: 450, alignItems: 'center' }}><CircularProgress /></Box> : (
                         chartData.current.length > 0 ? (
                             <RevenueProfitChart 
                                 data={chartData.current} 

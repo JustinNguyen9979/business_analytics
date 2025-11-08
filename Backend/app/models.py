@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB # 
 from database import Base
@@ -48,6 +48,10 @@ class Order(Base):
     source = Column(String, nullable=False, index=True)
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
     details = Column(JSONB, nullable=True)
+
+    __table_args__ = (
+        Index('ix_order_brand_id_order_date', 'brand_id', 'order_date'),
+    )
     
     owner_brand = relationship("Brand", back_populates="orders")
 
@@ -66,6 +70,10 @@ class Ad(Base):
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
     # --- Cột JSONB ---
     details = Column(JSONB, nullable=True)
+
+    __table_args__ = (
+        Index('ix_ad_brand_id_ad_date', 'brand_id', 'ad_date'),
+    )
     
     owner_brand = relationship("Brand", back_populates="ads")
 
@@ -82,5 +90,9 @@ class Revenue(Base):
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
     # --- Cột JSONB ---
     details = Column(JSONB, nullable=True)
+
+    __table_args__ = (
+        Index('ix_revenue_brand_id_transaction_date', 'brand_id', 'transaction_date'),
+    )
 
     owner_brand = relationship("Brand", back_populates="revenues")

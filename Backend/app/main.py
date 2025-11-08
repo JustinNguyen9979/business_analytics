@@ -2,6 +2,7 @@ import json
 import redis
 import crud, models, schemas, shopee_parser
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, status
+from fastapi.responses import ORJSONResponse
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from database import SessionLocal, engine
@@ -11,7 +12,12 @@ from celery_worker import process_brand_data, calculate_customer_distribution
 from schemas import CustomerMapDistributionItem 
 
 models.Base.metadata.create_all(bind=engine)
-app = FastAPI(title="CEO Dashboard API by Julice")
+# app = FastAPI(title="CEO Dashboard API by Julice")
+app = FastAPI(
+    title="CEO Dashboard API by Julice",
+    default_response_class=ORJSONResponse 
+)
+
 def get_db(): 
     db = SessionLocal(); 
     try: yield db 

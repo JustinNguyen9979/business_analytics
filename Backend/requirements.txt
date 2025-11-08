@@ -14,3 +14,4 @@ aioredis
 unidecode
 celery[redis]
 gevent
+orjson

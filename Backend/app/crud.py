@@ -1,7 +1,7 @@
 # FILE: backend/app/crud.py (PHIÊN BẢN CUỐI CÙNG - ỔN ĐỊNH)
 
 import json
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func, union_all, select, or_, cast, Integer, String, and_
 from sqlalchemy.dialects.postgresql import JSONB
 import models, schemas
@@ -371,6 +371,16 @@ def recalculate_brand_data_sync(db: Session, brand_id: int):
 
 def get_brand(db: Session, brand_id: int):
     return db.query(models.Brand).filter(models.Brand.id == brand_id).first()
+
+# def get_brand(db: Session, brand_id: int):
+#     # query(models.Brand) sẽ chỉ lấy brand
+#     # .options(selectinload(models.Brand.orders)) sẽ bảo SQLAlchemy: 
+#     # "Khi lấy brand này, hãy chạy thêm 1 query nữa để lấy TẤT CẢ các order của nó"
+#     return db.query(models.Brand).options(
+#         selectinload(models.Brand.orders),
+#         selectinload(models.Brand.revenues),
+#         selectinload(models.Brand.ads)
+#     ).filter(models.Brand.id == brand_id).first()
 
 def get_brand_by_name(db: Session, name: str):
     return db.query(models.Brand).filter(models.Brand.name == name).first()

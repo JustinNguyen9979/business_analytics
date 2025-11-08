@@ -21,7 +21,7 @@ services:
   worker:
     build: { context: ./backend }
     # Bỏ cờ -B
-    command: celery -A celery_worker.celery_app worker --loglevel=info -P gevent
+    command: celery -A celery_worker.celery_app worker --loglevel=info -P gevent --concurrency=100
     volumes: [ ./backend/app:/app ]
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
