@@ -1,8 +1,7 @@
-// FILE: frontend/src/hooks/useCustomerDistribution.js
+// FILE: frontend/src/hooks/useCustomerDistribution.js (nội dung file được cập nhật)
 
 import { useState, useEffect } from 'react';
-// <<< SỬA LẠI IMPORT >>>
-import { getCustomerHeatmap } from '../services/api';
+import { getCustomerMapDistribution } from '../services/api';
 
 export function useCustomerDistribution(brandId, dateRange) {
     const [mapData, setMapData] = useState([]);
@@ -19,11 +18,11 @@ export function useCustomerDistribution(brandId, dateRange) {
                 setIsMapLoading(true);
 
                 // <<< SỬA LẠI HÀM GỌI API >>>
-                const coordinates = await getCustomerHeatmap(brandId, start, end);
+                const distributionData = await getCustomerMapDistribution(brandId, start, end);
                 
-                setMapData(coordinates); // Lưu mảng tọa độ vào state
+                setMapData(distributionData); // Lưu mảng dữ liệu đã tổng hợp vào state
             } catch (err) {
-                console.error("Lỗi khi lấy dữ liệu heatmap:", err);
+                console.error("Lỗi khi lấy dữ liệu phân bổ bản đồ:", err);
                 setMapData([]);
             } finally {
                 setIsMapLoading(false);

@@ -8,6 +8,7 @@ from database import SessionLocal, engine
 from datetime import date
 from cache import redis_client
 from celery_worker import process_brand_data, calculate_customer_distribution
+from schemas import CustomerMapDistributionItem 
 
 models.Base.metadata.create_all(bind=engine)
 app = FastAPI(title="CEO Dashboard API by Julice")
@@ -230,12 +231,19 @@ def read_brand_daily_kpis(
     daily_data = crud.get_daily_kpis_for_range(db, brand_id, start_date, end_date)
     return {"data": daily_data}
 
-@app.get("/brands/{brand_id}/customer-heatmap")
-def read_customer_heatmap(
+@app.get("/brands/{brand_id}/customer-map-distribution", response_model=List[schemas.CustomerMapDistributionItem])
+def read_customer_map_distribution(
     brand_id: int,
     start_date: date,
     end_date: date,
     db: Session = Depends(get_db)
 ):
-    points = crud.get_customer_heatmap_coordinates(db, brand_id, start_date, end_date)
-    return {"points": points}
+    """
+    API mới: Lấy dữ liệu phân bổ khách hàng theo tỉnh/thành,
+    kèm theo tọa độ và số lượng khách hàng đã được tổng hợp.
+    """
+    if not crud.get_brand(db, brand_id):
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
+    
+    distribution_data = crud.get_customer_distribution_with_coords(db, brand_id, start_date, end_date)
+    return distribution_data

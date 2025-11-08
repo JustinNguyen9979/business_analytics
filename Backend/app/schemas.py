@@ -105,5 +105,11 @@ class TopProduct(BaseModel):
 class CustomerDistributionItem(BaseModel):
     city: str
     customer_count: int
+    model_config = ConfigDict(from_attributes=True)
+
+class CustomerMapDistributionItem(BaseModel):
+    city: str
+    customer_count: int
+    coords: List[float] # Sẽ là một mảng [kinh độ, vĩ độ]
 
     model_config = ConfigDict(from_attributes=True)

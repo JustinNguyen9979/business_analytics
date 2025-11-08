@@ -140,6 +140,7 @@ function ChartTimeFilter({ onFilterChange }) {
                 variant="outlined"
                 onClick={handleClick}
                 endIcon={<KeyboardArrowDownIcon />}
+                sx={{ px: 4}}
             >
                 Bộ lọc
             </Button>

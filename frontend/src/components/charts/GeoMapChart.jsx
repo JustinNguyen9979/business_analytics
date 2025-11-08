@@ -1,36 +1,42 @@
-// FILE: frontend/src/components/charts/GeoMapChart.jsx (PHIÊN BẢN HOÀN CHỈNH)
+// FILE: frontend/src/components/charts/GeoMapChart.jsx (PHIÊN BẢN ANIMATION SVG GỐC)
 
 import React, { memo, useMemo } from 'react';
 import { ComposableMap, Geographies, Geography, Marker } from '@vnedyalk0v/react19-simple-maps';
-import { Box, Typography, Stack, Grid } from '@mui/material';
+import { Box, Grid, Stack, Typography } from '@mui/material';
+import { scaleLinear } from 'd3-scale';
 
-import geoShapeData from '../../assets/vietnam-shape.json'; 
+import geoShapeData from '../../assets/vietnam-shape.json';
 
-function GeoMapChartComponent({ data }) { // data giờ là mảng [{city, coords}, ...]
+// <<< BỎ HOÀN TOÀN KEYFRAMES VÀ STYLED COMPONENT >>>
+// Chúng ta sẽ định nghĩa animation trực tiếp trong SVG
 
-    // <<< BƯỚC 1: TÍNH TOÁN TOP 5 TỪ DỮ LIỆU ĐẦU VÀO >>>
+function GeoMapChartComponent({ data }) {
+    const { sizeScale, opacityScale } = useMemo(() => {
+        if (!data || data.length === 0) {
+            return { sizeScale: () => 0, opacityScale: () => 0 };
+        }
+        
+        const counts = data.map(d => d.customer_count);
+        const max = Math.max(...counts.map(c => Number(c)), 0); 
+        
+        const size = scaleLinear().domain([0, max]).range([4, 12]).clamp(true);
+        const opacity = scaleLinear().domain([0, max]).range([0.6, 1.0]).clamp(true);
+
+        return { sizeScale: size, opacityScale: opacity };
+    }, [data]);
+
     const top5Provinces = useMemo(() => {
         if (!data || data.length === 0) {
             return [];
         }
-
-        // Đếm số lần xuất hiện của mỗi tỉnh
-        const counts = data.reduce((acc, point) => {
-            acc[point.city] = (acc[point.city] || 0) + 1;
-            return acc;
-        }, {});
-
-        // Chuyển object thành mảng, sắp xếp và lấy top 5
-        return Object.entries(counts)
-            .map(([city, count]) => ({ city, customer_count: count }))
+        // Sắp xếp dữ liệu theo customer_count giảm dần và lấy 5 phần tử đầu tiên
+        return [...data]
             .sort((a, b) => b.customer_count - a.customer_count)
             .slice(0, 5);
-            
     }, [data]);
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            {/* PHẦN BẢN ĐỒ */}
             <Box sx={{ flexGrow: 1, position: 'relative' }}>
                 <ComposableMap
                     projection="geoMercator"
@@ -41,7 +47,7 @@ function GeoMapChartComponent({ data }) { // data giờ là mảng [{city, coord
                         {({ geographies }) =>
                             geographies.map((geo, index) => (
                                 <Geography
-                                    key={index} 
+                                    key={index}
                                     geography={geo}
                                     fill="#303952"
                                     stroke="#596275"
@@ -51,33 +57,62 @@ function GeoMapChartComponent({ data }) { // data giờ là mảng [{city, coord
                         }
                     </Geographies>
 
-                    {/* Vẽ các chấm đỏ */}
-                    {data && data.map((point, index) => (
-                        <Marker key={index} coordinates={point.coords}>
-                            <circle 
-                                r={2}
-                                fill="#FF5252"
-                                style={{ fillOpacity: 0.5, pointerEvents: 'none' }}
-                            />
-                        </Marker>
-                    ))}
+                    {data.map(item => {
+                        if (!item.coords || item.coords.length !== 2) return null;
+
+                        const size = sizeScale(item.customer_count);
+                        const opacity = opacityScale(item.customer_count);
+
+                        return (
+                            <Marker
+                                key={item.city}
+                                coordinates={item.coords}
+                                data-tooltip-content={`${item.city}: ${item.customer_count.toLocaleString('vi-VN')} khách`}
+                            >
+                                {/* Group chứa toàn bộ hiệu ứng cho một điểm */}
+                                <g style={{ cursor: 'pointer', pointerEvents: 'none' }}>
+                                    {/* <<< SỬ DỤNG THẺ <animate> GỐC CỦA SVG >>> */}
+
+                                    {/* Vòng sóng 1 */}
+                                    <circle r={size} fill="none" stroke="#FF5252" strokeWidth={2}>
+                                        {/* Animation cho bán kính (lan rộng ra) */}
+                                        <animate attributeName="r" from={size} to={size * 8} dur="2.2s" begin="0s" repeatCount="indefinite" />
+                                        {/* Animation cho độ trong suốt (mờ dần) */}
+                                        <animate attributeName="stroke-opacity" from={0.8} to={0} dur="2.2s" begin="0s" repeatCount="indefinite" />
+                                    </circle>
+
+                                    {/* Vòng sóng 2 (bắt đầu trễ hơn) */}
+                                    <circle r={size} fill="none" stroke="#FF5252" strokeWidth={2}>
+                                        <animate attributeName="r" from={size} to={size * 5} dur="2.2s" begin="1.1s" repeatCount="indefinite" />
+                                        <animate attributeName="stroke-opacity" from={0.8} to={0} dur="2.2s" begin="1.1s" repeatCount="indefinite" />
+                                    </circle>
+                                    
+                                    {/* Chấm tròn trung tâm */}
+                                    <circle
+                                        r={size}
+                                        fill={`rgba(255, 82, 82, ${opacity})`}
+                                        stroke="#FFFFFF"
+                                        strokeWidth={0.5}
+                                        style={{ transition: 'transform 0.2s ease', pointerEvents: 'auto' }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.8)'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                                    />
+                                </g>
+                            </Marker>
+                        );
+                    })}
                 </ComposableMap>
             </Box>
-
-            {/* <<< BƯỚC 2: PHẦN CHÚ THÍCH TOP 5 THEO CHIỀU NGANG >>> */}
             {top5Provinces.length > 0 && (
                 <Box sx={{ p: 2, flexShrink: 0, borderTop: 1, borderColor: 'divider' }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 2, textAlign: 'center' }}>
                         Top 5 Tỉnh/Thành có lượng khách hàng cao nhất
                     </Typography>
-                    
-                    {/* Grid container */}
-                    <Grid container spacing={{ xs: 2, md: 3 }} columns={{ xs: 4, sm: 8, md: 12 }}>
+                    <Grid container spacing={{ xs: 2, sm: 3 }} justifyContent={{ sm: 'center', lg: 'space-between' }}>
                         {top5Provinces.map((province, index) => (
-                            // Mỗi mục chiếm 12 cột (toàn bộ) trên xs, và 6 cột (một nửa) trên md
-                            <Grid item key={province.city} xs={12} sm={6}>
-                                <Stack direction="row" spacing={1.5} alignItems="center">
-                                    <Typography sx={{ fontWeight: 'bold', fontSize: '1.1rem', color: 'text.secondary', width: '24px' }}>
+                            <Grid item key={province.city} xs={12} sm={6} lg="auto">
+                                <Stack direction="row" spacing={1.5} alignItems="center" justifyContent={{ xs: 'center', sm: 'flex-start'}}>
+                                    <Typography sx={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'text.secondary', width: '24px' }}>
                                         {index + 1}.
                                     </Typography>
                                     <Box>

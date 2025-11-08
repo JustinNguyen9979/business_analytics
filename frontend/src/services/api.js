@@ -193,17 +193,17 @@ export const getCustomerDistribution = async (brandId, startDate, endDate) => {
     }
 };
 
-export const getCustomerHeatmap = async (brandId, startDate, endDate) => {
+export const getCustomerMapDistribution = async (brandId, startDate, endDate) => {
     try {
-        const response = await apiClient.get(`/brands/${brandId}/customer-heatmap`, {
+        const response = await apiClient.get(`/brands/${brandId}/customer-map-distribution`, {
             params: {
                 start_date: startDate.format('YYYY-MM-DD'),
                 end_date: endDate.format('YYYY-MM-DD'),
             },
         });
-        return response.data.points; 
+        return response.data; // Trả về mảng dữ liệu đã tổng hợp
     } catch (error) {
-        console.error(`Error fetching customer heatmap for brand ${brandId}:`, error);
+        console.error(`Error fetching customer map distribution for brand ${brandId}:`, error);
         throw error;
     }
 };
