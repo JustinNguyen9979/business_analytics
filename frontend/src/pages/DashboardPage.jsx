@@ -295,7 +295,8 @@ function DashboardPage() {
                             width: '100%',
                             flexGrow: 1,
                             display: 'flex',
-                            flexDirection: 'column'
+                            flexDirection: 'column',
+                            minHeight: { xs: 900, md: '100%' }
                         }}
                     >
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>

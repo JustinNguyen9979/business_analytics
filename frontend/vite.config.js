@@ -5,18 +5,21 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '0.0.0.0', // Rất quan trọng: cho phép truy cập từ bên ngoài container
-    port: 5173,      // Port Vite sẽ lắng nghe
+    host: '0.0.0.0',
+    port: 5173,
     proxy: {
-      // Bất kỳ request nào đến frontend bắt đầu bằng '/api'
       '/api': {
-        // Sẽ được chuyển tiếp đến backend
         target: 'http://backend:8000',
         changeOrigin: true,
-        // Xóa '/api' khỏi URL trước khi gửi đi
-        // ví dụ: /api/brands -> /brands
         rewrite: (path) => path.replace(/^\/api/, ''),
       }
-    }
+    },
+    
+    allowedHosts: [
+      'macbook-pro-ca-justin-2.tail2ab52c.ts.net',
+      '.ngrok-free.app',
+      '192.168.1.*',
+      '192.168.100.*'
+    ]
   }
 })

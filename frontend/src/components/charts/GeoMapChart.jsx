@@ -7,9 +7,6 @@ import { scaleLinear } from 'd3-scale';
 
 import geoShapeData from '../../assets/vietnam-shape.json';
 
-// <<< BỎ HOÀN TOÀN KEYFRAMES VÀ STYLED COMPONENT >>>
-// Chúng ta sẽ định nghĩa animation trực tiếp trong SVG
-
 function GeoMapChartComponent({ data }) {
     const { sizeScale, opacityScale } = useMemo(() => {
         if (!data || data.length === 0) {
@@ -40,7 +37,7 @@ function GeoMapChartComponent({ data }) {
             <Box sx={{ flexGrow: 1, position: 'relative' }}>
                 <ComposableMap
                     projection="geoMercator"
-                    projectionConfig={{ scale: 2200, center: [107.5, 16] }}
+                    projectionConfig={{ scale: 2300, center: [108, 16.4] }}
                     style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
                 >
                     <Geographies geography={geoShapeData}>

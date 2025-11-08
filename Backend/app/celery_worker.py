@@ -1,17 +1,19 @@
-# FILE: Backend/app/celery_worker.py (PHIÊN BẢN TÁI CẤU TRÚC)
+# FILE: Backend/app/celery_worker.py
 
+import os
 from celery import Celery
 import crud
 from cache import redis_client
 import json
 from datetime import date
-from worker_utils import get_db_session  # <<< IMPORT CONTEXT MANAGER MỚI
+from worker_utils import get_db_session 
 
-# Khởi tạo Celery app như cũ
-celery_app = Celery('tasks', broker='redis://cache:6379/0', backend='redis://cache:6379/0')
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+REDIS_URL = f"redis://:{REDIS_PASSWORD}@cache:6379/0"
+
+celery_app = Celery('tasks', broker=REDIS_URL, backend=REDIS_URL)
 celery_app.conf.update(task_serializer='json', accept_content=['json'], result_serializer='json', timezone='UTC', enable_utc=True)
 
-# Tác vụ định kỳ có thể giữ nguyên, nhưng logic bên trong sẽ thay đổi
 @celery_app.on_after_configure.connect
 def setup_periodic_tasks(sender, **kwargs):
     sender.add_periodic_task(3600.0, process_all_brands.s(), name='re-calculate all brands every hour')

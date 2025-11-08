@@ -14,6 +14,7 @@ services:
       - cache
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     restart: unless-stopped
 
   # === SERVICE WORKER CHỈ LÀM VIỆC ===
@@ -24,6 +25,7 @@ services:
     volumes: [ ./backend/app:/app ]
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     depends_on: [ db, cache, backend ]
     restart: unless-stopped
 
@@ -35,6 +37,7 @@ services:
     volumes: [ ./backend/app:/app ]
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     depends_on: [ db, cache, backend ]
     restart: unless-stopped
 
@@ -47,6 +50,8 @@ services:
       - /app/node_modules # Loại trừ node_modules để không bị ghi đè bởi thư mục rỗng trên máy host
     ports:
       - "5173:5173" # Ánh xạ port của Vite dev server ra ngoài
+    environment:
+      - WEBHOOK_URL=${WEBHOOK_URL}
     restart: unless-stopped
     depends_on:
       - backend
@@ -67,7 +72,8 @@ services:
     image: redis:6.2-alpine
     restart: always
     ports: [ '6379:6379' ]
-    command: redis-server --save 20 1 --loglevel warning
+    command: redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+
 
 volumes:
   postgres_data:
