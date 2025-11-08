@@ -11,7 +11,6 @@ export const formatCurrency = (value) => {
         return '0 đ';
     }
     return Math.round(value).toLocaleString('vi-VN') + ' đ';
-
 };
 
 /**
@@ -24,5 +23,5 @@ export const formatNumber = (value) => {
     if (typeof value !== 'number' || !isFinite(value)) {
         return '0';
     }
-    return value.toLocaleString('vi-VN');
+    return Math.round(value).toLocaleString('vi-VN');
 };
