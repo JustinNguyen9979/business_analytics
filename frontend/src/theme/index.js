@@ -132,6 +132,34 @@ const theme = createTheme({
         // Tùy chỉnh CSS toàn cục, bao gồm cả thanh cuộn
         MuiCssBaseline: {
             styleOverrides: (theme) => ({
+                '@keyframes ripple-effect': {
+                  'from': {
+                    transform: 'scale(0.1)',
+                    opacity: 0.8,
+                  },
+                  'to': {
+                    transform: 'scale(5)',
+                    opacity: 0,
+                  }
+                },
+                
+                // 2. Định nghĩa các class sử dụng animation
+                '.ripple': {
+                animationName: 'ripple-effect',
+                animationDuration: '2.2s',
+                animationIterationCount: 'infinite',
+                
+                // Quan trọng: Đảm bảo vòng tròn phóng to từ tâm
+                transformOrigin: 'center',
+
+                // <<< THÊM DÒNG NÀY ĐỂ SỬA LỖI TRÊN SVG >>>
+                transformBox: 'fill-box',
+                },
+
+                '.ripple-2': {
+                  animationDelay: '1.1s',
+                },
+
                 body: {
                     // Style cho thanh cuộn trên Firefox
                     scrollbarWidth: 'thin',

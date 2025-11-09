@@ -71,18 +71,22 @@ function GeoMapChartComponent({ data }) {
                                     {/* <<< SỬ DỤNG THẺ <animate> GỐC CỦA SVG >>> */}
 
                                     {/* Vòng sóng 1 */}
-                                    <circle r={size} fill="none" stroke="#FF5252" strokeWidth={2}>
-                                        {/* Animation cho bán kính (lan rộng ra) */}
-                                        <animate attributeName="r" from={size} to={size * 8} dur="2.2s" begin="0s" repeatCount="indefinite" />
-                                        {/* Animation cho độ trong suốt (mờ dần) */}
-                                        <animate attributeName="stroke-opacity" from={0.8} to={0} dur="2.2s" begin="0s" repeatCount="indefinite" />
-                                    </circle>
-
-                                    {/* Vòng sóng 2 (bắt đầu trễ hơn) */}
-                                    <circle r={size} fill="none" stroke="#FF5252" strokeWidth={2}>
-                                        <animate attributeName="r" from={size} to={size * 5} dur="2.2s" begin="1.1s" repeatCount="indefinite" />
-                                        <animate attributeName="stroke-opacity" from={0.8} to={0} dur="2.2s" begin="1.1s" repeatCount="indefinite" />
-                                    </circle>
+                                    <circle
+                                        className="ripple" // Class chung
+                                        r={size} 
+                                        fill="none" 
+                                        stroke="#FF5252" 
+                                        strokeWidth={2}
+                                    />
+                                    
+                                    {/* Vòng sóng 2 */}
+                                     <circle
+                                        className="ripple ripple-2" // Class chung và class delay
+                                        r={size} 
+                                        fill="none" 
+                                        stroke="#FF5252" 
+                                        strokeWidth={2}
+                                    />
                                     
                                     {/* Chấm tròn trung tâm */}
                                     <circle
