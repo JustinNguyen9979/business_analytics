@@ -66,7 +66,7 @@ function GeoMapChartComponent({ data }) {
                                     key={index}
                                     geography={geo}
                                     fill="#303952"
-                                    stroke="#596275"
+                                    stroke="#777c86ff"
                                     style={{ default: { outline: 'none' } }}
                                 />
                             ))

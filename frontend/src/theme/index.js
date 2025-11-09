@@ -13,8 +13,13 @@ const PALETTE = {
         contrastText: '#FFFFFF',
     },
     background: {
-        default: '#0d1e3dff', // Nền tối để làm nổi bật hiệu ứng Aurora
-        paper: 'rgba(10, 25, 41, 0.6)',
+        default: '#0A1A2B', // Nền chính (Deep Navy)
+        paper: 'rgba(10, 25, 41, 0.6)', // Nền mặc định của các component Paper
+        darker: '#071225', // Nền phụ tối hơn
+        
+        // Màu "kính mờ" (glassmorphism)
+        glassPrimary: 'rgba(15, 23, 42, 0.7)',  // Dùng cho AppBar, Drawer
+        glassSecondary: 'rgba(30, 41, 59, 0.7)', // Dùng cho Dialog, Tooltip
     },
     text: {
         primary: '#E0E0E0',
@@ -87,7 +92,7 @@ const theme = createTheme({
         MuiAppBar: {
             styleOverrides: {
                 root: {
-                    backgroundColor: 'rgba(15, 23, 42, 0.7)', // Màu nền kính mờ đậm hơn
+                    backgroundColor: PALETTE.background.glassPrimary, 
                     backdropFilter: 'blur(12px)', // Tăng độ mờ
                     WebkitBackdropFilter: 'blur(12px)',
                     boxShadow: 'none',
@@ -100,7 +105,7 @@ const theme = createTheme({
         MuiDrawer: {
             styleOverrides: {
                 paper: {
-                    backgroundColor: 'rgba(15, 23, 42, 0.7)', // Đồng bộ màu với AppBar
+                    backgroundColor: PALETTE.background.glassPrimary,
                     backdropFilter: 'blur(12px)',
                     WebkitBackdropFilter: 'blur(12px)',
                     borderRight: `1px solid ${PALETTE.divider}`,
@@ -121,7 +126,7 @@ const theme = createTheme({
             styleOverrides: {
                 paper: ({ theme }) => ({ // Sử dụng arrow function để truy cập theme
                     borderRadius: theme.shape.borderRadius * 2, // Bo tròn góc nhiều hơn một chút
-                    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+                    backgroundColor: theme.palette.background.glassSecondary,
                     backdropFilter: 'blur(15px)',
                     WebkitBackdropFilter: 'blur(15px)',
                     border: `1px solid ${theme.palette.divider}`,
@@ -132,59 +137,89 @@ const theme = createTheme({
         // Tùy chỉnh CSS toàn cục, bao gồm cả thanh cuộn
         MuiCssBaseline: {
             styleOverrides: (theme) => ({
-                '@keyframes ripple-effect': {
-                  'from': {
-                    transform: 'scale(0.1)',
-                    opacity: 0.8,
-                  },
-                  'to': {
-                    transform: 'scale(5)',
-                    opacity: 0,
-                  }
+                ':root': {
+                    '--accent-primary': '#00BFFF',
+                    '--accent-secondary': '#9370DB',
+                    '--text-main': '#E0E0E0',
+                    '--muted': '#A0A0A0',
                 },
-                
-                // 2. Định nghĩa các class sử dụng animation
-                '.ripple': {
-                animationName: 'ripple-effect',
-                animationDuration: '2.2s',
-                animationIterationCount: 'infinite',
-                
-                // Quan trọng: Đảm bảo vòng tròn phóng to từ tâm
-                transformOrigin: 'center',
-
-                // <<< THÊM DÒNG NÀY ĐỂ SỬA LỖI TRÊN SVG >>>
-                transformBox: 'fill-box',
-                },
-
-                '.ripple-2': {
-                  animationDelay: '1.1s',
-                },
-
                 body: {
-                    // Style cho thanh cuộn trên Firefox
+                    color: 'var(--text-main)',
+                    background: `linear-gradient(135deg, ${theme.palette.background.default} 0%, ${theme.palette.background.darker} 100%)`,
+                    fontFamily: "'Inter', 'Roboto', sans-serif",
+                    fontSize: '14px !important',
+                    WebkitFontSmoothing: 'antialiased',
+                    MozOsxFontSmoothing: 'grayscale',
+                    // Scrollbar styles
                     scrollbarWidth: 'thin',
                     scrollbarColor: `${theme.palette.text.secondary} ${theme.palette.background.default}`,
-
-                    // Style cho thanh cuộn trên các trình duyệt Webkit (Chrome, Safari, Edge)
-                    '&::-webkit-scrollbar': {
-                        width: '4px',
-                    },
-                    '*::selection': {
-                        backgroundColor: theme.palette.primary.main + '2D', // Màu primary với 30% opacity
-                        color: theme.palette.text.primary,
-                    },
-                    '&::-webkit-scrollbar-track': {
-                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    },
+                    '&::-webkit-scrollbar': { width: '4px' },
+                    '&::-webkit-scrollbar-track': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
                     '&::-webkit-scrollbar-thumb': {
                         backgroundColor: 'rgba(255, 255, 255, 0.2)',
                         borderRadius: theme.shape.borderRadius,
                         border: '2px solid transparent',
                         backgroundClip: 'content-box',
-                        '&:hover': {
-                            backgroundColor: 'rgba(255, 255, 255, 0.4)',
-                        },
+                        '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.4)' },
                     },
+                },
+                '*::selection': {
+                    backgroundColor: theme.palette.primary.main + '2D',
+                    color: theme.palette.text.primary,
+                },
+                // Animations
+                '@keyframes ripple-effect': {
+                    'from': { transform: 'scale(0.1)', opacity: 0.8 },
+                    'to': { transform: 'scale(5)', opacity: 0 }
+                },
+                '.ripple': {
+                    animationName: 'ripple-effect',
+                    animationDuration: '2.2s',
+                    animationIterationCount: 'infinite',
+                    transformOrigin: 'center',
+                    transformBox: 'fill-box',
+                },
+                '.ripple-2': { animationDelay: '1.1s' },
+                // Utility classes
+                '.primary-btn': {
+                    background: 'linear-gradient(90deg, var(--accent-primary), #00A3E0)',
+                    color: '#fff',
+                    borderRadius: '10px',
+                    position: 'relative',
+                    zIndex: 1,
+                    transition: 'transform 0.12s ease',
+                    willChange: 'transform',
+                    '&::after': {
+                        content: "''",
+                        position: 'absolute',
+                        zIndex: -1,
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        borderRadius: 'inherit',
+                        background: 'inherit',
+                        boxShadow: '0 10px 20px rgba(0, 179, 255, 0.14)',
+                        opacity: 0,
+                        transition: 'opacity 0.12s ease',
+                        willChange: 'opacity',
+                    },
+                    '&:hover': { transform: 'translateY(-3px)' },
+                    '&:hover::after': { opacity: 1 },
+                },
+                '.muted': { color: 'var(--muted)' },
+                // 3rd party overrides
+                '.js-plotly-plot .plotly, .js-plotly-plot .plotly-graph-div': {
+                    backgroundColor: 'transparent !important',
+                },
+                '.MuiButton-contained, .MuiButton-outlined': {
+                    transition: 'transform 0.2s ease-in-out !important',
+                    willChange: 'transform',
+                },
+                '.MuiButton-contained:hover': {
+                    transform: 'scale(1.03)',
+                    boxShadow: '0 0 15px #00BFFF',
+                },
+                '.MuiButton-outlined:hover': {
+                    transform: 'scale(1.03)',
+                    boxShadow: '0 0 15px #9370DB',
                 },
             }),
         },
@@ -208,7 +243,7 @@ const theme = createTheme({
                         sx: {
                             '& .MuiPaper-root': {
                                 backdropFilter: 'blur(15px)',
-                                backgroundColor: 'rgba(30, 41, 59, 0.7)',
+                                backgroundColor: (theme) => theme.palette.background.glassSecondary,
                                 border: (theme) => `1px solid ${theme.palette.divider}`,
                             },
                         },
@@ -217,7 +252,7 @@ const theme = createTheme({
                         PaperProps: {
                             sx: {
                                 backdropFilter: 'blur(15px)',
-                                backgroundColor: 'rgba(30, 41, 59, 0.7)',
+                                backgroundColor: (theme) => theme.palette.background.glassSecondary,
                                 border: (theme) => `1px solid ${theme.palette.divider}`,
                             },
                         },
@@ -254,7 +289,7 @@ const theme = createTheme({
                 {
                     props: { variant: 'glass' },
                     style: ({ theme }) => ({
-                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.03)',
                         backdropFilter: 'blur(10px)',
                         WebkitBackdropFilter: 'blur(10px)',
                         border: `1px solid ${theme.palette.divider}`,
@@ -264,7 +299,7 @@ const theme = createTheme({
                 {
                     props: { variant: 'placeholder' },
                     style: ({ theme }) => ({
-                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        backgroundColor: 'rgba(255, 255, 255, 0.03)',
                         backdropFilter: 'blur(10px)',
                         WebkitBackdropFilter: 'blur(10px)',
                         border: `1px solid ${theme.palette.divider}`,
@@ -282,7 +317,7 @@ const theme = createTheme({
         MuiTooltip: {
             styleOverrides: {
                 tooltip: ({ theme }) => ({
-                    backgroundColor: 'rgba(30, 41, 59, 0.7)', // Màu nền kính mờ
+                    backgroundColor: theme.palette.background.glassSecondary, // Màu nền kính mờ
                     backdropFilter: 'blur(10px)',
                     WebkitBackdropFilter: 'blur(10px)',
                     border: `1px solid ${theme.palette.divider}`,
@@ -290,7 +325,7 @@ const theme = createTheme({
                     padding: theme.spacing(1.5),
                 }),
                 arrow: ({ theme }) => ({
-                    color: 'rgba(30, 41, 59, 0.7)', // Đồng bộ màu mũi tên
+                    color: theme.palette.background.glassSecondary, 
                 }),
             },
         },
