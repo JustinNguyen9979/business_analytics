@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float, Index
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB # 
 from database import Base
@@ -40,17 +40,18 @@ class Order(Base):
 
     # --- Các cột cốt lõi anh yêu cầu ---
     order_code = Column(String, index=True)
-    order_date = Column(Date, nullable=True, index=True)
+    order_date = Column(Date, nullable=True)
     status = Column(String, nullable=True, index=True)
     username = Column(String, index=True, nullable=True)
-    total_quantity = Column(Integer, default=0, index=True)
-    cogs = Column(Float, default=0.0, index=True)
+    total_quantity = Column(Integer, default=0)
+    cogs = Column(Float, default=0.0)
     source = Column(String, nullable=False, index=True)
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
     details = Column(JSONB, nullable=True)
 
     __table_args__ = (
         Index('ix_order_brand_id_order_date', 'brand_id', 'order_date'),
+        UniqueConstraint('order_code', 'brand_id', name='uq_order_brand_code')
     )
     
     owner_brand = relationship("Brand", back_populates="orders")
@@ -60,12 +61,12 @@ class Ad(Base):
     id = Column(Integer, primary_key=True, index=True)
     # --- Cột cốt lõi ---
     campaign_name = Column(String, index=True)
-    ad_date = Column(Date, nullable=True, index=True)
-    impressions = Column(Integer, default=0, index=True)
-    clicks = Column(Integer, default=0, index=True)
-    expense = Column(Float, default=0.0, index=True)
-    orders = Column(Integer, default=0, index=True) # Tên chung cho "conversions"
-    gmv = Column(Float, default=0.0, index=True)
+    ad_date = Column(Date, nullable=True)
+    impressions = Column(Integer, default=0)
+    clicks = Column(Integer, default=0)
+    expense = Column(Float, default=0.0)
+    orders = Column(Integer, default=0) 
+    gmv = Column(Float, default=0.0)
     source = Column(String, nullable=False, index=True)
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
     # --- Cột JSONB ---
@@ -83,9 +84,9 @@ class Revenue(Base):
     id = Column(Integer, primary_key=True, index=True)
     # --- Cột cốt lõi ---
     order_code = Column(String, index=True)
-    transaction_date = Column(Date, nullable=True, index=True)
-    net_revenue = Column(Float, default=0.0, index=True)
-    gmv = Column(Float, default=0.0, index=True)
+    transaction_date = Column(Date, nullable=True)
+    net_revenue = Column(Float, default=0.0)
+    gmv = Column(Float, default=0.0)
     source = Column(String, nullable=False, index=True)
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
     # --- Cột JSONB ---

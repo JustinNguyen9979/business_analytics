@@ -1,10 +1,7 @@
 import pandas as pd
 from sqlalchemy.orm import Session
-import crud
-import io
-import traceback
-import math
-import models
+import crud, io, traceback, math, models
+from sqlalchemy.dialects.postgresql import insert
 
 # --- CÁC HÀM HỖ TRỢ CHUYỂN ĐỔI DỮ LIỆU ---
 def to_int(value):
@@ -63,64 +60,98 @@ def process_cost_file(db: Session, file_content: bytes, brand_id: int):
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
 
-# FILE: backend/app/shopee_parser.py
-
 def process_order_file(db: Session, file_content: bytes, brand_id: int, source: str):
     try:
-        buffer = io.BytesIO(file_content)
-        # Đọc file, giữ nguyên dtype là string để kiểm soát
-        df = pd.read_excel(buffer, header=0, dtype=str).fillna('')
+        print("\n--- BẮT ĐẦU XỬ LÝ FILE ĐƠN HÀNG ---")
+        df = pd.read_excel(file_content, header=0, dtype=str).fillna('')
         
-        # Chuyển đổi kiểu dữ liệu một cách có kiểm soát
         df['Ngày đặt hàng'] = pd.to_datetime(df['Ngày đặt hàng'], errors='coerce')
-        df['Số lượng'] = pd.to_numeric(df['Số lượng'], errors='coerce').fillna(0)
+        df['Số lượng'] = pd.to_numeric(df['Số lượng'], errors='coerce').fillna(0).astype(int)
         
-        products = db.query(models.Product).filter(models.Product.brand_id == brand_id).all()
-        product_cost_map = {p.sku: p.cost_price for p in products}
+        if df.empty:
+            return {"status": "success", "message": "File rỗng, không có dữ liệu để xử lý."}
 
-        grouped = df.groupby('Mã đơn hàng')
+        # --- BƯỚC 1: LẤY DỮ LIỆU TỪ DB ---
+        product_cost_map = {p.sku: p.cost_price for p in db.query(models.Product.sku, models.Product.cost_price).filter(models.Product.brand_id == brand_id).all()}
+        
+        order_codes_in_file = df['Mã đơn hàng'].dropna().unique().tolist()
+        
+        existing_order_codes_query = db.query(models.Order.order_code).filter(
+            models.Order.brand_id == brand_id,
+            models.Order.order_code.in_(order_codes_in_file)
+        ).all()
+        existing_order_codes_set = {code for code, in existing_order_codes_query}
+        
+        print(f"Tổng số đơn hàng duy nhất trong file: {len(order_codes_in_file)}")
+        print(f"Số đơn hàng đã tồn tại trong DB: {len(existing_order_codes_set)}")
 
-        count = 0
-        for order_code, group in grouped:
-            if not order_code: continue
+        # --- BƯỚC 2: XÁC ĐỊNH CÁC ĐƠN HÀNG MỚI (LOGIC MỚI, AN TOÀN HƠN) ---
+        new_order_codes = set(order_codes_in_file) - existing_order_codes_set
+        
+        print(f"Số đơn hàng mới cần import: {len(new_order_codes)}")
+        
+        if not new_order_codes:
+            return {"status": "success", "message": "Không có đơn hàng mới nào để import."}
 
+        # Lọc DataFrame để chỉ giữ lại các dòng của đơn hàng mới
+        df_new = df[df['Mã đơn hàng'].isin(new_order_codes)].copy()
+        
+        # --- BƯỚC 3: XỬ LÝ KHÁCH HÀNG (CHỈ CHO CÁC ĐƠN MỚI) ---
+        # (Logic này đã tốt, giữ nguyên)
+        unique_customers_df = df_new[['Người Mua', 'Tỉnh/Thành phố', 'TP / Quận / Huyện', 'Quận']].drop_duplicates(subset=['Người Mua'])
+        unique_usernames_in_file = [u for u in unique_customers_df['Người Mua'].tolist() if u]
+        if unique_usernames_in_file:
+            existing_usernames = {u for u, in db.query(models.Customer.username).filter(models.Customer.brand_id == brand_id, models.Customer.username.in_(unique_usernames_in_file)).all()}
+            new_customers_to_insert = [
+                { "username": row['Người Mua'], "city": row.get('Tỉnh/Thành phố'), "district_1": row.get('TP / Quận / Huyện'), "district_2": row.get('Quận'), "brand_id": brand_id }
+                for _, row in unique_customers_df.iterrows() if row['Người Mua'] and row['Người Mua'] not in existing_usernames
+            ]
+            if new_customers_to_insert:
+                print(f"Chuẩn bị thêm {len(new_customers_to_insert)} khách hàng mới.")
+                db.bulk_insert_mappings(models.Customer, new_customers_to_insert)
+
+        # --- BƯỚC 4: CHUẨN BỊ DỮ LIỆU ĐƠN HÀNG MỚI ĐỂ GHI HÀNG LOẠT ---
+        orders_to_insert = []
+        # Nhóm dữ liệu trên DataFrame đã được lọc
+        for order_code, group in df_new.groupby('Mã đơn hàng'):
             first_row = group.iloc[0]
-
-            order_cogs = 0
             items_details = []
+            order_cogs = 0
+
             for _, row in group.iterrows():
                 sku = row.get('SKU phân loại hàng')
-                quantity = int(row.get('Số lượng')) # Chuyển sang int
-                cost_price = product_cost_map.get(sku, 0)
-                order_cogs += cost_price * quantity
-                
-                items_details.append({
-                    "sku": sku,
-                    "name": row.get('Tên phân loại hàng'),
-                    "quantity": quantity
-                })
-            
-            # === SỬA LỖI Ở ĐÂY: CHUYỂN TOÀN BỘ DỮ LIỆU GỐC THÀNH STRING ===
-            # Cách này đảm bảo không có kiểu dữ liệu phức tạp nào lọt vào JSON
+                quantity = row.get('Số lượng')
+                order_cogs += product_cost_map.get(sku, 0) * quantity
+                items_details.append({"sku": sku, "name": row.get('Tên phân loại hàng'), "quantity": quantity})
+
             details_dict = first_row.astype(str).to_dict()
             details_dict['items'] = items_details
             
-            order_data = {
+            orders_to_insert.append({
                 "order_code": order_code,
                 "order_date": first_row.get('Ngày đặt hàng').date() if pd.notna(first_row.get('Ngày đặt hàng')) else None,
-                "status": first_row.get('Trạng Thái Đơn Hàng'),
-                "username": first_row.get('Người Mua'),
-                "total_quantity": int(group['Số lượng'].sum()), # Chuyển sang int
-                "cogs": order_cogs,
-                "details": details_dict
-            }
+                "status": first_row.get('Trạng Thái Đơn Hàng'), "username": first_row.get('Người Mua'),
+                "total_quantity": int(group['Số lượng'].sum()), "cogs": order_cogs, "details": details_dict,
+                "brand_id": brand_id, "source": source
+            })
+
+        print(f"Đã chuẩn bị được {len(orders_to_insert)} đơn hàng để ghi vào DB.")
+
+        # --- BƯỚC 5: GHI VÀ COMMIT ---
+        if orders_to_insert:
+            print(f"Thực hiện bulk insert cho {len(orders_to_insert)} đơn hàng...")
+            db.bulk_insert_mappings(models.Order, orders_to_insert)
             
-            crud.create_order_entry(db, order_data=order_data, brand_id=brand_id, source=source)
-            crud.get_or_create_customer(db, customer_data=first_row.to_dict(), brand_id=brand_id)
-            count += 1
+            print("Thực hiện commit giao dịch...")
+            db.commit()
+            print("COMMIT THÀNH CÔNG.")
+        else:
+            print("Không có đơn hàng nào được chuẩn bị, bỏ qua bước ghi.")
             
-        return {"status": "success", "message": f"Đã xử lý {count} đơn hàng."}
+        return {"status": "success", "message": f"Đã import thành công {len(orders_to_insert)} đơn hàng mới."}
     except Exception as e:
+        print("!!! ĐÃ XẢY RA LỖI, THỰC HIỆN ROLLBACK !!!")
+        db.rollback()
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
 

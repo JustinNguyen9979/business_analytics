@@ -13,7 +13,7 @@ const PALETTE = {
         contrastText: '#FFFFFF',
     },
     background: {
-        default: '#0A1A2B', // Nền chính (Deep Navy)
+        default: '#10273eff', // Nền chính
         paper: 'rgba(10, 25, 41, 0.6)', // Nền mặc định của các component Paper
         darker: '#071225', // Nền phụ tối hơn
         
