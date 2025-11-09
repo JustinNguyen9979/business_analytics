@@ -1,6 +1,6 @@
 // FILE: frontend/src/components/charts/GeoMapChart.jsx (PHIÊN BẢN ANIMATION SVG GỐC)
 
-import React, { memo, useMemo } from 'react';
+import React, { memo, useMemo, useEffect } from 'react';
 import { ComposableMap, Geographies, Geography, Marker } from '@vnedyalk0v/react19-simple-maps';
 import { Box, Grid, Stack, Typography } from '@mui/material';
 import { scaleLinear } from 'd3-scale';
@@ -31,6 +31,25 @@ function GeoMapChartComponent({ data }) {
             .sort((a, b) => b.customer_count - a.customer_count)
             .slice(0, 5);
     }, [data]);
+
+    useEffect(() => {
+        // Hàm này sẽ được gọi mỗi khi có một cú click bất kỳ trên trang
+        const handleOutsideClick = (event) => {
+            // Nếu phần tử được click không phải là (hoặc không nằm trong)
+            // một phần tử có class 'map-dot', thì ẩn tooltip đi.
+            if (!event.target.closest('.map-dot')) {
+                Tooltip.hide();
+            }
+        };
+
+        // Gắn listener vào document
+        document.addEventListener('click', handleOutsideClick);
+
+        // Quan trọng: Gỡ listener khi component bị unmount để tránh rò rỉ bộ nhớ
+        return () => {
+            document.removeEventListener('click', handleOutsideClick);
+        };
+    }, []);
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -64,7 +83,7 @@ function GeoMapChartComponent({ data }) {
                             <Marker
                                 key={item.city}
                                 coordinates={item.coords}
-                                data-tooltip-content={`${item.city}: ${item.customer_count.toLocaleString('vi-VN')} khách`}
+                                // data-tooltip-content={`${item.city}: ${item.customer_count.toLocaleString('vi-VN')} khách`}
                             >
                                 {/* Group chứa toàn bộ hiệu ứng cho một điểm */}
                                 <g style={{ cursor: 'pointer', pointerEvents: 'none' }}>
@@ -90,13 +109,21 @@ function GeoMapChartComponent({ data }) {
                                     
                                     {/* Chấm tròn trung tâm */}
                                     <circle
+                                        className="map-dot"
                                         r={size}
+                                        data-tooltip-id="map-tooltip"
+                                        data-tooltip-content={`${item.city}: ${item.customer_count.toLocaleString('vi-VN')} khách`}
+                                        // data-tooltip-events="mouseenter click"
+
                                         fill={`rgba(255, 82, 82, ${opacity})`}
                                         stroke="#FFFFFF"
                                         strokeWidth={0.5}
                                         style={{ transition: 'transform 0.2s ease', pointerEvents: 'auto' }}
+                                        
                                         onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.8)'; }}
                                         onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+
+                                        onClick={(e) => Tooltip.show(e.currentTarget)}
                                     />
                                 </g>
                             </Marker>
