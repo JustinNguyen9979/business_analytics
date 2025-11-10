@@ -1,6 +1,5 @@
-import json
-import redis
-import crud, models, schemas, shopee_parser
+import json, redis, crud, models, schemas, shopee_parser, tiktok_parser
+
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, status
 from fastapi.responses import ORJSONResponse
 from sqlalchemy.orm import Session
@@ -127,14 +126,13 @@ async def upload_platform_data(
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand")
 
     results = {}
+
+    if cost_file:
+            results['cost_file'] = shopee_parser.process_cost_file(db, await cost_file.read(), brand_id)
     
     # 2. Phân luồng xử lý dựa trên 'platform'
     if platform.lower() == "shopee":
         # Nếu là Shopee, gọi các hàm xử lý của shopee_parser
-        # Lưu ý: file giá vốn (cost_file) là file chung, không cần truyền source
-        if cost_file:
-            results['cost_file'] = shopee_parser.process_cost_file(db, await cost_file.read(), brand_id)
-        
         # Các file còn lại cần truyền 'source' để gắn nhãn cho dữ liệu
         if order_file:
             results['order_file'] = shopee_parser.process_order_file(db, await order_file.read(), brand_id, source=platform)
@@ -144,10 +142,12 @@ async def upload_platform_data(
             results['revenue_file'] = shopee_parser.process_revenue_file(db, await revenue_file.read(), brand_id, source=platform)
     
     elif platform.lower() == "tiktok":
-        # Đây là nơi để gọi các hàm xử lý cho TikTok trong tương lai
-        # Ví dụ: results['order_file'] = tiktok_parser.process_order_file(...)
-        # Hiện tại chưa có nên ta có thể báo lỗi hoặc không làm gì cả
-        raise HTTPException(status_code=501, detail="Chức năng upload cho TikTok chưa được triển khai.")
+        if order_file:
+            results['order_file'] = tiktok_parser.process_order_file(db, await order_file.read(), brand_id, source=platform)
+        if ad_file:
+            results['ad_file'] = tiktok_parser.process_ad_file(db, await ad_file.read(), brand_id, source=platform)
+        if revenue_file:
+            results['revenue_file'] = tiktok_parser.process_revenue_file(db, await revenue_file.read(), brand_id, source=platform)
         
     else:
         # Nếu platform không được hỗ trợ, báo lỗi

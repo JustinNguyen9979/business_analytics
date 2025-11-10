@@ -31,7 +31,7 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import AuroraBackground from '../components/ui/AuroraBackground';
 import ImportDialog from '../components/import/ImportDialog';
 import SingleImportDialog from '../components/import/SingleImportDialog';
-import { uploadShopeeFiles, uploadCostFile, recalculateBrandData } from '../services/api';
+import { uploadCostFile, recalculateBrandData, uploadPlatformFiles } from '../services/api';
 import { useLayout } from '../context/LayoutContext';
 import { useNotification } from '../context/NotificationContext';
 
@@ -107,7 +107,7 @@ export default function DashboardLayout() {
   // const [open, setOpen] = useState(true);
   const [isImportMenuOpen, setImportMenuOpen] = useState(false);
   const [isMultiImportDialogOpen, setMultiImportDialogOpen] = useState(false);
-  const [selectedPlatform, setSelectedPlatform] = useState('');
+  const [selectedPlatform, setSelectedPlatform] = useState({ key: '', name: '' });
   const [isSingleImportDialogOpen, setSingleImportDialogOpen] = useState(false);
   const [isRecalculating, setIsRecalculating] = useState(false);
   const { isSidebarOpen, setIsSidebarOpen } = useLayout();
@@ -118,8 +118,8 @@ export default function DashboardLayout() {
   // const handleDrawerToggle = () => setOpen(!open);
   const handleImportMenuToggle = () => setImportMenuOpen(!isImportMenuOpen);
 
-  const handleOpenMultiImportDialog = (platform) => {
-    setSelectedPlatform(platform);
+  const handleOpenMultiImportDialog = (platformKey, platformName) => {
+    setSelectedPlatform({ key: platformKey, name: platformName });
     setMultiImportDialogOpen(true);
   };
 
@@ -150,21 +150,19 @@ export default function DashboardLayout() {
   };
 
   const handleMultiUpload = async (files) => {
-        if (selectedPlatform !== 'Shopee') {
-            // Thay thế alert cũ
-            showNotification(`Chức năng upload cho ${selectedPlatform} chưa được hỗ trợ.`, 'warning');
-            return;
-        }
+        if (!selectedPlatform.key) { // Kiểm tra key thay vì state chung
+        showNotification('Không xác định được nền tảng.', 'error');
+        return;
+    }
 
         try {
-            const result = await uploadShopeeFiles(brandId, files);
+            const result = await uploadPlatformFiles(selectedPlatform.key, brandId, files);
             // THAY THẾ ALERT THÀNH CÔNG
-            showNotification('Upload và xử lý file thành công!', 'success');
+            showNotification(`Upload cho ${selectedPlatform.name} thành công! Dữ liệu đang được xử lý.`, 'success');
             console.log('Phản hồi từ server:', result);
-            navigate(0); 
+            navigate(0);  
         } catch (error) {
             const errorMessage = error.response?.data?.detail || 'Đã có lỗi xảy ra khi upload file.';
-            // THAY THẾ ALERT LỖI
             showNotification(errorMessage, 'error');
             console.error("Lỗi chi tiết:", error.response);
         }
@@ -280,10 +278,15 @@ export default function DashboardLayout() {
                     </ListItem>
                     <Collapse in={isImportMenuOpen && isSidebarOpen} timeout="auto" unmountOnExit>
                         <List component="div" disablePadding>
-                            <ListItemButton sx={{ pl: 4 }} onClick={handleOpenSingleImportDialog}><ListItemText primary="File Giá nhập" /></ListItemButton>
-                            <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('Shopee')}><ListItemText primary="Shopee" /></ListItemButton>
-                            <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('Tiktok Shop')}><ListItemText primary="Tiktok Shop" /></ListItemButton>
-                            <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('Lazada')}><ListItemText primary="Lazada" /></ListItemButton>
+                            <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('shopee', 'Shopee')}>
+                              <ListItemText primary="Shopee" />
+                            </ListItemButton>
+                            <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('tiktok', 'Tiktok Shop')}>
+                              <ListItemText primary="Tiktok Shop" />
+                            </ListItemButton>
+                            <ListItemButton sx={{ pl: 4 }} onClick={() => handleOpenMultiImportDialog('lazada', 'Lazada')}>
+                              <ListItemText primary="Lazada" />
+                            </ListItemButton>
                         </List>
                     </Collapse>
                      <ListItem disablePadding>
@@ -324,7 +327,7 @@ export default function DashboardLayout() {
       <ImportDialog 
         open={isMultiImportDialogOpen}
         onClose={handleCloseMultiImportDialog}
-        platformName={selectedPlatform}
+        platformName={selectedPlatform.name}
         onUpload={handleMultiUpload}
       />
       <SingleImportDialog
