@@ -33,7 +33,7 @@ function App() {
                 style={{ 
                     backgroundColor: 'rgba(30, 41, 59, 0.8)',
                     backdropFilter: 'blur(10px)',
-                    border: `1px solid ${theme.palette.divider}`,
+                    // border: `1px solid ${theme.palette.divider}`,
                     borderRadius: '8px',
                     zIndex: 9999 // Đảm bảo nó nổi lên trên tất cả
                 }}

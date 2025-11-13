@@ -42,8 +42,8 @@ function FileDropzone({ title, onFileChange }) {
             sx={{
                 position: 'relative',
                 // SỬA LẠI: Chỉ dùng aspect-ratio
-                aspectRatio: '4 / 3',
-                minHeight: 150,
+                width: '100%',
+                height: 250,
                 
                 border: '2px dashed',
                 borderColor: isDragging ? 'primary.main' : 'rgba(255, 255, 255, 0.23)',
@@ -61,7 +61,7 @@ function FileDropzone({ title, onFileChange }) {
         >
             <input
                 ref={inputRef} type="file" hidden onChange={handleFileSelect}
-                accept=".csv, .xlsx, .xls"
+                accept=" .xlsx, .xls"
             />
 
             {file ? (

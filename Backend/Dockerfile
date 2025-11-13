@@ -1,6 +1,6 @@
 # FILE: Backend/Dockerfile (PHIÊN BẢN CÓ CÔNG CỤ BIÊN DỊCH)
 
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 # === PHẦN SỬA ĐỔI BẮT ĐẦU ===
 

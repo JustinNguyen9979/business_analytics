@@ -1,27 +1,33 @@
-// FILE: frontend/src/components/import/SingleImportDialog.jsx (PHIÊN BẢN CHUẨN)
+// FILE: frontend/src/components/import/SingleImportDialog.jsx (PHIÊN BẢN NÂNG CẤP CÓ CHỌN SÀN)
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
+import { useState, useEffect } from 'react';
 import { 
-    Dialog, 
-    DialogTitle, 
-    DialogContent, 
-    DialogActions, 
-    Button, 
-    IconButton, 
-    CircularProgress, 
-    Box 
+    Dialog, DialogTitle, DialogContent, DialogActions, Button, 
+    IconButton, CircularProgress, Box, FormControl, InputLabel, 
+    Select, MenuItem, FormHelperText 
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import FileDropzone from './FileDropzone';
 
-function SingleImportDialog({ open, onClose, title, onUpload }) {
+// Danh sách các sàn được hỗ trợ
+const SUPPORTED_PLATFORMS = [
+    { key: 'shopee', name: 'Shopee' },
+    { key: 'tiktok', name: 'TikTok Shop' },
+    { key: 'lazada', name: 'Lazada' },
+];
+
+function SingleImportDialog({ open, onClose, onUpload }) {
+    const [selectedPlatform, setSelectedPlatform] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
     const [isUploading, setIsUploading] = useState(false);
 
-    // Reset file khi dialog được mở lại
+    // Reset lại toàn bộ state khi dialog được mở lại
     useEffect(() => {
         if (open) {
+            setSelectedPlatform('');
             setSelectedFile(null);
+            setIsUploading(false);
         }
     }, [open]);
 
@@ -32,44 +38,68 @@ function SingleImportDialog({ open, onClose, title, onUpload }) {
     };
 
     const handleUpload = async () => {
-        if (!selectedFile) return;
+        if (!selectedFile || !selectedPlatform) return;
 
         setIsUploading(true);
         try {
-            await onUpload(selectedFile);
+            // Truyền cả platform và file lên cho hàm onUpload
+            await onUpload(selectedPlatform, selectedFile);
         } finally {
-            setIsUploading(false);
+            // isUploading sẽ được reset khi dialog mở lại
             onClose(); // Tự động đóng dialog sau khi upload xong
         }
     };
 
     return (
-        // 1. KHUNG DIALOG CHÍNH
         <Dialog 
             open={open} 
             onClose={handleClose} 
-            maxWidth="xs" 
+            maxWidth="sm" // Tăng kích thước một chút để chứa vừa các thành phần
             fullWidth
         >
-            {/* 2. TIÊU ĐỀ DIALOG */}
             <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                {title}
+                Import Dữ liệu từ Template Chuẩn
                 <IconButton edge="end" color="inherit" onClick={handleClose} aria-label="close">
                     <CloseIcon />
                 </IconButton>
             </DialogTitle>
             
-            {/* 3. NỘI DUNG CHÍNH (CHỨA DROPZONE) */}
             <DialogContent>
-                <Box sx={{ mt: 1 }}>
-                     <FileDropzone 
-                        title="File Giá nhập" 
-                        onFileChange={setSelectedFile} 
-                    /> 
+                <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                    {/* BƯỚC 1: HỘP THOẠI CHỌN SÀN */}
+                    <FormControl fullWidth required>
+                        <InputLabel id="platform-select-label">Chọn Sàn Giao Dịch</InputLabel>
+                        <Select
+                            labelId="platform-select-label"
+                            value={selectedPlatform}
+                            label="Chọn Sàn Giao Dịch *"
+                            onChange={(e) => setSelectedPlatform(e.target.value)}
+                        >
+                            {SUPPORTED_PLATFORMS.map((platform) => (
+                                <MenuItem key={platform.key} value={platform.key}>
+                                    {platform.name}
+                                </MenuItem>
+                            ))}
+                        </Select>
+                        <FormHelperText>
+                            Vui lòng chọn sàn bạn muốn import dữ liệu vào.
+                        </FormHelperText>
+                    </FormControl>
+
+                    {/* BƯỚC 2: KHU VỰC UPLOAD FILE - SẼ BỊ VÔ HIỆU HÓA NẾU CHƯA CHỌN SÀN */}
+                    <Box sx={{ 
+                        opacity: selectedPlatform ? 1 : 0.5, 
+                        pointerEvents: selectedPlatform ? 'auto' : 'none',
+                        transition: 'opacity 0.3s ease'
+                    }}>
+                        <FileDropzone 
+                            title="Tải lên File Template" 
+                            onFileChange={setSelectedFile} 
+                        /> 
+                    </Box>
                 </Box>
             </DialogContent>
 
-            {/* 4. PHẦN CHÂN (CHỨA CÁC NÚT BẤM) */}
             <DialogActions sx={{ p: '0 24px 16px' }}>
                 <Button onClick={handleClose} disabled={isUploading} color="secondary">
                     Hủy
@@ -77,10 +107,10 @@ function SingleImportDialog({ open, onClose, title, onUpload }) {
                 <Button 
                     onClick={handleUpload} 
                     variant="contained" 
-                    disabled={!selectedFile || isUploading}
+                    disabled={!selectedFile || !selectedPlatform || isUploading}
                     startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : null}
                 >
-                    {isUploading ? 'Đang xử lý...' : 'Bắt đầu Xử lý'}
+                    {isUploading ? 'Đang xử lý...' : 'Bắt đầu Import'}
                 </Button>
             </DialogActions>
         </Dialog>

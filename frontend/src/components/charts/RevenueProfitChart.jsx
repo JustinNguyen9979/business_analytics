@@ -130,7 +130,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
     const getXAxisConfig = () => { 
         const tick0 = data.length > 0 ? dayjs(data[0].date).toDate() : new Date();
         switch (aggregationType) {
-            case 'month': return { tickmode: 'linear', tick0: tick0, dtick: 'M1', tickformat: '%b', };
+            case 'month': return { tickmode: 'linear', tick0: tick0, dtick: 'M1', tickformat: '%b %Y', };
             case 'week': return { tickmode: 'linear', tick0: tick0, dtick: 7 * 24 * 60 * 60 * 1000, tickformat: 'Tuần %W', };
             case 'day': default: return { tickmode: 'linear', tick0: tick0, dtick: 24 * 60 * 60 * 1000, tickformat: '%d', };
         }

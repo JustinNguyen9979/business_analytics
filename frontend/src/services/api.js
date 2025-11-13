@@ -7,6 +7,43 @@ const apiClient = axios.create({
     baseURL: '/api',
 });
 
+/**
+ * Gửi yêu cầu tính toán dữ liệu đến backend.
+ * @param {string} requestType - Loại dữ liệu cần tính (kpi_summary, daily_kpis_chart, ...).
+ * @param {number} brandId - ID của brand.
+ * @param {object} params - Các tham số (start_date, end_date, ...).
+ * @returns {Promise<object>} - Phản hồi từ API, có thể là dữ liệu ngay (cache hit) hoặc task_id (cache miss).
+ */
+export const requestData = async (requestType, brandId, params) => {
+    try {
+        const payload = {
+            brand_id: brandId,
+            request_type: requestType,
+            params: params,
+        };
+        const response = await apiClient.post('/data-requests', payload);
+        return response.data;
+    } catch (error) {
+        console.error(`Error requesting data for ${requestType}:`, error);
+        throw error;
+    }
+};
+
+/**
+ * "Hỏi thăm" trạng thái của một yêu cầu đang được xử lý.
+ * @param {string} cacheKey - Cache key được trả về từ hàm requestData.
+ * @returns {Promise<object>} - Phản hồi chứa trạng thái (PROCESSING, SUCCESS, FAILED) và dữ liệu (nếu có).
+ */
+export const pollDataStatus = async (cacheKey) => {
+    try {
+        const response = await apiClient.get(`/data-requests/status/${cacheKey}`);
+        return response.data;
+    } catch (error) {
+        console.error(`Error polling status for cache key ${cacheKey}:`, error);
+        throw error;
+    }
+};
+
 // Hàm lấy danh sách tất cả các brand
 export const getAllBrands = async () => {
     try {
@@ -15,36 +52,6 @@ export const getAllBrands = async () => {
     } catch (error) {
         console.error("Error fetching brands:", error);
         throw error; // Ném lỗi ra để component có thể xử lý
-    }
-};
-
-export const recalculateBrandData = async (brandId) => {
-    try {
-        const response = await apiClient.post(`/brands/${brandId}/recalculate`);
-        return response.data;
-    } catch (error) {
-        console.error(`Error requesting recalculation for brand ${brandId}:`, error);
-        throw error;
-    }
-};
-
-export const getBrandDetails = async (brandId, startDate, endDate) => { // Xóa timeRange
-    if (!brandId || !startDate || !endDate) {
-        return Promise.reject(new Error("Thiếu thông tin Brand ID, ngày bắt đầu hoặc ngày kết thúc."));
-    }
-
-    try {
-        const response = await apiClient.get(`/brands/${brandId}`, {
-            params: {
-                start_date: startDate.format('YYYY-MM-DD'),
-                end_date: endDate.format('YYYY-MM-DD')
-                // Xóa time_range khỏi đây
-            }
-        });
-        return response.data;
-    } catch (error) {
-        console.error(`Error fetching details for brand ${brandId}:`, error);
-        throw error;
     }
 };
 
@@ -112,14 +119,40 @@ export const uploadPlatformFiles = async (platform, brandId, files) => {
     }
 };
 
+export const uploadStandardFile = async (platform, brandId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+        const response = await apiClient.post(
+            `/brands/${brandId}/upload-standard-file?platform=${platform.toLowerCase()}`,
+            formData, { headers: { 'Content-Type': 'multipart/form-data' } }
+        );
+        return response.data;
+    } catch (error) { throw error; }
+};
+
+export const recalculateBrandData = async (brandId) => {
+    try {
+        const response = await apiClient.post(`/brands/${brandId}/recalculate`);
+        return response.data;
+    } catch (error) { throw error; }
+};
+
+export const recalculateBrandDataAndWait = async (brandId) => {
+    try {
+        // Trỏ đến endpoint mới
+        const response = await apiClient.post(`/brands/${brandId}/recalculate-and-wait`);
+        return response.data;
+    } catch (error) { throw error; }
+};
+
 // Hàm tải lên file chi phí cho Shopee
 export const uploadCostFile = async (brandId, costFile) => {
     const formData = new FormData();
-    // Quan trọng: Key 'cost_file' phải khớp với tên tham số ở backend
     formData.append('cost_file', costFile);
 
     try {
-        const response = await apiClient.post(`/upload/shopee/${brandId}`, formData, {
+        const response = await apiClient.post(`/brands/${brandId}/upload-cost-file`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
             },
@@ -127,37 +160,6 @@ export const uploadCostFile = async (brandId, costFile) => {
         return response.data;
     } catch (error) {
         console.error(`Error uploading cost file for brand ${brandId}:`, error);
-        throw error;
-    }
-};
-
-export const getBrandDailyKpis = async (brandId, startDate, endDate) => {
-    try {
-        const response = await apiClient.get(`/brands/${brandId}/daily-kpis`, {
-            params: {
-                start_date: startDate.format('YYYY-MM-DD'),
-                end_date: endDate.format('YYYY-MM-DD'),
-            },
-        });
-        return response.data.data; // Trả về mảng data bên trong response
-    } catch (error) {
-        console.error(`Error fetching daily KPIs for brand ${brandId}:`, error);
-        throw error;
-    }
-};
-
-export const getTopProducts = async (brandId, startDate, endDate, limit = 10) => {
-    try {
-        const response = await apiClient.get(`/brands/${brandId}/top-products`, {
-            params: {
-                start_date: startDate.format('YYYY-MM-DD'),
-                end_date: endDate.format('YYYY-MM-DD'),
-                limit: limit,
-            },
-        });
-        return response.data;
-    } catch (error) {
-        console.error(`Error fetching top products for brand ${brandId}:`, error);
         throw error;
     }
 };
@@ -187,21 +189,6 @@ export const getCustomerDistribution = async (brandId, startDate, endDate) => {
         return response.data;
     } catch (error) {
         console.error(`Error fetching customer distribution for brand ${brandId}:`, error);
-        throw error;
-    }
-};
-
-export const getCustomerMapDistribution = async (brandId, startDate, endDate) => {
-    try {
-        const response = await apiClient.get(`/brands/${brandId}/customer-map-distribution`, {
-            params: {
-                start_date: startDate.format('YYYY-MM-DD'),
-                end_date: endDate.format('YYYY-MM-DD'),
-            },
-        });
-        return response.data; // Trả về mảng dữ liệu đã tổng hợp
-    } catch (error) {
-        console.error(`Error fetching customer map distribution for brand ${brandId}:`, error);
         throw error;
     }
 };

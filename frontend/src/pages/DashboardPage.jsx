@@ -1,77 +1,94 @@
 // FILE: frontend/src/pages/DashboardPage.jsx (PHIÊN BẢN HOÀN THIỆN)
 
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import { useTheme } from '@mui/material/styles';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, Grid, Stack } from '@mui/material';
+import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, Stack } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import dayjs from 'dayjs';
-import CostDonutChart from '../components/charts/CostDonutChart';
-import { useKpiData } from '../hooks/useKpiData';
-import { useChartData } from '../hooks/useChartData';
-// import { useDashboardData } from '../components/dashboard/useDashboardData';
-import { useTheme } from '@mui/material/styles';
-import { useLayout } from '../context/LayoutContext';
-import { StatItem } from '../components/dashboard/StatItem';
-import { kpiGroups } from '../config/dashboardConfig';
-
-import RevenueProfitChart from '../components/charts/RevenueProfitChart';
-import TopProductsChart from '../components/charts/TopProductsChart';
-import ChartPlaceholder from '../components/common/ChartPlaceholder';
+import { getAllBrands } from '../services/api';
+import { useAsyncData } from '../hooks/useAsyncData'; 
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import ChartTimeFilter from '../components/common/ChartTimeFilter';
-import { getBrandDetails, getBrandDailyKpis, getTopProducts } from '../services/api';
+import { StatItem } from '../components/dashboard/StatItem';
+import { kpiGroups } from '../config/dashboardConfig';
+import RevenueProfitChart from '../components/charts/RevenueProfitChart';
+import TopProductsChart from '../components/charts/TopProductsChart';
+import CostDonutChart from '../components/charts/CostDonutChart';
 import GeoMapChart from '../components/charts/GeoMapChart';
-import { useCustomerDistribution } from '../hooks/useCustomerDistribution';
+import ChartPlaceholder from '../components/common/ChartPlaceholder';
+import { useLayout } from '../context/LayoutContext';
 
 function DashboardPage() {
     const theme = useTheme();
     const { brandId } = useParams();
-    const { isSidebarOpen } = useLayout();
+    const [brandName, setBrandName] = useState('');
     const [searchParams, setSearchParams] = useSearchParams();
-
-    // --- STATE QUẢN LÝ LỰA CHỌN CỦA NGƯỜI DÙNG ---
+    const { isSidebarOpen } = useLayout();
+    
+    // --- STATE QUẢN LÝ THỜI GIAN ---
     const [kpiDateRange, setKpiDateRange] = useState(() => {
         const start = searchParams.get('start');
         const end = searchParams.get('end');
-        return (start && end) ? [dayjs(start), dayjs(end)] : [dayjs().subtract(27, 'days').startOf('day'), dayjs().endOf('day')];
+        return [
+            start ? dayjs(start) : dayjs().subtract(27, 'days').startOf('day'),
+            end ? dayjs(end) : dayjs().endOf('day')
+        ];
     });
+    const [chartDateRange, setChartDateRange] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
+    const [topProductsDateRange, setTopProductsDateRange] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
+    const [donutDateRange, setDonutDateRange] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
+    const [mapDateRange, setMapDateRange] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
+    const handleChartFilterChange = useCallback((range, type) => {
+        setChartDateRange({ range, type });
+    }, []); // Không có phụ thuộc, chỉ cần tạo 1 lần
 
-    const [chartDateRange, setChartDateRange] = useState({
-        range: [dayjs().startOf('year'), dayjs().endOf('year')],
-        type: 'year'
-    });
+    const handleTopProductsFilterChange = useCallback((range, type) => {
+        setTopProductsDateRange({ range, type });
+    }, []); // Không có phụ thuộc
 
-    const [mapDateRange, setMapDateRange] = useState({
-        range: [dayjs().startOf('year'), dayjs().endOf('year')],
-        type: 'year'
-    });
+    const handleDonutFilterChange = useCallback((range, type) => {
+        setDonutDateRange({ range, type });
+    }, []); // Không có phụ thuộc
 
-    const [donutChartDateRange, setDonutChartDateRange] = useState({
-        range: [dayjs().startOf('year'), dayjs().endOf('year')],
-        type: 'year'
-    });
+    const handleMapFilterChange = useCallback((range, type) => {
+        setMapDateRange({ range, type });
+    }, []); // Không có phụ thuộc
 
-    const [topProductsDateRange, setTopProductsDateRange] = useState({
-        range: [dayjs().startOf('year'), dayjs().endOf('year')],
-        type: 'year'
-    });
-
-    // --- State quản lý dữ liệu và trạng thái loading của các biểu đồ phụ ---
-    const [donutChartKpiData, setDonutChartKpiData] = useState(null);
-    const [isDonutChartLoading, setIsDonutChartLoading] = useState(true);
-    const [topProductsData, setTopProductsData] = useState([]);
-    const [isTopProductsLoading, setIsTopProductsLoading] = useState(true);
-
-    // --- State quản lý UI ---
+    // --- STATE QUẢN LÝ UI ---
     const [kpiAnchorEl, setKpiAnchorEl] = useState(null);
     const [chartRevision, setChartRevision] = useState(0);
+    useEffect(() => {
+        const fetchBrandName = async () => {
+            try {
+                const allBrands = await getAllBrands();
+                const currentBrand = allBrands.find(b => b.id === parseInt(brandId));
+                if (currentBrand) {
+                    setBrandName(currentBrand.name);
+                }
+            } catch (error) {
+                console.error("Lỗi khi lấy tên brand:", error);
+            }
+        };
+        fetchBrandName();
+    }, [brandId]);
 
-    // --- Dữ liệu chính từ các custom hook ---
-    const { loading: isKpiLoading, error: kpiError, brandInfo, kpiData } = useKpiData(brandId, kpiDateRange);
-    const { loading: isChartLoading, error: chartError, chartData } = useChartData(brandId, chartDateRange);
-    const { mapData, isMapLoading } = useCustomerDistribution(brandId, mapDateRange);
+    useEffect(() => {
+        const timer = setTimeout(() => setChartRevision(prev => prev + 1), 300);
+        return () => clearTimeout(timer);
+    }, [isSidebarOpen]);
 
-    // --- Các hàm handler ---
+    // --- GỌI DỮ LIỆU BẰNG HOOK BẤT ĐỒNG BỘ DUY NHẤT ---
+    const { data: kpiData, isLoading: isKpiLoading, error: kpiError } = useAsyncData('kpi_summary', brandId, kpiDateRange);
+    const { data: chartApiResponse, isLoading: isChartLoading, error: chartError } = useAsyncData('daily_kpis_chart', brandId, chartDateRange.range);
+    const { data: topProductsData, isLoading: isTopProductsLoading, error: topProductsError } = useAsyncData('top_products', brandId, topProductsDateRange.range);
+    const { data: donutData, isLoading: isDonutLoading, error: donutError } = useAsyncData('kpi_summary', brandId, donutDateRange.range);
+    const { data: mapData, isLoading: isMapLoading, error: mapError } = useAsyncData('customer_map', brandId, mapDateRange.range);
+    
+    // Xử lý dữ liệu biểu đồ sau khi nhận được từ API
+    const chartData = chartApiResponse ? chartApiResponse.data : [];
+
+    // --- CÁC HÀM HANDLER (Không thay đổi) ---
     const handleOpenKpiFilter = (event) => setKpiAnchorEl(event.currentTarget);
     const handleCloseKpiFilter = () => setKpiAnchorEl(null);
     const handleApplyKpiFilter = useCallback((newRange) => {
@@ -80,79 +97,15 @@ function DashboardPage() {
         handleCloseKpiFilter();
     }, [setSearchParams]);
 
-    const handleChartFilterChange = useCallback((newRange, type) => {
-        setChartDateRange({ range: newRange, type: type });
-    }, []);
-
-    const handleMapFilterChange = useCallback((newRange, type) => {
-        setMapDateRange({ range: newRange, type: type });
-    }, [])
-    
-    const handleDonutChartFilterChange = useCallback((newRange, type) => {
-        setDonutChartDateRange({ range: newRange, type: type });
-    }, []);
-
-    const handleTopProductsFilterChange = useCallback((newRange, type) => {
-        setTopProductsDateRange({ range: newRange, type: type });
-    }, []);
-
-    useEffect(() => {
-        const fetchTopProducts = async () => {
-            if (!brandId) return;
-            setIsTopProductsLoading(true);
-            try {
-                const [start, end] = topProductsDateRange.range;
-                const data = await getTopProducts(brandId, start, end, 10);
-                setTopProductsData(data);
-            } catch (err) {
-                console.error("Lỗi khi tải Top Products:", err);
-                setTopProductsData([]);
-            } finally {
-                setIsTopProductsLoading(false);
-            }
-        };
-
-        fetchTopProducts();
-    }, [brandId, topProductsDateRange]);
- 
-    useEffect(() => {
-        const timer = setTimeout(() => setChartRevision(prev => prev + 1), 300);
-        return () => clearTimeout(timer);
-    }, [isSidebarOpen]);
-
-     
-
-    useEffect(() => {
-        const fetchDonutData = async () => {
-            if (!brandId) return;
-            setIsDonutChartLoading(true);
-            try {
-                const [start, end] = donutChartDateRange.range;
-                const data = await getBrandDetails(brandId, start, end);
-                setDonutChartKpiData(data ? data.kpis : null);
-            } catch (err) {
-                console.error("Lỗi khi tải dữ liệu Donut Chart:", err);
-                setDonutChartKpiData(null); // Reset khi có lỗi
-            } finally {
-                setIsDonutChartLoading(false);
-            }
-        };
-
-        fetchDonutData();
-    }, [brandId, donutChartDateRange]);
-
     // --- PHẦN RENDER GIAO DIỆN ---
-    const error = kpiError || chartError; // Gộp lỗi từ cả hai hook
-    if (error) return <Alert severity="error">{error}</Alert>;
-    
-    // Hiển thị loading nếu bất kỳ dữ liệu chính nào đang tải
-    if (isKpiLoading && !kpiData.current) { 
-        return <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}><CircularProgress /></Box>; 
-    }
+    const anyError = kpiError || chartError || topProductsError || donutError || mapError;
+    if (anyError) return <Alert severity="error" sx={{ m: 4 }}>{anyError}</Alert>;
 
     return (
         <Box sx={{ px: 4 }} >
-            <Typography variant="h4" gutterBottom sx={{ mb: 4 }}>{brandInfo.name ? `Báo cáo Kinh doanh: ${brandInfo.name}` : ''}</Typography>
+            <Typography variant="h4" gutterBottom sx={{ mb: 4 }}>
+                {brandName ? `Báo cáo Kinh doanh: ${brandName}` : 'Đang tải...'}
+            </Typography>
             
             <Paper variant="glass" elevation={0} sx={{ p: 3, mb: 4 }}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
@@ -170,53 +123,60 @@ function DashboardPage() {
                 
                 <Divider sx={{ mb: 3 }} />
                 
-                {kpiData.current ? (
-                    <Box sx={{ 
-                        display: 'grid',
-                        gridTemplateColumns: {
-                            xs: '1fr',
-                            md: 'repeat(2, 1fr)',
-                            lg: 'repeat(4, 1fr)',
-                        }
-                    }}>
-                        {kpiGroups.map((group, groupIndex) => (
-                            <Box 
-                                key={group.groupTitle} 
-                                sx={{ 
-                                    p: 2, 
-                                    borderRight: { 
-                                        lg: groupIndex < 3 ? `1px solid ${theme.palette.divider}` : 'none',
-                                        md: groupIndex % 2 === 0 ? `1px solid ${theme.palette.divider}` : 'none',
-                                    }, 
-                                    borderBottom: { 
-                                        xs: groupIndex < kpiGroups.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
-                                        md: groupIndex < 2 ? `1px solid ${theme.palette.divider}` : 'none',
-                                        lg: 'none'
-                                    } 
-                                }}
-                            >
-                                <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 2, fontWeight: 600, fontSize: '0.875rem', textAlign: 'center' }}>
-                                    {group.groupTitle}
-                                </Typography>
-                                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 3, textAlign: 'left' }}>
-                                    {group.items.map((kpi) => (
-                                        <StatItem 
-                                            key={kpi.key} 
-                                            title={kpi.title} 
-                                            value={kpiData.current[kpi.key]} 
-                                            previousValue={kpiData.previous ? kpiData.previous[kpi.key] : 0}
-                                            format={kpi.format}
-                                            tooltipText={kpi.tooltipText}
-                                            direction={kpi.direction}
-                                        />
-                                    ))}
+                <Box sx={{ minHeight: 360, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    {isKpiLoading ? (
+                        // 1. NẾU ĐANG LOADING: Hiển thị vòng quay
+                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                            <CircularProgress />
+                        </Box>
+                    ) : kpiData ? (
+                        // 2. NẾU KHÔNG LOADING VÀ CÓ DỮ LIỆU: Hiển thị bảng
+                        <Box sx={{ 
+                            display: 'grid',
+                            gridTemplateColumns: {
+                                xs: '1fr',
+                                md: 'repeat(2, 1fr)',
+                                lg: 'repeat(4, 1fr)',
+                            }
+                        }}>
+                            {kpiGroups.map((group, groupIndex) => (
+                                <Box 
+                                    key={group.groupTitle} 
+                                    sx={{ 
+                                        p: 2, 
+                                        borderRight: { 
+                                            lg: groupIndex < 3 ? `1px solid ${theme.palette.divider}` : 'none',
+                                            md: groupIndex % 2 === 0 ? `1px solid ${theme.palette.divider}` : 'none',
+                                        }, 
+                                        borderBottom: { 
+                                            xs: groupIndex < kpiGroups.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
+                                            md: groupIndex < 2 ? `1px solid ${theme.palette.divider}` : 'none',
+                                            lg: 'none'
+                                        } 
+                                    }}
+                                >
+                                    <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 2, fontWeight: 600, fontSize: '0.875rem', textAlign: 'center' }}>
+                                        {group.groupTitle}
+                                    </Typography>
+                                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 3, textAlign: 'left' }}>
+                                        {group.items.map((kpi) => (
+                                            <StatItem 
+                                                key={kpi.key} 
+                                                title={kpi.title} 
+                                                value={kpiData[kpi.key]}
+                                                format={kpi.format}
+                                                tooltipText={kpi.tooltipText}
+                                                direction={kpi.direction}
+                                            />
+                                        ))}
+                                    </Box>
                                 </Box>
-                            </Box>
-                        ))}
-                    </Box>
-                ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'center' }}><CircularProgress /></Box>
-                )}
+                            ))}
+                        </Box>
+                    ) : (
+                        <ChartPlaceholder title="Chỉ số Hiệu suất" />
+                    )}
+                </Box>
             </Paper>
 
             <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4 }}>
@@ -225,18 +185,19 @@ function DashboardPage() {
                     <ChartTimeFilter onFilterChange={handleChartFilterChange} />
                 </Box>
                 
-                <Box sx={{ pb: 3, pt: 1 }}>
-                    {isChartLoading ? <Box sx={{ display: 'flex', justifyContent: 'center', height: 450, alignItems: 'center' }}><CircularProgress /></Box> : (
-                        chartData.current.length > 0 ? (
+                <Box sx={{ pb: 3, pt: 1, height: 450, position: 'relative' }}>
+                    {isChartLoading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
+                        
+                        // BẮT ĐẦU SỬA
+                        chartData && chartData.length > 0 ? (
+                        // KẾT THÚC SỬA
+
                             <RevenueProfitChart 
-                                data={chartData.current} 
-                                comparisonData={chartData.previous}
+                                data={chartData} 
                                 chartRevision={chartRevision}
-                                filterType={chartDateRange.type}
-                                dateRange={chartDateRange.range}
-                                aggregationType={chartData.aggregationType}
+                                aggregationType={chartDateRange.type}
                             />
-                        ) : <ChartPlaceholder />
+                        ) : <ChartPlaceholder title="Doanh thu & Lợi nhuận" />
                     )}
                 </Box>
             </Paper>
@@ -261,10 +222,19 @@ function DashboardPage() {
                         <Paper variant="glass" elevation={0} sx={{ p: 1, display: 'flex', flexDirection: 'column' }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                                 <Typography variant="h6" noWrap>Phân bổ Chi phí</Typography>
-                                <ChartTimeFilter onFilterChange={handleDonutChartFilterChange} />
+                                <ChartTimeFilter onFilterChange={handleDonutFilterChange} />
                             </Box>
                             <Box sx={{ flexGrow: 1, minHeight: 400, position: 'relative' }}>
-                                {isDonutChartLoading ? ( <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><CircularProgress /></Box> ) : donutChartKpiData ? ( <CostDonutChart cogs={donutChartKpiData.cogs} executionCost={donutChartKpiData.executionCost} adSpend={donutChartKpiData.adSpend} /> ) : ( <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><Typography color="text.secondary">Không có dữ liệu.</Typography></Box> )}
+                                {isDonutLoading ? ( <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><CircularProgress /></Box> ) 
+                                
+                                // BẮT ĐẦU SỬA
+                                : donutData ? ( 
+                                // KẾT THÚC SỬA
+
+                                    <CostDonutChart cogs={donutData.cogs} executionCost={donutData.executionCost} adSpend={donutData.adSpend} /> 
+                                ) : ( 
+                                    <ChartPlaceholder title="Phân bổ Chi phí"/> 
+                                )}
                             </Box>
                         </Paper>
 
