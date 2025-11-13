@@ -6,14 +6,27 @@ import traceback
 import io
 import models
 import crud
-from datetime import date
+from datetime import date, datetime
 from typing import Union, List
 
-# --- Các hàm tiện ích (Giữ nguyên) ---
-def parse_date(date_str) -> Union[date, None]:
-    if not date_str or pd.isna(date_str): return None
-    try: return pd.to_datetime(date_str, dayfirst=True).date()
-    except (ValueError, TypeError): return None
+def parse_date(date_str: str) -> Union[date, None]:
+    """
+    Hàm chuẩn hóa ngày tháng một cách nghiêm ngặt.
+    Chỉ chấp nhận duy nhất định dạng 'DD/MM/YYYY'.
+    """
+    if not date_str or pd.isna(date_str):
+        return None
+    
+    try:
+        # Sử dụng datetime.strptime để ép kiểu theo đúng định dạng yêu cầu.
+        # Đây là cách làm chuẩn và an toàn nhất trong Python.
+        dt_object = datetime.strptime(str(date_str).strip(), '%d/%m/%Y')
+        return dt_object.date()
+    except (ValueError, TypeError):
+        # Nếu chuỗi đầu vào không khớp chính xác với định dạng 'DD/MM/YYYY',
+        # một lỗi ValueError sẽ xảy ra, và hàm sẽ trả về None.
+        print(f"CẢNH BÁO: Định dạng ngày tháng không hợp lệ (bỏ qua): '{date_str}'. Chỉ chấp nhận DD/MM/YYYY.")
+        return None
 
 def to_float(value) -> float:
     try: return float(str(value).replace(',', ''))

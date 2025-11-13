@@ -1,14 +1,14 @@
 import dayjs from "dayjs";
 
 export const dateShortcuts = [
-        { label: 'Hôm nay', getValue: () => [dayjs().startOf('day'), dayjs().endOf('day')] },
-        { label: 'Hôm qua', getValue: () => [dayjs().subtract(1, 'day').startOf('day'), dayjs().subtract(1, 'day').endOf('day')] },
-        { label: '7 ngày qua', getValue: () => [dayjs().subtract(6, 'days').startOf('day'), dayjs().endOf('day')] },
-        { label: '28 ngày qua', getValue: () => [dayjs().subtract(27, 'days').startOf('day'), dayjs().endOf('day')] },
-        { label: 'Tuần hiện tại', getValue: () => [dayjs().startOf('week'), dayjs().endOf('week')] },
-        { label: 'Tháng hiện tại', getValue: () => [dayjs().startOf('month'), dayjs().endOf('day')] },
-        { label: 'Tháng trước', getValue: () => [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] },
-        { label: 'Năm nay', getValue: () => [dayjs().startOf('year'), dayjs().endOf('day')] },
+        { label: 'Hôm nay', type: 'day', getValue: () => [dayjs().startOf('day'), dayjs().endOf('day')] },
+        { label: 'Hôm qua', type: 'day', getValue: () => [dayjs().subtract(1, 'day').startOf('day'), dayjs().subtract(1, 'day').endOf('day')] },
+        { label: '7 ngày qua', type: 'day', getValue: () => [dayjs().subtract(6, 'days').startOf('day'), dayjs().endOf('day')] },
+        { label: '28 ngày qua', type: 'day', getValue: () => [dayjs().subtract(27, 'days').startOf('day'), dayjs().endOf('day')] },
+        { label: 'Tuần hiện tại', type: 'week', getValue: () => [dayjs().startOf('week'), dayjs().endOf('week')] },
+        { label: 'Tháng hiện tại', type: 'month', getValue: () => [dayjs().startOf('month'), dayjs().endOf('day')] },
+        { label: 'Tháng trước', type: 'month', getValue: () => [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] },
+        { label: 'Năm nay', type: 'year', getValue: () => [dayjs().startOf('year'), dayjs().endOf('day')] },
     ];
 
 export const kpiGroups = [

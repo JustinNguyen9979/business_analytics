@@ -46,13 +46,15 @@ function DateRangeFilterMenu({ open, anchorEl, onClose, initialDateRange, onAppl
         }
     }, [open, initialDateRange]);
 
-    const handleShortcutClick = (getValue) => {
-        const newRange = getValue();
-        onApply(newRange); // Gửi giá trị mới ra ngoài, component cha sẽ đóng Menu
+    const handleShortcutClick = (shortcut) => {
+        // Bây giờ 'shortcut' là một object hoàn chỉnh { label, type, getValue }
+        const newRange = shortcut.getValue();
+        // Gửi cả range và type ra ngoài
+        onApply(newRange, shortcut.type);
     };
     
     const handleApplyCustomDate = () => {
-        onApply(tempDateRange); // Gửi giá trị đang chọn ra ngoài
+        onApply(tempDateRange, 'custom'); // Gửi giá trị đang chọn ra ngoài
     };
 
     return (
@@ -76,9 +78,9 @@ function DateRangeFilterMenu({ open, anchorEl, onClose, initialDateRange, onAppl
                 {/* Cột trái: Lối tắt */}
                 <Box sx={{ borderRight: 1, borderColor: 'divider', width: 160, flexShrink: 0 }}>
                     <List>
-                        {dateShortcuts.map(({ label, getValue }) => (
-                            <ListItemButton key={label} onClick={() => handleShortcutClick(getValue)}>
-                                <ListItemText primary={label} />
+                        {dateShortcuts.map((shortcut) => (
+                            <ListItemButton key={shortcut.label} onClick={() => handleShortcutClick(shortcut)}>
+                                <ListItemText primary={shortcut.label} />
                             </ListItemButton>
                         ))}
                     </List>

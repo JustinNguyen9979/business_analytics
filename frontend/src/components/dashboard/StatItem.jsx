@@ -12,21 +12,25 @@ import { useAnimatedValue } from '../../hooks/useAnimatedValue';
 // Em copy lại luôn phần StatComparison để anh tiện copy cả file
 const StatComparison = ({ value, previousValue, format, direction = 'up' }) => {
     const theme = useTheme();
+
+    if (typeof previousValue !== 'number') {
+        return null;
+    }
+
     const currentValue = (typeof value === 'number') ? value : 0;
-    const previous = (typeof previousValue === 'number') ? previousValue : 0;
+    const previous = previousValue;
 
     if (currentValue === 0 && previous === 0) return null;
 
     const sxProps = { display: 'flex', alignItems: 'center', ml: 0.5 };
-    if (previous === 0) {
-        let color = theme.palette.success.main;
-        let Icon = ArrowDropUpIcon;
-        if (direction === 'down') {
-             color = theme.palette.error.main;
-             Icon = ArrowDropDownIcon;
-        }
+
+    if (previous === 0 && currentValue > 0) {
+        let color = direction === 'up' ? theme.palette.success.main : theme.palette.error.main;
+        let Icon = direction === 'up' ? ArrowDropUpIcon : ArrowDropDownIcon;
         return ( <Box sx={{ ...sxProps, color }}> <Icon sx={{ fontSize: '1rem' }} /> <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1 }}>Mới</Typography> </Box> );
     }
+
+    if (previous === 0) return null;
     
     const percentageChange = ((currentValue - previous) / Math.abs(previous)) * 100;
     if (!isFinite(percentageChange)) return null;
