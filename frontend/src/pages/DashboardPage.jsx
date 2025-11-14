@@ -110,7 +110,7 @@ function DashboardPage() {
                 <Box sx={{ minHeight: 360, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                     {kpi.loading ? (
                         // 1. NẾU ĐANG LOADING: Hiển thị vòng quay
-                        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+                        <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
                             <CircularProgress />
                         </Box>
                     ) : kpi.data.current ? (
@@ -165,7 +165,7 @@ function DashboardPage() {
             </Paper>
 
             <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4 }}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 3, pt: 3 }}>
+                <Box variant="loaderContainer" sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 3, pt: 3 }}>
                     <Typography variant="h6" noWrap>Biểu đồ Doanh thu ròng & Lợi nhuận</Typography>
                     <ChartTimeFilter value={lineChartFilter} onChange={handleLineChartFilterChange} />
                 </Box>
@@ -200,29 +200,37 @@ function DashboardPage() {
                 >
                     {/* Dùng Stack để tạo khoảng cách giữa 2 biểu đồ bên trong */}
                     <Stack spacing={4}>
-                        {/* KHỐI 1: DONUT CHART - Tái sử dụng variant="glass" */}
+                        {/* KHỐI 1: DONUT CHART */}
                         <Paper variant="glass" elevation={0} sx={{ p: 1, display: 'flex', flexDirection: 'column' }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
+                            <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                                 <Typography variant="h6" noWrap>Phân bổ Chi phí</Typography>
                                 <ChartTimeFilter value={donutFilter} onChange={handleDonutFilterChange} />
                             </Box>
                             <Box sx={{ flexGrow: 1, minHeight: 400, position: 'relative' }}>
-                                {donut.loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
-                                donut.data ? <CostDonutChart {...donut.data} /> : <ChartPlaceholder title="Phân bổ Chi phí"/> 
-                            )}
+                                {donut.loading ? (
+                                    <Box sx={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                        <CircularProgress />
+                                    </Box>
+                                ) : (
+                                    donut.data ? <CostDonutChart {...donut.data} /> : <ChartPlaceholder title="Phân bổ Chi phí"/>
+                                )}
                             </Box>
                         </Paper>
 
-                        {/* KHỐI 2: TOP PRODUCTS CHART - Tái sử dụng variant="glass" */}
+                        {/* KHỐI 2: TOP PRODUCTS CHART */}
                         <Paper variant="glass" elevation={0} sx={{ p: 1, display: 'flex', flexDirection: 'column' }}>
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
+                            <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                                 <Typography variant="h6" noWrap>Top SKU bán chạy</Typography>
                                 <ChartTimeFilter value={topProductsFilter} onChange={handleTopProductsFilterChange} />
                             </Box>
                             <Box sx={{ flexGrow: 1, minHeight: 600, position: 'relative' }}>
-                                {topProducts.loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
-                                topProducts.data && topProducts.data.length > 0 ? <TopProductsChart data={topProducts.data} /> : <ChartPlaceholder title="Top SKU bán chạy" />
-                            )}
+                                {topProducts.loading ? (
+                                    <Box sx={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                        <CircularProgress />
+                                    </Box>
+                                ) : (
+                                    topProducts.data && topProducts.data.length > 0 ? <TopProductsChart data={topProducts.data} /> : <ChartPlaceholder title="Top SKU bán chạy" />
+                                )}
                             </Box>
                         </Paper>
                     </Stack>
@@ -248,7 +256,7 @@ function DashboardPage() {
                             minHeight: { xs: 900, md: '100%' }
                         }}
                     >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
+                        <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                             <Typography variant="h6" noWrap>Phân bổ Khách hàng</Typography>
                             <ChartTimeFilter value={mapFilter} onChange={handleMapFilterChange} />
                         </Box>
@@ -274,4 +282,3 @@ function DashboardPage() {
 }
 
 export default DashboardPage;
-
