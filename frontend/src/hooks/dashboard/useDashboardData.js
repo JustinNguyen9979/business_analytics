@@ -58,76 +58,102 @@ const fetchAsyncData = async (requestType, brandId, dateRange, params = {}) => {
 };
 
 /**
- * Custom Hook DUY NHẤT để quản lý toàn bộ việc lấy và xử lý dữ liệu cho trang Dashboard.
+ * Custom Hook DUY NHẤT, linh hoạt để quản lý nhiều khối dữ liệu độc lập trên dashboard.
+ * @param {string} brandId - ID của thương hiệu.
+ * @param {object} filters - Một object chứa các bộ lọc cho từng khối dữ liệu.
+ * Ví dụ: { kpi: kpiFilter, lineChart: chartFilter, donut: donutFilter, ... }
  */
-export const useDashboardData = (brandId, kpiFilter, chartFilter) => {
-    const [data, setData] = useState({
-        kpi: { current: null, previous: null },
-        chart: { current: [], previous: [], aggregationType: 'day' },
-        donut: null,
-        topProducts: null,
-        map: null,
+export const useDashboardData = (brandId, filters) => {
+    // <<< THAY ĐỔI 1: Cấu trúc state mới, mỗi khối dữ liệu là một object riêng >>>
+    const [state, setState] = useState({
+        kpi: { data: { current: null, previous: null }, loading: true, error: null },
+        lineChart: { data: { current: [], previous: [], aggregationType: 'day' }, loading: true, error: null },
+        donut: { data: null, loading: true, error: null },
+        topProducts: { data: null, loading: true, error: null },
+        map: { data: null, loading: true, error: null },
     });
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
 
+    // Hàm tiện ích để cập nhật state cho một khối cụ thể
+    const updateState = (key, newState) => {
+        setState(prevState => ({
+            ...prevState,
+            [key]: { ...prevState[key], ...newState },
+        }));
+    };
+
+    // <<< THAY ĐỔI 2: useEffect riêng cho KPI >>>
     useEffect(() => {
-        if (!brandId || !kpiFilter || !kpiFilter.range || !chartFilter) return;
+        const filter = filters.kpi;
+        if (!brandId || !filter || !filter.range) return;
 
-        const fetchAllDashboardData = async () => {
-            setLoading(true);
-            setError(null);
-
-            // Tính toán các khoảng thời gian so sánh
-            const prevKpiRange = getPreviousPeriod(kpiFilter.range[0], kpiFilter.range[1], kpiFilter.type);
-            const prevChartRange = getPreviousPeriod(chartFilter.range[0], chartFilter.range[1], chartFilter.type);
-
+        const fetchKpi = async () => {
+            updateState('kpi', { loading: true, error: null });
+            const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
             try {
-                // Gọi tất cả các API song song
-                const [
-                    kpiCurrent, kpiPrevious,
-                    chartApiResponse, prevChartApiResponse,
-                    donutData, topProductsData, mapData,
-                ] = await Promise.all([
-                    // Dữ liệu KPI (dùng kpiFilter)
-                    fetchAsyncData('kpi_summary', brandId, kpiFilter.range),
-                    fetchAsyncData('kpi_summary', brandId, prevKpiRange),
-                    // Dữ liệu biểu đồ đường (dùng chartFilter.range)
-                    fetchAsyncData('daily_kpis_chart', brandId, chartFilter.range),
-                    fetchAsyncData('daily_kpis_chart', brandId, prevChartRange),
-                    // Dữ liệu cho các biểu đồ còn lại (cũng dùng chartFilter.range)
-                    fetchAsyncData('kpi_summary', brandId, chartFilter.range), // Donut
-                    fetchAsyncData('top_products', brandId, chartFilter.range),
-                    fetchAsyncData('customer_map', brandId, chartFilter.range),
+                const [current, previous] = await Promise.all([
+                    fetchAsyncData('kpi_summary', brandId, filter.range),
+                    fetchAsyncData('kpi_summary', brandId, prevRange)
                 ]);
-
-                // Xử lý dữ liệu biểu đồ đường
-                const processedCurrentChart = processChartData(chartApiResponse?.data, chartFilter);
-                const processedPreviousChart = processChartData(prevChartApiResponse?.data, { range: prevChartRange, type: chartFilter.type });
-
-                // Cập nhật state một lần duy nhất với tất cả dữ liệu
-                setData({
-                    kpi: { current: kpiCurrent, previous: kpiPrevious },
-                    chart: {
-                        current: processedCurrentChart.aggregatedData,
-                        previous: processedPreviousChart.aggregatedData,
-                        aggregationType: processedCurrentChart.aggregationType,
-                    },
-                    donut: donutData,
-                    topProducts: topProductsData,
-                    map: mapData,
-                });
-
+                updateState('kpi', { data: { current, previous }, loading: false });
             } catch (err) {
-                setError(err.message || 'Đã xảy ra lỗi khi tải dữ liệu dashboard.');
-                console.error(err);
-            } finally {
-                setLoading(false);
+                updateState('kpi', { error: err.message || 'Lỗi tải dữ liệu KPI.', loading: false });
             }
         };
+        fetchKpi();
+    }, [brandId, filters.kpi]); // Chỉ phụ thuộc vào bộ lọc KPI
 
-        fetchAllDashboardData();
-    }, [brandId, kpiFilter, chartFilter]); // Chạy lại mỗi khi các bộ lọc thay đổi
+    // <<< THAY ĐỔI 3: useEffect riêng cho Biểu đồ đường (Line Chart) >>>
+    useEffect(() => {
+        const filter = filters.lineChart;
+        if (!brandId || !filter || !filter.range) return;
+        
+        const fetchLineChart = async () => {
+            updateState('lineChart', { loading: true, error: null });
+            const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
+            try {
+                const [currentRes, previousRes] = await Promise.all([
+                    fetchAsyncData('daily_kpis_chart', brandId, filter.range),
+                    fetchAsyncData('daily_kpis_chart', brandId, prevRange)
+                ]);
+                const processedCurrent = processChartData(currentRes?.data, filter);
+                const processedPrevious = processChartData(previousRes?.data, { range: prevRange, type: filter.type });
+                updateState('lineChart', { 
+                    data: {
+                        current: processedCurrent.aggregatedData,
+                        previous: processedPrevious.aggregatedData,
+                        aggregationType: processedCurrent.aggregationType,
+                    }, 
+                    loading: false 
+                });
+            } catch (err) {
+                updateState('lineChart', { error: err.message || 'Lỗi tải dữ liệu biểu đồ.', loading: false });
+            }
+        };
+        fetchLineChart();
+    }, [brandId, filters.lineChart]); // Chỉ phụ thuộc vào bộ lọc Line Chart
 
-    return { data, loading, error };
+    // <<< THAY ĐỔI 4: useEffect riêng cho các biểu đồ còn lại (Donut, Top Products, Map) >>>
+    // Helper function để tránh lặp code
+    const createSingleChartEffect = (key, requestType, filter) => {
+        useEffect(() => {
+            if (!brandId || !filter || !filter.range) return;
+            const fetchData = async () => {
+                updateState(key, { loading: true, error: null });
+                try {
+                    const result = await fetchAsyncData(requestType, brandId, filter.range);
+                    updateState(key, { data: result, loading: false });
+                } catch (err) {
+                    updateState(key, { error: err.message || `Lỗi tải dữ liệu ${key}.`, loading: false });
+                }
+            };
+            fetchData();
+        }, [brandId, filter]);
+    };
+
+    createSingleChartEffect('donut', 'kpi_summary', filters.donut);
+    createSingleChartEffect('topProducts', 'top_products', filters.topProducts);
+    createSingleChartEffect('map', 'customer_map', filters.map);
+    
+    // Trả về toàn bộ state đã được cấu trúc
+    return state;
 };

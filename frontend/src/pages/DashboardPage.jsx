@@ -25,12 +25,6 @@ function DashboardPage() {
     const [brandName, setBrandName] = useState('');
     const [searchParams, setSearchParams] = useSearchParams();
     const { isSidebarOpen } = useLayout();
-    
-    // const [kpiDateRange, setKpiDateRange] = useState(() => {
-    //     const start = searchParams.get('start_kpi');
-    //     const end = searchParams.get('end_kpi');
-    //     return [start ? dayjs(start) : dayjs().subtract(27, 'days').startOf('day'), end ? dayjs(end) : dayjs().endOf('day')];
-    // });
 
     const [kpiFilter, setKpiFilter] = useState(() => {
         const start = searchParams.get('start_kpi');
@@ -40,9 +34,19 @@ function DashboardPage() {
         return { range: initialRange, type: 'custom' }; 
     });
 
-    const [chartFilter, setChartFilter] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
+    const [lineChartFilter, setLineChartFilter] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
+    const [donutFilter, setDonutFilter] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
+    const [topProductsFilter, setTopProductsFilter] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
+    const [mapFilter, setMapFilter] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
 
-    const { data, loading, error } = useDashboardData(brandId, kpiFilter, chartFilter);
+    const dashboardState = useDashboardData(brandId, {
+        kpi: kpiFilter,
+        lineChart: lineChartFilter,
+        donut: donutFilter,
+        topProducts: topProductsFilter,
+        map: mapFilter,
+    });
+    const { kpi, lineChart, donut, topProducts, map } = dashboardState;
 
     // --- STATE QUẢN LÝ UI ---
     const [kpiAnchorEl, setKpiAnchorEl] = useState(null);
@@ -73,9 +77,13 @@ function DashboardPage() {
         handleCloseKpiFilter();
     }, [setSearchParams]);
 
-    const handleChartFilterChange = useCallback((range, type) => setChartFilter({ range, type }), []);
+    const handleLineChartFilterChange = useCallback((range, type) => setLineChartFilter({ range, type }), []);
+    const handleDonutFilterChange = useCallback((range, type) => setDonutFilter({ range, type }), []);
+    const handleTopProductsFilterChange = useCallback((range, type) => setTopProductsFilter({ range, type }), []);
+    const handleMapFilterChange = useCallback((range, type) => setMapFilter({ range, type }), []);
 
-    if (error) return <Alert severity="error" sx={{ m: 4 }}>{error}</Alert>;
+    const anyError = Object.values(dashboardState).find(s => s.error);
+    if (anyError) return <Alert severity="error" sx={{ m: 4 }}>{anyError.error}</Alert>;
 
     return (
         <Box sx={{ px: 4 }} >
@@ -100,12 +108,12 @@ function DashboardPage() {
                 <Divider sx={{ mb: 3 }} />
                 
                 <Box sx={{ minHeight: 360, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                    {loading ? (
+                    {kpi.loading ? (
                         // 1. NẾU ĐANG LOADING: Hiển thị vòng quay
                         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
                             <CircularProgress />
                         </Box>
-                    ) : data.kpi.current ? (
+                    ) : kpi.data.current ? (
                         // 2. NẾU KHÔNG LOADING VÀ CÓ DỮ LIỆU: Hiển thị bảng
                         <Box sx={{ 
                             display: 'grid',
@@ -135,14 +143,14 @@ function DashboardPage() {
                                         {group.groupTitle}
                                     </Typography>
                                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 3, textAlign: 'left' }}>
-                                        {group.items.map((kpi) => {
-                                            console.log(`Đang render chỉ số: ${kpi.key}`, ' | Giá trị hiện tại:', data.kpi.current[kpi.key], ' | Giá trị kỳ trước:', data.kpi.previous?.[kpi.key]);
+                                        {group.items.map((kpiItem) => {
+                                            console.log(`Đang render chỉ số: ${kpiItem.key}`, ' | Giá trị hiện tại:', kpi.data.current[kpiItem.key], ' | Giá trị kỳ trước:', kpi.data.previous?.[kpiItem.key]);
                                             return (
                                                 <StatItem 
-                                                    key={kpi.key} 
-                                                    value={data.kpi.current[kpi.key]} 
-                                                    previousValue={data.kpi.previous?.[kpi.key]}
-                                                    {...kpi} // Dùng spread operator cho gọn
+                                                    key={kpiItem.key} 
+                                                    value={kpi.data.current[kpiItem.key]} 
+                                                    previousValue={kpi.data.previous?.[kpiItem.key]}
+                                                    {...kpiItem} // Dùng spread operator cho gọn
                                                 />
                                             );
                                         })} 
@@ -159,17 +167,17 @@ function DashboardPage() {
             <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4 }}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 3, pt: 3 }}>
                     <Typography variant="h6" noWrap>Biểu đồ Doanh thu ròng & Lợi nhuận</Typography>
-                    <ChartTimeFilter value={chartFilter} onChange={handleChartFilterChange} />
+                    <ChartTimeFilter value={lineChartFilter} onChange={handleLineChartFilterChange} />
                 </Box>
                 
                 <Box sx={{ pb: 3, pt: 1, height: 450, position: 'relative' }}>
-                    {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
-                        data.chart.current && data.chart.current.length > 0 ? (
+                    {lineChart.loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
+                        lineChart.data.current && lineChart.data.current.length > 0 ? (
                             <RevenueProfitChart 
-                                data={data.chart.current} 
-                                comparisonData={data.chart.previous}
+                                data={lineChart.data.current} 
+                                comparisonData={lineChart.data.previous}
                                 chartRevision={chartRevision}
-                                aggregationType={data.chart.aggregationType}
+                                aggregationType={lineChart.data.aggregationType}
                             />
                         ) : <ChartPlaceholder title="Doanh thu & Lợi nhuận" />
                     )}
@@ -196,11 +204,11 @@ function DashboardPage() {
                         <Paper variant="glass" elevation={0} sx={{ p: 1, display: 'flex', flexDirection: 'column' }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                                 <Typography variant="h6" noWrap>Phân bổ Chi phí</Typography>
-                                <ChartTimeFilter value={chartFilter} onChange={handleChartFilterChange} />
+                                <ChartTimeFilter value={donutFilter} onChange={handleDonutFilterChange} />
                             </Box>
                             <Box sx={{ flexGrow: 1, minHeight: 400, position: 'relative' }}>
-                                {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
-                                data.donut ? <CostDonutChart {...data.donut} /> : <ChartPlaceholder title="Phân bổ Chi phí"/> 
+                                {donut.loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
+                                donut.data ? <CostDonutChart {...donut.data} /> : <ChartPlaceholder title="Phân bổ Chi phí"/> 
                             )}
                             </Box>
                         </Paper>
@@ -209,11 +217,11 @@ function DashboardPage() {
                         <Paper variant="glass" elevation={0} sx={{ p: 1, display: 'flex', flexDirection: 'column' }}>
                             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                                 <Typography variant="h6" noWrap>Top SKU bán chạy</Typography>
-                                <ChartTimeFilter value={chartFilter} onChange={handleChartFilterChange} />
+                                <ChartTimeFilter value={topProductsFilter} onChange={handleTopProductsFilterChange} />
                             </Box>
                             <Box sx={{ flexGrow: 1, minHeight: 600, position: 'relative' }}>
-                                {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
-                                data.topProducts && data.topProducts.length > 0 ? <TopProductsChart data={data.topProducts} /> : <ChartPlaceholder title="Top SKU bán chạy" />
+                                {topProducts.loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
+                                topProducts.data && topProducts.data.length > 0 ? <TopProductsChart data={topProducts.data} /> : <ChartPlaceholder title="Top SKU bán chạy" />
                             )}
                             </Box>
                         </Paper>
@@ -242,11 +250,11 @@ function DashboardPage() {
                     >
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                             <Typography variant="h6" noWrap>Phân bổ Khách hàng</Typography>
-                            <ChartTimeFilter value={chartFilter} onChange={handleChartFilterChange} />
+                            <ChartTimeFilter value={mapFilter} onChange={handleMapFilterChange} />
                         </Box>
                         <Box sx={{ flexGrow: 1, minHeight: { xs: 500, lg: 'auto' }, position: 'relative' }}>
-                            {loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
-                                data.map && data.map.length > 0 ? <GeoMapChart data={data.map} /> : <ChartPlaceholder title="Phân bổ Khách hàng" />
+                            {map.loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
+                                map.data && map.data.length > 0 ? <GeoMapChart data={map.data} /> : <ChartPlaceholder title="Phân bổ Khách hàng" />
                             )}
                         </Box>
                     </Paper>
@@ -266,5 +274,4 @@ function DashboardPage() {
 }
 
 export default DashboardPage;
-
 
