@@ -123,9 +123,25 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
         ...(data?.map(d => d.profit) || []),
         ...(comparisonData?.map(d => d.netRevenue) || []),
         ...(comparisonData?.map(d => d.profit) || [])
-    ];
+    ].filter(v => typeof v === 'number'); // Lọc ra các giá trị không hợp lệ
+
+    // 2. Tìm giá trị LỚN NHẤT và NHỎ NHẤT
     const maxY = allYValues.length > 0 ? Math.max(...allYValues) : 1;
-    const yAxisRangeMax = maxY > 0 ? maxY * 1.1 : 1;
+    const minY = allYValues.length > 0 ? Math.min(...allYValues) : 0;
+
+    // 3. Tính toán khoảng đệm (padding) để biểu đồ không bị sát lề
+    const dataSpan = maxY - minY;
+    // Nếu tất cả giá trị bằng nhau (span=0), tạo một khoảng đệm mặc định
+    const padding = dataSpan === 0 ? Math.abs(maxY * 0.2) || 1 : dataSpan * 0.1;
+
+    // 4. Xác định khoảng hiển thị cuối cùng cho trục Y
+    const yAxisRange = [
+        // Nếu giá trị nhỏ nhất là số dương, trục Y vẫn bắt đầu từ 0 cho trực quan
+        // Nếu là số âm, bắt đầu từ dưới số đó một chút (trừ đi padding)
+        minY >= 0 ? 0 : minY - padding,
+        // Luôn kết thúc ở trên giá trị lớn nhất một chút (cộng thêm padding)
+        maxY + padding
+    ];
 
     const getXAxisConfig = () => { 
         const tick0 = data.length > 0 ? dayjs(data[0].date).toDate() : new Date();
@@ -148,12 +164,12 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             showspikes: false,
         },
         yaxis: {
-            range: [0, yAxisRangeMax],
+            range: yAxisRange,
             color: theme.palette.text.secondary,
             gridcolor: theme.palette.divider,
             hoverformat: ',.0f đ',
-            showspikes: false,
-            zeroline: false,
+            showspikes: false, zeroline: true, // Hiển thị đường zero line để dễ so sánh
+            zerolinecolor: theme.palette.divider, zerolinewidth: 2,
             rangeslider: { visible: false },
         },
         legend: {

@@ -6,20 +6,38 @@ import dayjs from 'dayjs';
 import { processChartData } from '../../utils/chartDataProcessor';
 
 /**
- * TÍNH TOÁN KHOẢNG THỜI GIAN SO SÁNH THÔNG MINH
+ * TÍNH TOÁN KHOẢNG THỜI GIAN SO SÁNH THÔNG MINH - ĐÃ SỬA LỖI
+ * @param {dayjs} startDate - Ngày bắt đầu của kỳ hiện tại.
+ * @param {dayjs} endDate - Ngày kết thúc của kỳ hiện tại.
+ * @param {string} filterType - Loại bộ lọc ('year', 'quarter', 'month', 'custom').
+ * @returns {Array<dayjs>} - Mảng [ngày bắt đầu kỳ trước, ngày kết thúc kỳ trước].
  */
+
 const getPreviousPeriod = (startDate, endDate, filterType = 'custom') => {
     if (!startDate || !endDate) return [null, null];
 
-    if (['year', 'month', 'week'].includes(filterType)) {
-        const prevStartDate = startDate.clone().subtract(1, filterType);
-        const prevEndDate = prevStartDate.clone().endOf(filterType);
-        return [prevStartDate, prevEndDate];
-    }
+    // === PHẦN SỬA ĐỔI BẮT ĐẦU ===
+    // Logic 1: Dành cho các bộ lọc có đơn vị lịch rõ ràng
+    if (['year', 'quarter', 'month'].includes(filterType)) {
+        // 1. Tính khoảng thời gian của kỳ hiện tại (tính bằng tháng)
+        // Ví dụ: T4 -> T6 là 3 tháng. endDate.diff(startDate, 'month') = 2. Do đó cần +1
+        const durationInMonths = endDate.diff(startDate, 'month') + 1;
 
-    const durationInDays = endDate.diff(startDate, 'day');
+        // 2. Ngày bắt đầu của kỳ trước = Ngày bắt đầu kỳ này trừ đi khoảng thời gian
+        const prevStartDate = startDate.clone().subtract(durationInMonths, 'month');
+
+        // 3. Ngày kết thúc của kỳ trước = Ngày bắt đầu kỳ này trừ đi 1 ngày
+        const prevEndDate = startDate.clone().subtract(1, 'day');
+
+        return [prevStartDate.startOf('month'), prevEndDate.endOf('day')];
+    }
+    // === PHẦN SỬA ĐỔI KẾT THÚC ===
+
+    // Logic 2: Dành cho các bộ lọc theo khoảng ngày tùy chỉnh (ví dụ: 7 ngày qua, 28 ngày qua)
+    // Logic này vốn đã đúng nên giữ nguyên.
+    const durationInDays = endDate.diff(startDate, 'day') + 1; // +1 để bao gồm cả ngày cuối
     const prevEndDate = startDate.clone().subtract(1, 'day');
-    const prevStartDate = prevEndDate.clone().subtract(durationInDays, 'day');
+    const prevStartDate = prevEndDate.clone().subtract(durationInDays - 1, 'day');
     return [prevStartDate.startOf('day'), prevEndDate.endOf('day')];
 };
 

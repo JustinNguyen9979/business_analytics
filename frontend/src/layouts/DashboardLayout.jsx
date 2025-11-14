@@ -130,7 +130,8 @@ export default function DashboardLayout() {
         if (!brandId || isRecalculating) return;
         setIsRecalculating(true);
         try {
-            await recalculateBrandData(brandId);
+            await recalculateBrandDataAndWait(brandId);
+            showNotification("Dữ liệu đã được làm mới thành công!", "success");
             // Sau khi thành công, tự động tải lại trang
             navigate(0); 
         } catch (error) {

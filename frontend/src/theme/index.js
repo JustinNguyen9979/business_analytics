@@ -88,6 +88,23 @@ const theme = createTheme({
             }
         },
 
+        MuiBox: {
+            variants: [
+                {
+                    // Đặt tên cho variant mới
+                    props: { variant: 'loaderContainer' },
+                    // Định nghĩa các thuộc tính CSS cho variant này
+                    style: {
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        height: '100%',
+                        width: '100%',
+                    },
+                },
+            ],
+        },
+
         // AppBar (Thanh header trong Dashboard)
         MuiAppBar: {
             styleOverrides: {

@@ -128,28 +128,39 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
 @celery_app.task(name="recalculate_all_brand_data")
 def recalculate_all_brand_data(brand_id: int):
     """
-    Xóa cache KPI hàng ngày và tính toán lại toàn bộ cho một brand.
-    Đây là task "tính toán trước" (pre-computation).
+    Xóa TOÀN BỘ cache của brand và tính toán lại dữ liệu hàng ngày.
+    Đây là task "tính toán trước" (pre-computation) và dọn dẹp cache.
     """
     print(f"WORKER: Bắt đầu TÍNH TOÁN LẠI TOÀN BỘ cho brand ID {brand_id}.")
     with get_db_session() as db:
-        # 1. Xóa cache cũ
-        keys_to_delete = redis_client.keys(f"kpi_daily:{brand_id}:*")
-        if keys_to_delete:
-            redis_client.delete(*keys_to_delete)
-            print(f"WORKER: Đã xóa {len(keys_to_delete)} cache KPI hàng ngày cũ.")
+        # === PHẦN SỬA ĐỔI BẮT ĐẦU ===
+        
+        # 1. Xóa cache cũ một cách triệt để
+        # Xóa cache của các yêu cầu dữ liệu (KPI, biểu đồ, bản đồ...)
+        data_req_keys = redis_client.keys(f"data_req:{brand_id}:*")
+        if data_req_keys:
+            redis_client.delete(*data_req_keys)
+            print(f"WORKER: Đã xóa {len(data_req_keys)} cache YÊU CẦU DỮ LIỆU cũ.")
+
+        # Xóa cache KPI hàng ngày
+        daily_kpi_keys = redis_client.keys(f"kpi_daily:{brand_id}:*")
+        if daily_kpi_keys:
+            redis_client.delete(*daily_kpi_keys)
+            print(f"WORKER: Đã xóa {len(daily_kpi_keys)} cache KPI HÀNG NGÀY cũ.")
+
+        # === PHẦN SỬA ĐỔI KẾT THÚC ===
 
         # 2. Lấy tất cả các ngày có hoạt động của brand
         all_activity_dates = crud.get_all_activity_dates(db, brand_id=brand_id)
         if not all_activity_dates:
             print(f"WORKER: Brand {brand_id} không có dữ liệu để tính toán.")
-            return
+            return # Kết thúc sớm nếu không có gì để làm
         
-        # 3. Lặp qua từng ngày và tính toán lại KPI cho ngày đó
+        # 3. Lặp qua từng ngày và tính toán lại KPI cho ngày đó (pre-computation)
         print(f"WORKER: Sẽ tính toán lại cho {len(all_activity_dates)} ngày.")
         for target_date in all_activity_dates:
             # Gọi hàm tiện ích trong crud để thực hiện chuỗi logic:
             # Lấy data thô -> gọi kpi_calculator -> cache kết quả
             crud._calculate_and_cache_single_day(db, brand_id, target_date)
             
-    print(f"WORKER: Hoàn thành TÍNH TOÁN LẠI TOÀN BỘ cho brand ID {brand_id}.") 
+    print(f"WORKER: Hoàn thành TÍNH TOÁN LẠI TOÀN BỘ cho brand ID {brand_id}.")

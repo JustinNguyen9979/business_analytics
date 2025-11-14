@@ -34,10 +34,30 @@ def _calculate_core_kpis(
     
     # Lọc ra các đơn hàng bị hủy dựa trên trạng thái.
     cancelled_order_codes = {o.order_code for o in orders if o.status and o.status.lower() in CANCELLED_STATUSES}
-    cancelledOrders = len(cancelled_order_codes)
     
-    # Lọc ra các đơn hàng có phát sinh hoàn tiền.
-    refunded_order_codes = {r.order_code for r in revenues if r.refund > 0}
+    # Khởi tạo tập hợp rỗng cho các đơn hoàn tiền.
+    refunded_order_codes = set()
+
+    # 3. Duyệt qua dữ liệu DOANH THU để áp dụng logic hoàn/hủy đặc thù cho từng sàn.
+    for r in revenues:
+        if r.refund == 0:
+            continue
+
+        # Logic cho Shopee: Chỉ cần có refund là tính đơn hoàn.
+        if r.source == 'shopee':
+            refunded_order_codes.add(r.order_code)
+        
+        # Logic cho TikTok:
+        elif r.source == 'tiktok':
+            # Trường hợp 1: Có refund, VÀ cả doanh thu & tổng phí đều KHÁC 0 -> Đây là ĐƠN HOÀN.
+            if r.net_revenue != 0 or r.total_fees != 0:
+                refunded_order_codes.add(r.order_code)
+            # Trường hợp 2: Có refund, nhưng net_revenue hoặc total_fees bằng 0 -> Đây là ĐƠN HỦY.
+            else: 
+                cancelled_order_codes.add(r.order_code)
+
+    # Tính toán số lượng cuối cùng sau khi đã áp dụng tất cả logic.
+    cancelledOrders = len(cancelled_order_codes)
     refundedOrders = len(refunded_order_codes)
     
     # Đơn hàng thành công = Tổng đơn - Đơn hủy - Đơn hoàn tiền. Đây là cơ sở để tính các chỉ số hiệu suất.
@@ -55,6 +75,15 @@ def _calculate_core_kpis(
                 if item.get('sku'):
                     unique_skus_sold_set.add(item['sku'])
     uniqueSkusSold = len(unique_skus_sold_set)
+
+    # Tỷ lệ chốt đơn (Completion Rate): Tỷ lệ đơn hàng thành công trên tổng số đơn đã tạo.
+    completionRate = (completedOrders / totalOrders) if totalOrders > 0 else 0
+
+    # Tỷ lệ hủy đơn (Cancellation Rate): Tỷ lệ đơn hàng bị hủy trên tổng số đơn đã tạo.
+    cancellationRate = (cancelledOrders / totalOrders) if totalOrders > 0 else 0
+
+    # Tỷ lệ hoàn tiền (Refund Rate): Tỷ lệ đơn hàng có hoàn tiền trên tổng số đơn đã tạo.
+    refundRate = (refundedOrders / totalOrders) if totalOrders > 0 else 0
 
     # === KHỐI 3: TỔNG HỢP VÀ TÍNH CÁC CHỈ SỐ PHÁI SINH ===
 
@@ -80,6 +109,7 @@ def _calculate_core_kpis(
     takeRate = (executionCost / gmv) if gmv > 0 else 0
 
     return {
+        # Tài chính
         "gmv": gmv, 
         "netRevenue": netRevenue, 
         "cogs": cogs, 
@@ -90,6 +120,8 @@ def _calculate_core_kpis(
         "roi": roi, 
         "profitMargin": profitMargin, 
         "takeRate": takeRate,
+
+        # Vận hành
         "totalOrders": totalOrders, 
         "completedOrders": completedOrders, 
         "cancelledOrders": cancelledOrders,
@@ -98,6 +130,9 @@ def _calculate_core_kpis(
         "upt": upt, 
         "uniqueSkusSold": uniqueSkusSold,
         "totalQuantitySold": totalQuantitySoldInCompletedOrders,
+        "completionRate": completionRate,
+        "cancellationRate": cancellationRate,
+        "refundRate": refundRate
     }
 
 # ==============================================================================
