@@ -1,6 +1,104 @@
 # FILE: Backend/app/kpi_calculator.py
 from datetime import date
-import models  # Cần import models để có type hinting cho rõ ràng
+import models, math  
+
+CANCELLED_STATUSES = {'hủy', 'cancel', 'đã hủy', 'cancelled'}
+
+def _calculate_core_kpis(
+    orders: list[models.Order], 
+    revenues: list[models.Revenue], 
+    ads: list[models.Ad]
+) -> dict:
+    # === KHỐI 1: TÍNH CÁC CHỈ SỐ TÀI CHÍNH & MARKETING CƠ BẢN ===
+
+    # GMV (Gross Merchandise Value): Tổng giá trị hàng hóa bán ra trước khi trừ chi phí, giảm giá.
+    gmv = sum(r.gmv for r in revenues)
+
+    # Net Revenue: Doanh thu thuần, là số tiền thực nhận sau khi trừ phí sàn.
+    netRevenue = sum(r.net_revenue for r in revenues)
+
+    # COGS (Cost of Goods Sold): Giá vốn hàng bán, là chi phí trực tiếp để sản xuất ra hàng hóa đã bán.
+    cogs = sum(o.cogs for o in orders)
+
+    # Execution Cost: Chi phí vận hành/thực thi, bao gồm các loại phí sàn, phí giao dịch, phí vận chuyển...
+    executionCost = abs(sum(r.total_fees for r in revenues))
+
+    # Ad Spend: Tổng chi phí đã chi cho quảng cáo.
+    adSpend = sum(a.expense for a in ads)
+
+    # === KHỐI 2: TÍNH CÁC CHỈ SỐ VẬN HÀNH CƠ BẢN ===
+
+    # Lấy tất cả mã đơn hàng duy nhất để có con số tổng chính xác.
+    all_order_codes = {o.order_code for o in orders}
+    totalOrders = len(all_order_codes)
+    
+    # Lọc ra các đơn hàng bị hủy dựa trên trạng thái.
+    cancelled_order_codes = {o.order_code for o in orders if o.status and o.status.lower() in CANCELLED_STATUSES}
+    cancelledOrders = len(cancelled_order_codes)
+    
+    # Lọc ra các đơn hàng có phát sinh hoàn tiền.
+    refunded_order_codes = {r.order_code for r in revenues if r.refund > 0}
+    refundedOrders = len(refunded_order_codes)
+    
+    # Đơn hàng thành công = Tổng đơn - Đơn hủy - Đơn hoàn tiền. Đây là cơ sở để tính các chỉ số hiệu suất.
+    completed_order_codes = all_order_codes - cancelled_order_codes - refunded_order_codes
+    completedOrders = len(completed_order_codes)
+
+    # Tổng số lượng sản phẩm đã bán CHỈ TÍNH trên các đơn hàng thành công.
+    totalQuantitySoldInCompletedOrders = sum(o.total_quantity for o in orders if o.order_code in completed_order_codes)
+    
+    # Đếm số lượng SKU (mã sản phẩm) duy nhất đã được bán trong các đơn thành công.
+    unique_skus_sold_set = set()
+    for order in orders:
+        if order.order_code in completed_order_codes and order.details and isinstance(order.details.get('items'), list):
+            for item in order.details['items']:
+                if item.get('sku'):
+                    unique_skus_sold_set.add(item['sku'])
+    uniqueSkusSold = len(unique_skus_sold_set)
+
+    # === KHỐI 3: TỔNG HỢP VÀ TÍNH CÁC CHỈ SỐ PHÁI SINH ===
+
+    # Total Cost: Tổng tất cả các loại chi phí (giá vốn + vận hành + quảng cáo).
+    totalCost = cogs + executionCost + adSpend
+
+    # Profit: Lợi nhuận, tính bằng GMV trừ Tổng chi phí.
+    profit = gmv - totalCost
+    
+    # AOV (Average Order Value): Giá trị trung bình của một đơn hàng thành công.
+    aov = (gmv / completedOrders) if completedOrders > 0 else 0
+
+    # UPT (Units Per Transaction): Số lượng sản phẩm trung bình trên một đơn hàng thành công.
+    upt = (totalQuantitySoldInCompletedOrders / completedOrders) if completedOrders > 0 else 0
+
+    # ROI (Return on Investment): Tỷ suất lợi nhuận trên tổng chi phí đầu tư. Mỗi đồng chi phí tạo ra bao nhiêu đồng lợi nhuận.
+    roi = (profit / totalCost) if totalCost > 0 else 0
+
+    # Profit Margin: Biên lợi nhuận, cho biết tỷ lệ phần trăm lợi nhuận trên doanh thu thuần.
+    profitMargin = (profit / netRevenue) if netRevenue != 0 else 0
+
+    # Take Rate: Tỷ lệ phí mà nền tảng/sàn thu trên tổng giá trị giao dịch (GMV).
+    takeRate = (executionCost / gmv) if gmv > 0 else 0
+
+    return {
+        "gmv": gmv, 
+        "netRevenue": netRevenue, 
+        "cogs": cogs, 
+        "executionCost": executionCost,
+        "adSpend": adSpend, 
+        "totalCost": totalCost, 
+        "profit": profit,
+        "roi": roi, 
+        "profitMargin": profitMargin, 
+        "takeRate": takeRate,
+        "totalOrders": totalOrders, 
+        "completedOrders": completedOrders, 
+        "cancelledOrders": cancelledOrders,
+        "refundedOrders": refundedOrders, 
+        "aov": aov, 
+        "upt": upt, 
+        "uniqueSkusSold": uniqueSkusSold,
+        "totalQuantitySold": totalQuantitySoldInCompletedOrders,
+    }
 
 # ==============================================================================
 # HÀM 1: TÍNH TOÁN KPI CHO MỘT NGÀY DUY NHẤT
@@ -11,71 +109,25 @@ def calculate_daily_kpis(
     ads_in_day: list[models.Ad]
 ) -> dict:
     """
-    Tính toán KPI cho MỘT ngày từ dữ liệu thô đã được cung cấp.
-    Hàm này không tương tác với DB, chỉ làm nhiệm vụ tính toán.
+    Tính toán KPI cho MỘT ngày.
+    Hàm này gọi hàm helper và thêm vào các chỉ số chỉ có ý nghĩa trong ngày.
     """
     try:
-        # === KHỐI 1: TÍNH CÁC CHỈ SỐ TÀI CHÍNH & MARKETING CƠ BẢN ===
-        gmv = sum(r.gmv for r in revenues_in_day)
-        netRevenue = sum(r.net_revenue for r in revenues_in_day)
-        cogs = sum(o.cogs for o in orders_in_day)
-        executionCost = sum(r.total_fees for r in revenues_in_day)
-        adSpend = sum(a.expense for a in ads_in_day)
-
-        # === KHỐI 2: TÍNH CÁC CHỈ SỐ VẬN HÀNH CƠ BẢN ===
-        all_order_codes = {o.order_code for o in orders_in_day}
-        totalOrders = len(all_order_codes)
+        # Gọi hàm tính toán cốt lõi
+        kpis = _calculate_core_kpis(orders_in_day, revenues_in_day, ads_in_day)
         
-        cancelled_order_codes = {o.order_code for o in orders_in_day if o.status and ('hủy' in o.status.lower() or 'cancel' in o.status.lower())}
-        refunded_order_codes = {r.order_code for r in revenues_in_day if r.refund > 0}
-        
-        cancelledOrders = len(cancelled_order_codes)
-        refundedOrders = len(refunded_order_codes)
-        completed_order_codes = all_order_codes - cancelled_order_codes - refunded_order_codes
-        completedOrders = len(completed_order_codes)
-
-        totalQuantitySoldInCompletedOrders = sum(o.total_quantity for o in orders_in_day if o.order_code in completed_order_codes)
-        
-        unique_skus_sold_set = set()
-        for order in orders_in_day:
-            if order.order_code in completed_order_codes and order.details and isinstance(order.details.get('items'), list):
-                for item in order.details['items']:
-                    if item.get('sku'):
-                        unique_skus_sold_set.add(item['sku'])
-        uniqueSkusSold = len(unique_skus_sold_set)
-
-        # === KHỐI 3: TÍNH CÁC CHỈ SỐ KHÁCH HÀNG (Cần DB context ở tầng cao hơn) ===
-        # Ở đây ta chỉ tính được Total Customers trong ngày
+        # Tính thêm các chỉ số đặc thù của ngày
         usernames_today = {o.username for o in orders_in_day if o.username}
-        totalCustomers = len(usernames_today)
+        kpis["totalCustomers"] = len(usernames_today)
         
-        # === KHỐI 4: TỔNG HỢP VÀ TÍNH CÁC CHỈ SỐ PHÁI SINH ===
-        totalCost = cogs + executionCost + adSpend
-        profit = netRevenue - totalCost 
-        
-        aov = (gmv / completedOrders) if completedOrders > 0 else 0
-        upt = (totalQuantitySoldInCompletedOrders / completedOrders) if completedOrders > 0 else 0
-        roi = (profit / totalCost) if totalCost > 0 else 0
-        profitMargin = (profit / netRevenue) if netRevenue != 0 else 0
-        takeRate = (executionCost / gmv) if gmv > 0 else 0
-
-        # Trả về dictionary kết quả (các chỉ số khách hàng phức tạp hơn sẽ được tính ở worker)
-        return {
-            "gmv": gmv, "netRevenue": netRevenue, "cogs": cogs, "executionCost": executionCost,
-            "adSpend": adSpend, "totalCost": totalCost, "profit": profit,
-            "roi": roi, "profitMargin": profitMargin, "takeRate": takeRate,
-            "totalOrders": totalOrders, "completedOrders": completedOrders, "cancelledOrders": cancelledOrders,
-            "refundedOrders": refundedOrders, "aov": aov, "upt": upt, "uniqueSkusSold": uniqueSkusSold,
-            "totalQuantitySold": totalQuantitySoldInCompletedOrders,
-            "totalCustomers": totalCustomers,
-            # Các chỉ số như newCustomers, LTV... sẽ được tính ở worker vì cần thêm truy vấn DB
-        }
+        # Các chỉ số như newCustomers, LTV... sẽ được tính ở worker vì cần thêm truy vấn DB
+        return kpis
     except Exception as e:
         print(f"CALCULATOR ERROR (daily): {e}")
-        return {} # Trả về dict rỗng nếu có lỗi
+        return {}
 
 # ==============================================================================
-# HÀM 2: TÍNH TOÁN KPI TỔNG HỢP CHO MỘT KHOẢNG THỜI GIAN
+# HÀM 2: TÍNH TOÁN KPI TỔNG HỢP
 # ==============================================================================
 def calculate_aggregated_kpis(
     all_orders: list[models.Order],
@@ -83,57 +135,12 @@ def calculate_aggregated_kpis(
     all_ads: list[models.Ad]
 ) -> dict:
     """
-    Tính toán KPI tổng hợp cho một khoảng thời gian từ dữ liệu thô.
-    Hàm này không tương tác với DB.
+    Tính toán KPI tổng hợp cho một khoảng thời gian.
+    Hàm này giờ chỉ là một wrapper gọi đến hàm tính toán cốt lõi.
     """
     print("CALCULATOR: Bắt đầu tính toán các chỉ số tổng hợp...")
     try:
-        # --- Tính các chỉ số cơ bản ---
-        gmv = sum(r.gmv for r in all_revenues)
-        netRevenue = sum(r.net_revenue for r in all_revenues)
-        executionCost = sum(r.total_fees for r in all_revenues)
-        cogs = sum(o.cogs for o in all_orders)
-        adSpend = sum(a.expense for a in all_ads)
-
-        # --- Tính các chỉ số vận hành ---
-        all_order_codes = {o.order_code for o in all_orders}
-        totalOrders = len(all_order_codes)
-        
-        cancelled_order_codes = {o.order_code for o in all_orders if o.status and ('hủy' in o.status.lower() or 'cancel' in o.status.lower())}
-        refunded_order_codes = {r.order_code for r in all_revenues if r.refund > 0}
-        
-        cancelledOrders = len(cancelled_order_codes)
-        refundedOrders = len(refunded_order_codes)
-        completed_order_codes = all_order_codes - cancelled_order_codes - refunded_order_codes
-        completedOrders = len(completed_order_codes)
-        
-        totalQuantitySold = sum(o.total_quantity for o in all_orders if o.order_code in completed_order_codes)
-        
-        unique_skus_sold_set = set()
-        for order in all_orders:
-            if order.order_code in completed_order_codes and order.details and isinstance(order.details.get('items'), list):
-                for item in order.details['items']:
-                    if item.get('sku'):
-                        unique_skus_sold_set.add(item['sku'])
-        uniqueSkusSold = len(unique_skus_sold_set)
-
-        # --- Gộp lại và tính chỉ số phái sinh ---
-        kpis = {
-            "gmv": gmv, "netRevenue": netRevenue, "executionCost": executionCost, "cogs": cogs,
-            "adSpend": adSpend, "totalOrders": totalOrders, "cancelledOrders": cancelledOrders,
-            "refundedOrders": refundedOrders, "completedOrders": completedOrders,
-            "totalQuantitySold": totalQuantitySold, "uniqueSkusSold": uniqueSkusSold,
-        }
-        
-        kpis['totalCost'] = kpis['cogs'] + kpis['executionCost'] + kpis['adSpend']
-        kpis['profit'] = kpis['netRevenue'] - kpis['totalCost']
-        
-        kpis['roi'] = (kpis['profit'] / kpis['totalCost']) if kpis['totalCost'] > 0 else 0
-        kpis['profitMargin'] = (kpis['profit'] / kpis['netRevenue']) if kpis['netRevenue'] != 0 else 0
-        kpis['takeRate'] = (kpis['executionCost'] / kpis['gmv']) if kpis['gmv'] > 0 else 0
-        kpis['aov'] = (kpis['gmv'] / kpis['completedOrders']) if kpis['completedOrders'] > 0 else 0
-        kpis['upt'] = (kpis['totalQuantitySold'] / kpis['completedOrders']) if kpis['completedOrders'] > 0 else 0
-
+        kpis = _calculate_core_kpis(all_orders, all_revenues, all_ads)
         print("CALCULATOR: Hoàn thành tính toán.")
         return kpis
     except Exception as e:
