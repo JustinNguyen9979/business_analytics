@@ -155,22 +155,22 @@ export default function DashboardLayout() {
         },
         {
             text: 'Tài chính',
-            path: '/finance',
+            // path: '/finance',
             icon: <MonetizationOnIcon />
         },
         {
             text: 'Marketing',
-            path: '/marketing',
+            // path: '/marketing',
             icon: <TrackChangesIcon />
         },
         {
             text: 'Vận hành',
-            path: '/operation',
+            // path: '/operation',
             icon: <TuneIcon />
         },
         {
             text: 'Khách hàng',
-            path: '/customer',
+            // path: '/customer',
             icon: <GroupIcon />
         }
     ];
