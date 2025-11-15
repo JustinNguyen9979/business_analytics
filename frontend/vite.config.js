@@ -15,6 +15,10 @@ export default defineConfig({
       }
     },
     
+    watch: {
+      usePolling: true,
+    },
+
     allowedHosts: [
       'macbook-pro-ca-justin-2.tail2ab52c.ts.net',
       '.ngrok-free.app',

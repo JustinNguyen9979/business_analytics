@@ -12,6 +12,10 @@ import { Tooltip } from 'react-tooltip';
 import BrandLobby from './pages/BrandLobby';
 import DashboardLayout from './layouts/DashboardLayout';
 import DashboardPage from './pages/DashboardPage';
+import FinancePage from './pages/FinancePage';
+import MarketingPage from './pages/MarketingPage'; 
+import OperationPage from './pages/OperationPage'; 
+import CustomerPage from './pages/CustomerPage';   
 
 function App() {
     return (
@@ -24,6 +28,10 @@ function App() {
                         <Route path="/" element={<BrandLobby />} />
                         <Route element={<DashboardLayout />}>
                             <Route path="/dashboard/:brandId" element={<DashboardPage />} />
+                            <Route path="/dashboard/:brandId/finance" element={<FinancePage />} />
+                            <Route path="/dashboard/:brandId/marketing" element={<MarketingPage />} />
+                            <Route path="/dashboard/:brandId/operation" element={<OperationPage />} />
+                            <Route path="/dashboard/:brandId/customer" element={<CustomerPage />} />
                         </Route>
                     </Routes>
                 </LayoutProvider>
