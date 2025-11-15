@@ -148,8 +148,6 @@ def recalculate_all_brand_data(brand_id: int):
             redis_client.delete(*daily_kpi_keys)
             print(f"WORKER: Đã xóa {len(daily_kpi_keys)} cache KPI HÀNG NGÀY cũ.")
 
-        # === PHẦN SỬA ĐỔI KẾT THÚC ===
-
         # 2. Lấy tất cả các ngày có hoạt động của brand
         all_activity_dates = crud.get_all_activity_dates(db, brand_id=brand_id)
         if not all_activity_dates:

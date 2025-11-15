@@ -1,6 +1,6 @@
 // FILE: frontend/src/components/charts/GeoMapChart.jsx (PHIÊN BẢN ANIMATION SVG GỐC)
 
-import React, { memo, useMemo, useEffect } from 'react';
+import React, { memo, useMemo, useEffect, useState } from 'react';
 import { ComposableMap, Geographies, Geography, Marker } from '@vnedyalk0v/react19-simple-maps';
 import { Box, Grid, Stack, Typography } from '@mui/material';
 import { scaleLinear } from 'd3-scale';
@@ -8,6 +8,9 @@ import { scaleLinear } from 'd3-scale';
 import geoShapeData from '../../assets/vietnam-shape.json';
 
 function GeoMapChartComponent({ data }) {
+
+    const [showMarkers, setShowMarkers] = useState(false);
+
     const { sizeScale, opacityScale } = useMemo(() => {
         if (!data || data.length === 0) {
             return { sizeScale: () => 0, opacityScale: () => 0 };
@@ -31,6 +34,17 @@ function GeoMapChartComponent({ data }) {
             .sort((a, b) => b.customer_count - a.customer_count)
             .slice(0, 5);
     }, [data]);
+
+    useEffect(() => {
+        // Chúng ta dùng setTimeout để trì hoãn việc hiển thị các điểm chấm một chút (50ms).
+        // Khoảng thời gian này đủ để trình duyệt vẽ xong nền bản đồ phức tạp trước.
+        const timer = setTimeout(() => {
+            setShowMarkers(true);
+        }, 50); // 50 mili-giây là một độ trễ người dùng không thể nhận ra.
+
+        // Cleanup function để dọn dẹp timer nếu component bị unmount
+        return () => clearTimeout(timer);
+    }, []);
 
     useEffect(() => {
         // Hàm này sẽ được gọi mỗi khi có một cú click bất kỳ trên trang
@@ -73,7 +87,7 @@ function GeoMapChartComponent({ data }) {
                         }
                     </Geographies>
 
-                    {data.map(item => {
+                    {showMarkers && data.map(item => {
                         if (!item.coords || item.coords.length !== 2) return null;
 
                         const size = sizeScale(item.customer_count);

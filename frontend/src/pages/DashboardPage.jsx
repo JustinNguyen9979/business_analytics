@@ -144,7 +144,7 @@ function DashboardPage() {
                                     </Typography>
                                     <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 3, textAlign: 'left' }}>
                                         {group.items.map((kpiItem) => {
-                                            console.log(`Đang render chỉ số: ${kpiItem.key}`, ' | Giá trị hiện tại:', kpi.data.current[kpiItem.key], ' | Giá trị kỳ trước:', kpi.data.previous?.[kpiItem.key]);
+                                            // console.log(`Đang render chỉ số: ${kpiItem.key}`, ' | Giá trị hiện tại:', kpi.data.current[kpiItem.key], ' | Giá trị kỳ trước:', kpi.data.previous?.[kpiItem.key]);
                                             return (
                                                 <StatItem 
                                                     key={kpiItem.key} 

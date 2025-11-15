@@ -135,6 +135,30 @@ export const useDashboardData = (brandId, filters) => {
                 ]);
                 const processedCurrent = processChartData(currentRes?.data, filter);
                 const processedPrevious = processChartData(previousRes?.data, { range: prevRange, type: filter.type });
+
+                // Log tính toán tổng các chỉ số
+                // const calculateTotals = (dataArray) => {
+                //     if (!dataArray || dataArray.length === 0) {
+                //         return { totalRevenue: 0, totalProfit: 0 };
+                //     }
+                //     return dataArray.reduce((acc, item) => {
+                //         acc.totalRevenue += item.netRevenue;
+                //         acc.totalProfit += item.profit;
+                //         return acc;
+                //     }, { totalRevenue: 0, totalProfit: 0 });
+                // };
+
+                // const currentTotals = calculateTotals(processedCurrent.aggregatedData);
+                // const previousTotals = calculateTotals(processedPrevious.aggregatedData);
+
+                // console.log(`--- [LOG BIỂU ĐỒ - TỔNG KỲ HIỆN TẠI (${processedCurrent.aggregationType})] ---`);
+                // console.log('Tổng Doanh thu Ròng:', currentTotals.totalRevenue.toLocaleString('vi-VN'));
+                // console.log('Tổng Lợi nhuận:', currentTotals.totalProfit.toLocaleString('vi-VN'));
+                
+                // console.log(`--- [LOG BIỂU ĐỒ - TỔNG KỲ TRƯỚC (${processedPrevious.aggregationType})] ---`);
+                // console.log('Tổng Doanh thu Ròng (Kỳ trước):', previousTotals.totalRevenue.toLocaleString('vi-VN'));
+                // console.log('Tổng Lợi nhuận (Kỳ trước):', previousTotals.totalProfit.toLocaleString('vi-VN'));
+
                 updateState('lineChart', { 
                     data: {
                         current: processedCurrent.aggregatedData,

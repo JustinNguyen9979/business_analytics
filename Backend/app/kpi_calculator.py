@@ -155,7 +155,6 @@ def calculate_daily_kpis(
         usernames_today = {o.username for o in orders_in_day if o.username}
         kpis["totalCustomers"] = len(usernames_today)
         
-        # Các chỉ số như newCustomers, LTV... sẽ được tính ở worker vì cần thêm truy vấn DB
         return kpis
     except Exception as e:
         print(f"CALCULATOR ERROR (daily): {e}")
