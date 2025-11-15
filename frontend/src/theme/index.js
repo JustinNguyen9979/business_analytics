@@ -44,6 +44,18 @@ const theme = createTheme({
     },
     // --- TÙY CHỈNH STYLE CHO CÁC COMPONENT CỤ THỂ ---
     components: {
+        MuiButtonBase: {
+            styleOverrides: {
+                    root: {
+                    // Áp dụng style cho hiệu ứng ripple trên TẤT CẢ các component
+                    // sử dụng ButtonBase (Button, IconButton, ListItemButton, etc.)
+                    '& .MuiTouchRipple-rippleVisible': {
+                        backgroundColor: PALETTE.primary.main + '26',
+                    },
+                },
+            },
+        },
+
         // Nút bấm
         MuiButton: {
             styleOverrides: {
@@ -344,6 +356,27 @@ const theme = createTheme({
                 arrow: ({ theme }) => ({
                     color: theme.palette.background.glassSecondary, 
                 }),
+            },
+        },
+
+        MuiListItemButton: {
+            styleOverrides: {
+                root: {
+                borderRadius: 8,
+                margin: '4px 8px',
+                width: 'auto',
+                
+                '&.Mui-selected': {
+                    backgroundColor: PALETTE.primary.main,
+                    color: PALETTE.primary.contrastText,
+                    '&:hover': {
+                    backgroundColor: '#00A3E0',
+                    },
+                    '& .MuiListItemIcon-root': {
+                    color: PALETTE.primary.contrastText,
+                    }
+                },
+                },
             },
         },
 

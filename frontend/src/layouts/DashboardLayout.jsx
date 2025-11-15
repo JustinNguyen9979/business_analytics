@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { styled } from '@mui/material/styles';
-import { Link as RouterLink, Outlet, useParams, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, Outlet, useParams, useNavigate, useLocation } from 'react-router-dom';
 import { 
     Box, Drawer as MuiDrawer, AppBar as MuiAppBar, Toolbar, List, 
     Typography, Divider, IconButton, ListItem, ListItemButton, 
@@ -18,6 +18,10 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import MonetizationOnIcon from '@mui/icons-material/MonetizationOn'; 
+import TrackChangesIcon from '@mui/icons-material/TrackChanges';   
+import TuneIcon from '@mui/icons-material/Tune';                 
+import GroupIcon from '@mui/icons-material/Group';
 
 // --- Components & Services ---
 import AuroraBackground from '../components/ui/AuroraBackground';
@@ -101,6 +105,7 @@ export default function DashboardLayout() {
     const navigate = useNavigate();
     const { isSidebarOpen, setIsSidebarOpen } = useLayout();
     const { showNotification } = useNotification();
+    const { pathname } = useLocation();
     
     // BƯỚC 2: LOẠI BỎ STATE THỪA, CHỈ GIỮ LẠI STATE CỦA HỆ THỐNG MỚI
     const [isImportDialogOpen, setImportDialogOpen] = useState(false);
@@ -142,6 +147,34 @@ export default function DashboardLayout() {
         }
     };
 
+    const reportMenuItems = [
+        {
+            text: 'Tổng quan',
+            path: '', // Để trống cho trang dashboard chính
+            icon: <DashboardIcon />
+        },
+        {
+            text: 'Tài chính',
+            path: '/finance',
+            icon: <MonetizationOnIcon />
+        },
+        {
+            text: 'Marketing',
+            path: '/marketing',
+            icon: <TrackChangesIcon />
+        },
+        {
+            text: 'Vận hành',
+            path: '/operation',
+            icon: <TuneIcon />
+        },
+        {
+            text: 'Khách hàng',
+            path: '/customer',
+            icon: <GroupIcon />
+        }
+    ];
+
     return (
         <Box sx={{ display: 'flex' }}>
             <CssBaseline />
@@ -180,12 +213,19 @@ export default function DashboardLayout() {
                     <Box sx={{ overflowY: 'auto', overflowX: 'hidden' }}>
                         {/* Menu Báo cáo */}
                         <List subheader={isSidebarOpen ? <ListSubheader>BÁO CÁO</ListSubheader> : null}>
-                            <ListItem disablePadding>
-                                <ListItemButton sx={{ minHeight: 48 }}>
-                                    <ListItemIcon><DashboardIcon /></ListItemIcon>
-                                    <ListItemText primary="Tổng quan" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
-                                </ListItemButton>
-                            </ListItem>
+                            {reportMenuItems.map((item) => {
+                                // Nối chuỗi để tạo ra đường dẫn đầy đủ
+                                const fullPath = `/dashboard/${brandId}${item.path}`;
+
+                                return (
+                                    <ListItem key={item.text} disablePadding>
+                                        <ListItemButton component={RouterLink} to={fullPath} selected={pathname === fullPath}>
+                                            <ListItemIcon>{item.icon}</ListItemIcon>
+                                            <ListItemText primary={item.text} sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                                        </ListItemButton>
+                                    </ListItem>
+                                );
+                            })}
                         </List>
 
                         {/* BƯỚC 4: ĐƠN GIẢN HÓA HOÀN TOÀN MENU CÔNG CỤ */}
