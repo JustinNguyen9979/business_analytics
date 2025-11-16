@@ -46,24 +46,32 @@ export const processChartData = (dailyData, chartDateRange) => {
         return { aggregatedData: dailyData, aggregationType };
     }
 
-    // TH2: Tổng hợp theo THÁNG (khi xem theo NĂM) - THUẬT TOÁN MỚI
+    // TH2: Tổng hợp theo THÁNG (khi xem theo NĂM)
     if (aggregationType === 'month') {
-        // 2.1. Tạo 12 "xô" rỗng, mỗi xô cho một tháng
-        const monthlyBuckets = Array.from({ length: 12 }, (_, i) => ({
-            date: startDate.clone().month(i).startOf('month').toDate(),
-            netRevenue: 0,
-            profit: 0,
-        }));
+        const monthlyMap = new Map();
 
-        // 2.2. Đổ dữ liệu hàng ngày vào đúng "xô" tháng của nó
+        // 1. Tạo khung dữ liệu theo tháng, đảm bảo an toàn
+        let cursorDate = startDate.clone().startOf('month');
+        while (cursorDate.isBefore(endDate) || cursorDate.isSame(endDate, 'day')) {
+            const key = cursorDate.format('YYYY-MM');
+            monthlyMap.set(key, {
+                date: cursorDate.toDate(),
+                netRevenue: 0,
+                profit: 0,
+            });
+            cursorDate = cursorDate.add(1, 'month');
+        }
+
+        // 2. Lấp đầy dữ liệu, chỉ cộng vào đúng tháng/năm
         for (const day of dailyData) {
-            const monthIndex = dayjs(day.date).month(); // Lấy chỉ số tháng (0-11)
-            if (monthlyBuckets[monthIndex]) { // Kiểm tra an toàn
-                monthlyBuckets[monthIndex].netRevenue += day.netRevenue;
-                monthlyBuckets[monthIndex].profit += day.profit;
+            const key = dayjs(day.date).format('YYYY-MM');
+            if (monthlyMap.has(key)) {
+                const monthEntry = monthlyMap.get(key);
+                monthEntry.netRevenue += day.netRevenue;
+                monthEntry.profit += day.profit;
             }
         }
-        return { aggregatedData: monthlyBuckets, aggregationType };
+        return { aggregatedData: Array.from(monthlyMap.values()), aggregationType };
     }
 
     // TH3: Tổng hợp theo TUẦN (khi xem theo QUÝ hoặc 3+ THÁNG)

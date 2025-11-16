@@ -50,6 +50,7 @@ services:
       - /app/node_modules # Loại trừ node_modules để không bị ghi đè bởi thư mục rỗng trên máy host
     ports:
       - "5173:5173" # Ánh xạ port của Vite dev server ra ngoài
+      - "24678:24678" # Port cho Vite HMR
     environment:
       - WEBHOOK_URL=${WEBHOOK_URL}
     restart: unless-stopped

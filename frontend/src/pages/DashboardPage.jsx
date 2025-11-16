@@ -150,7 +150,10 @@ function DashboardPage() {
                                                     key={kpiItem.key} 
                                                     value={kpi.data.current[kpiItem.key]} 
                                                     previousValue={kpi.data.previous?.[kpiItem.key]}
-                                                    {...kpiItem} // Dùng spread operator cho gọn
+                                                    {...(() => {
+                                                        const { key, ...rest } = kpiItem;
+                                                        return rest;
+                                                    })()}
                                                 />
                                             );
                                         })} 

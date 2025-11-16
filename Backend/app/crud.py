@@ -178,9 +178,31 @@ def _calculate_and_cache_single_day(db: Session, brand_id: int, target_date: dat
     """Hàm nội bộ: Lấy data thô, gọi calculator, và cache kết quả cho một ngày."""
     import kpi_calculator # Import local để tránh circular import
     
-    orders = db.query(models.Order).filter(models.Order.brand_id == brand_id, models.Order.order_date == target_date).all()
+    # 1. Lấy revenues và ads cho ngày mục tiêu
     revenues = db.query(models.Revenue).filter(models.Revenue.brand_id == brand_id, models.Revenue.transaction_date == target_date).all()
     ads = db.query(models.Ad).filter(models.Ad.brand_id == brand_id, models.Ad.ad_date == target_date).all()
+
+    # 2. Lấy các mã đơn hàng từ revenues của ngày hôm nay
+    order_codes_from_revenues = {r.order_code for r in revenues}
+    
+    # 3. Lấy các đơn hàng có doanh thu hôm nay (bất kể ngày đặt)
+    orders_for_revenue = []
+    if order_codes_from_revenues:
+        orders_for_revenue = db.query(models.Order).filter(
+            models.Order.brand_id == brand_id,
+            models.Order.order_code.in_(order_codes_from_revenues)
+        ).all()
+
+    # 4. Lấy các đơn hàng được TẠO hôm nay
+    orders_created_today = db.query(models.Order).filter(
+        models.Order.brand_id == brand_id,
+        models.Order.order_date == target_date
+    ).all()
+
+    # 5. Gộp và loại bỏ trùng lặp để có danh sách đầy đủ nhất
+    all_orders_map = {o.order_code: o for o in orders_for_revenue}
+    all_orders_map.update({o.order_code: o for o in orders_created_today})
+    orders = list(all_orders_map.values())
 
     daily_kpis = kpi_calculator.calculate_daily_kpis(orders, revenues, ads)
 
