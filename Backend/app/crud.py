@@ -395,6 +395,56 @@ def get_sources_for_brand(db: Session, brand_id: int) -> list[str]:
 def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end_date: date, source: str = None):
     """Deletes transactional data for a brand within a date range, optionally filtered by source."""
     try:
+        # BƯỚC 1: Xác định tập hợp các đơn hàng sẽ bị xóa
+        orders_to_delete_query = db.query(models.Order).filter(
+            models.Order.brand_id == brand_id,
+            models.Order.order_date.between(start_date, end_date)
+        )
+        if source:
+            orders_to_delete_query = orders_to_delete_query.filter(models.Order.source == source)
+
+        # BƯỚC 2: Lấy danh sách các username duy nhất từ các đơn hàng sẽ bị xóa
+        usernames_in_deleted_orders = {
+            row.username for row in orders_to_delete_query.with_entities(models.Order.username).distinct() if row.username
+        }
+
+        if usernames_in_deleted_orders:
+            # BƯỚC 3: Với mỗi username, kiểm tra xem họ có còn đơn hàng nào khác (không bị xóa) không
+            
+            # Tạo một subquery để tìm tất cả các đơn hàng còn lại của các username này
+            # Đơn hàng còn lại là đơn hàng nằm ngoài khoảng ngày HOẶC khác nguồn (nếu source được chỉ định)
+            remaining_orders_subquery = db.query(models.Order.username).filter(
+                models.Order.brand_id == brand_id,
+                models.Order.username.in_(usernames_in_deleted_orders)
+            )
+
+            # Áp dụng điều kiện NOT của query xóa
+            if source:
+                 remaining_orders_subquery = remaining_orders_subquery.filter(
+                    (models.Order.order_date.between(start_date, end_date) == False) |
+                    (models.Order.source != source)
+                )
+            else:
+                 remaining_orders_subquery = remaining_orders_subquery.filter(
+                    models.Order.order_date.between(start_date, end_date) == False
+                )
+
+            # Lấy danh sách các user vẫn còn đơn hàng
+            users_with_remaining_orders = {
+                row.username for row in remaining_orders_subquery.distinct().all()
+            }
+            
+            # BƯỚC 4: Xác định những user cần xóa (những user chỉ có đơn hàng trong tập bị xóa)
+            users_to_delete = usernames_in_deleted_orders - users_with_remaining_orders
+            
+            if users_to_delete:
+                # Thực hiện xóa khách hàng
+                db.query(models.Customer).filter(
+                    models.Customer.brand_id == brand_id,
+                    models.Customer.username.in_(list(users_to_delete))
+                ).delete(synchronize_session=False)
+                print(f"INFO: Đã xóa {len(users_to_delete)} khách hàng không còn đơn hàng nào.")
+
         # Delete Ads
         ads_query = db.query(models.Ad).filter(
             models.Ad.brand_id == brand_id,
@@ -402,6 +452,8 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
         )
         if source:
             ads_query = ads_query.filter(models.Ad.source == source)
+        
+        ads_count = ads_query.count()
         ads_query.delete(synchronize_session=False)
         
         # Delete Revenues
@@ -411,6 +463,8 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
         )
         if source:
             revenues_query = revenues_query.filter(models.Revenue.source == source)
+        
+        revenues_count = revenues_query.count()
         revenues_query.delete(synchronize_session=False)
 
         # Delete Orders
@@ -420,6 +474,8 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
         )
         if source:
             orders_query = orders_query.filter(models.Order.source == source)
+        
+        orders_count = orders_query.count()
         orders_query.delete(synchronize_session=False)
 
         db.commit()
