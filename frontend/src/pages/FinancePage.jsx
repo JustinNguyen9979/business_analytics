@@ -19,8 +19,8 @@ import { dateShortcuts } from '../config/dashboardConfig';
 import { formatCurrency, formatPercentage } from '../utils/formatters';
 
 // Lấy giá trị mặc định là "Tháng này"
-const defaultDateRange = dateShortcuts.find(s => s.type === 'month').getValue();
-const defaultDateLabel = dateShortcuts.find(s => s.type === 'month').label;
+const defaultDateRange = dateShortcuts.find(s => s.type === 'this_month').getValue();
+const defaultDateLabel = dateShortcuts.find(s => s.type === 'this_month').label;
 
 // Component cho KpiCard khi đang tải
 const KpiCardSkeleton = () => (
@@ -76,7 +76,11 @@ function FinancePage() {
                     variant="outlined"
                     startIcon={<CalendarTodayIcon />}
                     onClick={handleOpenFilter}
-                    sx={{ color: 'text.secondary', borderColor: 'divider', borderRadius: 2 }}
+                    sx={{ 
+                        color: (theme) => theme.palette.primary.main, 
+                        borderColor: (theme) => theme.palette.primary.main, 
+                        borderRadius: 2 
+                    }}
                 >
                     {dateLabel}
                 </Button>
