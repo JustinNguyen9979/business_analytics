@@ -1,5 +1,6 @@
 // FILE: frontend/src/services/api.js
 import axios from 'axios';
+import { memoryCache, generateCacheKey } from '../cache/memoryCache';
 
 // Tạo một instance của axios với cấu hình sẵn
 const apiClient = axios.create({
@@ -193,9 +194,39 @@ export const getCustomerDistribution = async (brandId, startDate, endDate) => {
     }
 };
 
+export const getSourcesForBrand = async (brandId) => {
+    try {
+        const response = await apiClient.get(`/brands/${brandId}/sources`);
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching sources for brand ${brandId}:`, error);
+        throw error;
+    }
+};
+
+export const deleteDataInRange = async (brandId, startDate, endDate, source = null) => {
+    try {
+        const params = {};
+        if (source && source !== 'all') {
+            params.source = source;
+        }
+
+        const response = await apiClient.post(
+            `/brands/${brandId}/delete-data-in-range`,
+            { start_date: startDate, end_date: endDate },
+            { params }
+        );
+        return response.data;
+    } catch (error) {
+        console.error(`Error deleting data for brand ${brandId}:`, error);
+        throw error;
+    }
+};
+
 /**
  * Hàm tổng hợp: Gửi yêu cầu, và tự động "hỏi thăm" (poll) cho đến khi có kết quả.
  * Đây là logic bất đồng bộ chính được các hook sử dụng.
+ * TÍCH HỢP CLIENT-SIDE CACHE.
  * @param {string} requestType - Loại dữ liệu cần tính (kpi_summary, kpis_by_platform, ...).
  * @param {number} brandId - ID của brand.
  * @param {Array<dayjs>} dateRange - Mảng [ngày bắt đầu, ngày kết thúc].
@@ -203,9 +234,18 @@ export const getCustomerDistribution = async (brandId, startDate, endDate) => {
  * @returns {Promise<object>} - Dữ liệu đã được xử lý thành công.
  */
 export const fetchAsyncData = async (requestType, brandId, dateRange, params = {}) => {
-    const [start, end] = dateRange;
-    if (!start || !end) return null;
+    const cacheKey = generateCacheKey(requestType, brandId, dateRange);
+    if (!cacheKey) return null;
+
+    // 1. Kiểm tra client cache trước
+    const cachedData = memoryCache.get(cacheKey);
+    if (cachedData) {
+        console.log(`CLIENT CACHE HIT for key: ${cacheKey}`);
+        return Promise.resolve(cachedData);
+    }
     
+    console.log(`CLIENT CACHE MISS for key: ${cacheKey}`);
+    const [start, end] = dateRange;
     const fullParams = { 
         start_date: start.format('YYYY-MM-DD'), 
         end_date: end.format('YYYY-MM-DD'), 
@@ -216,7 +256,9 @@ export const fetchAsyncData = async (requestType, brandId, dateRange, params = {
         const initialResponse = await requestData(requestType, brandId, fullParams);
         
         if (initialResponse.status === 'SUCCESS') {
-            return initialResponse.data;
+            const resultData = initialResponse.data;
+            memoryCache.set(cacheKey, resultData); // Lưu vào cache
+            return resultData;
         }
 
         if (initialResponse.status === 'PROCESSING') {
@@ -226,7 +268,9 @@ export const fetchAsyncData = async (requestType, brandId, dateRange, params = {
                         const statusResponse = await pollDataStatus(initialResponse.cache_key);
                         if (statusResponse.status === 'SUCCESS') {
                             clearInterval(pollingInterval);
-                            resolve(statusResponse.data);
+                            const resultData = statusResponse.data;
+                            memoryCache.set(cacheKey, resultData); // Lưu vào cache
+                            resolve(resultData);
                         } else if (statusResponse.status === 'FAILED') {
                             clearInterval(pollingInterval);
                             reject(new Error(statusResponse.error || `Worker xử lý '${requestType}' thất bại.`));

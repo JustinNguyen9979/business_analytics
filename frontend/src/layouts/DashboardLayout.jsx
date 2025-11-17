@@ -22,10 +22,12 @@ import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import TrackChangesIcon from '@mui/icons-material/TrackChanges';   
 import TuneIcon from '@mui/icons-material/Tune';                 
 import GroupIcon from '@mui/icons-material/Group';
+import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 
 // --- Components & Services ---
 import AuroraBackground from '../components/ui/AuroraBackground';
 import SingleImportDialog from '../components/import/SingleImportDialog';
+import DeleteDataDialog from '../components/settings/DeleteDataDialog';
 
 // BƯỚC 1: DỌN DẸP LẠI IMPORT, CHỈ GIỮ LẠI NHỮNG GÌ CẦN THIẾT
 import { recalculateBrandData, uploadStandardFile, recalculateBrandDataAndWait } from '../services/api';
@@ -107,14 +109,16 @@ export default function DashboardLayout() {
     const { showNotification } = useNotification();
     const { pathname } = useLocation();
     
-    // BƯỚC 2: LOẠI BỎ STATE THỪA, CHỈ GIỮ LẠI STATE CỦA HỆ THỐNG MỚI
     const [isImportDialogOpen, setImportDialogOpen] = useState(false);
+    const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [isRecalculating, setIsRecalculating] = useState(false);
 
     // BƯỚC 3: CHUẨN HÓA LẠI CÁC HÀM HANDLER
     const handleDrawerToggle = () => setIsSidebarOpen(!isSidebarOpen);
     const handleOpenImportDialog = () => setImportDialogOpen(true);
     const handleCloseImportDialog = () => setImportDialogOpen(false);
+    const handleOpenDeleteDialog = () => setDeleteDialogOpen(true);
+    const handleCloseDeleteDialog = () => setDeleteDialogOpen(false);
     
     const handleUpload = async (platform, file) => {
         try {
@@ -231,15 +235,21 @@ export default function DashboardLayout() {
                         {/* BƯỚC 4: ĐƠN GIẢN HÓA HOÀN TOÀN MENU CÔNG CỤ */}
                         <List subheader={isSidebarOpen ? <ListSubheader>CÔNG CỤ</ListSubheader> : null}>
                             <ListItem disablePadding>
+                                <ListItemButton onClick={handleRecalculate} disabled={isRecalculating} sx={{ minHeight: 48 }}>
+                                    <ListItemIcon><RefreshIcon /></ListItemIcon>
+                                    <ListItemText primary={isRecalculating ? "Đang xử lý..." : "Tải lại dữ liệu"} sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                                </ListItemButton>
+                            </ListItem>
+                            <ListItem disablePadding>
                                 <ListItemButton onClick={handleOpenImportDialog} sx={{ minHeight: 48 }}>
                                     <ListItemIcon><CloudUploadIcon /></ListItemIcon>
                                     <ListItemText primary="Import Dữ liệu" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
                                 </ListItemButton>
                             </ListItem>
                             <ListItem disablePadding>
-                                <ListItemButton onClick={handleRecalculate} disabled={isRecalculating} sx={{ minHeight: 48 }}>
-                                    <ListItemIcon><RefreshIcon /></ListItemIcon>
-                                    <ListItemText primary={isRecalculating ? "Đang xử lý..." : "Tải lại dữ liệu"} sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                                <ListItemButton onClick={handleOpenDeleteDialog} sx={{ minHeight: 48 }}>
+                                    <ListItemIcon><DeleteForeverIcon sx={{ color: 'error.main' }} /></ListItemIcon>
+                                    <ListItemText primary="Xóa Dữ liệu" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
                                 </ListItemButton>
                             </ListItem>
                         </List>
@@ -271,11 +281,17 @@ export default function DashboardLayout() {
                 <Outlet />
             </Box>
 
-            {/* BƯỚC 5: HỢP NHẤT DIALOG, CHỈ SỬ DỤNG SINGLEIMPORTDIALOG */}
             <SingleImportDialog
                 open={isImportDialogOpen}
                 onClose={handleCloseImportDialog}
                 onUpload={handleUpload}
+                brandId={brandId}
+            />
+
+            <DeleteDataDialog
+                open={isDeleteDialogOpen}
+                onClose={handleCloseDeleteDialog}
+                brandId={brandId}
             />
         </Box>
     );

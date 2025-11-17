@@ -106,7 +106,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     first_row = group.iloc[0]
                     username = first_row.get('username')
                     if username:
-                         customer_data = {'username': username, 'province': first_row.get('province'), 'district': first_row.get('district')}
+                         customer_data = {'username': username, 'city': first_row.get('province'), 'district': first_row.get('district')}
                          crud.get_or_create_customer(db, customer_data=customer_data, brand_id=brand_id)
 
                     order_cogs, total_quantity = 0, 0
@@ -131,13 +131,68 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
             print(f"Đang xử lý sheet '{revenue_sheet}'...")
             df_revenue = pd.read_excel(xls, sheet_name=revenue_sheet, header=1, dtype=str).fillna('')
             if not df_revenue.empty and 'order_id' in df_revenue.columns:
+                # Lấy các order_code trong file để giới hạn query
+                order_codes_in_file = df_revenue['order_id'].dropna().unique().tolist()
+                
+                # Lấy các bản ghi revenue đã tồn tại trong DB
+                existing_revenues = db.query(models.Revenue).filter(
+                    models.Revenue.brand_id == brand_id,
+                    models.Revenue.order_code.in_(order_codes_in_file)
+                ).all()
+
+                # Tạo một set "chữ ký" của các bản ghi đã có để check trùng lặp O(1)
+                existing_signatures = {
+                    (
+                        rev.order_code,
+                        rev.transaction_date,
+                        rev.net_revenue,
+                        rev.gmv,
+                        rev.total_fees,
+                        rev.refund,
+                        rev.source
+                    ) for rev in existing_revenues
+                }
+                print(f"Tìm thấy {len(existing_signatures)} dòng doanh thu đã tồn tại trong DB cho các order_id liên quan.")
+
                 revenues_to_insert = []
                 for _, row in df_revenue.iterrows():
-                    revenues_to_insert.append({ "order_code": row.get('order_id'), "transaction_date": parse_date(row.get('transaction_date')), "net_revenue": to_float(row.get('net_revenue')), "gmv": to_float(row.get('gmv')), "total_fees": to_float(row.get('total_fees')), "refund": to_float(row.get('refund')), "brand_id": brand_id, "source": source })
+                    # Chuẩn hóa dữ liệu từ file excel
+                    order_code = row.get('order_id')
+                    transaction_date = parse_date(row.get('transaction_date'))
+                    net_revenue = to_float(row.get('net_revenue'))
+                    gmv = to_float(row.get('gmv'))
+                    total_fees = to_float(row.get('total_fees'))
+                    refund = to_float(row.get('refund'))
+
+                    # Tạo chữ ký cho dòng mới
+                    new_signature = (
+                        order_code,
+                        transaction_date,
+                        net_revenue,
+                        gmv,
+                        total_fees,
+                        refund,
+                        source # `source` là của cả file import
+                    )
+
+                    # Nếu chữ ký chưa tồn tại, đây là dòng mới
+                    if new_signature not in existing_signatures:
+                        revenues_to_insert.append({
+                            "order_code": order_code,
+                            "transaction_date": transaction_date,
+                            "net_revenue": net_revenue,
+                            "gmv": gmv,
+                            "total_fees": total_fees,
+                            "refund": refund,
+                            "brand_id": brand_id,
+                            "source": source
+                        })
+                        # Thêm chữ ký mới vào set để chống trùng lặp trong chính file upload
+                        existing_signatures.add(new_signature)
                 
                 if revenues_to_insert:
                     db.bulk_insert_mappings(models.Revenue, revenues_to_insert)
-                results['revenue_sheet'] = f"Đã chuẩn bị import {len(revenues_to_insert)} dòng doanh thu."
+                results['revenue_sheet'] = f"Đã chuẩn bị import {len(revenues_to_insert)} dòng doanh thu mới."
                 print(results['revenue_sheet'])
 
         else:

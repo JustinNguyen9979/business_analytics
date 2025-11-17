@@ -1,8 +1,9 @@
 # FILE: Backend/app/main.py
 
-import json, redis, crud, models, schemas, standard_parser
+import json, crud, models, schemas, standard_parser
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, status, Query, Body
 from fastapi.responses import ORJSONResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any
 from database import SessionLocal, engine
@@ -104,6 +105,36 @@ def recalculate_and_wait(brand_id: int, db: Session = Depends(get_db)):
         return {"message": "Tính toán lại hoàn tất!"}
     except TimeoutError:
         raise HTTPException(status_code=504, detail="Quá trình tính toán mất quá nhiều thời gian.")
+
+class DateRangePayload(BaseModel):
+    start_date: date
+    end_date: date
+
+@app.get("/brands/{brand_id}/sources", response_model=List[str])
+def get_brand_sources(brand_id: int, db: Session = Depends(get_db)):
+    """Lấy danh sách tất cả các 'source' duy nhất cho một brand."""
+    if not crud.get_brand(db, brand_id):
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
+    return crud.get_sources_for_brand(db, brand_id)
+
+@app.post("/brands/{brand_id}/delete-data-in-range", status_code=status.HTTP_200_OK)
+def delete_data_in_range(
+    brand_id: int, 
+    payload: DateRangePayload,
+    db: Session = Depends(get_db),
+    source: str = Query(None, description="Optional: Filter by source (e.g., 'shopee', 'tiktok'). If not provided, deletes from all sources.")
+):
+    """Deletes transactional data for a brand within a specified date range, optionally filtered by source."""
+    if not crud.get_brand(db, brand_id):
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
+    
+    try:
+        crud.delete_brand_data_in_range(db, brand_id, payload.start_date, payload.end_date, source)
+        # Invalidate relevant cache after deletion
+        recalculate_all_brand_data.delay(brand_id)
+        return {"message": "Yêu cầu xóa dữ liệu đã được thực hiện. Dữ liệu đang được tính toán lại."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Lỗi server khi xóa dữ liệu: {str(e)}")
 
 def generate_cache_key(brand_id: int, request_type: str, params: Dict[str, Any]) -> str:
     """Tạo ra một cache key nhất quán từ thông tin request."""

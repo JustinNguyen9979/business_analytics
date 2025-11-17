@@ -56,7 +56,9 @@ function FinancePage() {
     // Tách dữ liệu tổng và chi tiết
     const summaryData = currentData?.find(item => item.platform === 'Tổng cộng') || {};
     const prevSummaryData = previousData?.find(item => item.platform === 'Tổng cộng') || {};
-    const platformData = currentData?.filter(item => item.platform !== 'Tổng cộng') || [];
+    const platformData = currentData
+        ?.filter(item => item.platform !== 'Tổng cộng')
+        .sort((a, b) => (b.netRevenue || 0) - (a.netRevenue || 0)) || [];
 
     const kpiCards = [
         { 

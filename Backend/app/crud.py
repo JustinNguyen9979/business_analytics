@@ -131,7 +131,7 @@ def get_or_create_customer(db: Session, customer_data: dict, brand_id: int):
     if not db_customer:
         db_customer = models.Customer(
             username=username,
-            city=customer_data.get('province'), 
+            city=customer_data.get('city'), 
             district=customer_data.get('district'),
             brand_id=brand_id
         )
@@ -371,3 +371,61 @@ def get_kpis_by_platform(db: Session, brand_id: int, start_date: date, end_date:
                 results.append(kpis_for_source)
 
     return results
+
+def get_sources_for_brand(db: Session, brand_id: int) -> list[str]:
+    """Lấy danh sách tất cả các 'source' duy nhất cho một brand."""
+    try:
+        print(f"DEBUG: get_sources_for_brand called for brand_id: {brand_id}")
+        order_sources = db.query(models.Order.source.label('source_column')).filter(models.Order.brand_id == brand_id, models.Order.source.isnot(None))
+        revenue_sources = db.query(models.Revenue.source.label('source_column')).filter(models.Revenue.brand_id == brand_id, models.Revenue.source.isnot(None))
+        ad_sources = db.query(models.Ad.source.label('source_column')).filter(models.Ad.brand_id == brand_id, models.Ad.source.isnot(None))
+
+        all_sources_union = union_all(order_sources, revenue_sources, ad_sources).alias("all_sources")
+        distinct_sources_query = select(all_sources_union.c.source_column).distinct()
+        
+        raw_sources = db.execute(distinct_sources_query).fetchall()
+        print(f"DEBUG: Raw sources fetched for brand {brand_id}: {raw_sources}")
+        
+        return sorted([s for s, in raw_sources])
+    except Exception as e:
+        print(f"!!! LỖI KHI LẤY SOURCES CHO BRAND {brand_id}: {e}")
+        traceback.print_exc() # Print full traceback
+        return [] # Return empty list on error
+
+def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end_date: date, source: str = None):
+    """Deletes transactional data for a brand within a date range, optionally filtered by source."""
+    try:
+        # Delete Ads
+        ads_query = db.query(models.Ad).filter(
+            models.Ad.brand_id == brand_id,
+            models.Ad.ad_date.between(start_date, end_date)
+        )
+        if source:
+            ads_query = ads_query.filter(models.Ad.source == source)
+        ads_query.delete(synchronize_session=False)
+        
+        # Delete Revenues
+        revenues_query = db.query(models.Revenue).filter(
+            models.Revenue.brand_id == brand_id,
+            models.Revenue.transaction_date.between(start_date, end_date)
+        )
+        if source:
+            revenues_query = revenues_query.filter(models.Revenue.source == source)
+        revenues_query.delete(synchronize_session=False)
+
+        # Delete Orders
+        orders_query = db.query(models.Order).filter(
+            models.Order.brand_id == brand_id,
+            models.Order.order_date.between(start_date, end_date)
+        )
+        if source:
+            orders_query = orders_query.filter(models.Order.source == source)
+        orders_query.delete(synchronize_session=False)
+
+        db.commit()
+        return {"message": f"Successfully deleted data for brand {brand_id} between {start_date} and {end_date}."}
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting data for brand {brand_id}: {e}")
+        traceback.print_exc()
+        raise e
