@@ -232,7 +232,7 @@ function DashboardPage() {
                                         <CircularProgress />
                                     </Box>
                                 ) : (
-                                    topProducts.data && topProducts.data.length > 0 ? <TopProductsChart data={topProducts.data} /> : <ChartPlaceholder title="Top SKU bán chạy" />
+                                    topProducts.data ? <TopProductsChart data={topProducts.data} /> : <ChartPlaceholder title="Top SKU bán chạy" />
                                 )}
                             </Box>
                         </Paper>
@@ -265,7 +265,7 @@ function DashboardPage() {
                         </Box>
                         <Box sx={{ flexGrow: 1, minHeight: { xs: 500, lg: 'auto' }, position: 'relative' }}>
                             {map.loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
-                                map.data && map.data.length > 0 ? <GeoMapChart data={map.data} /> : <ChartPlaceholder title="Phân bổ Khách hàng" />
+                                map.data ? <GeoMapChart data={map.data}/> : <ChartPlaceholder title="Phân bổ Khách hàng" />
                             )}
                         </Box>
                     </Paper>
