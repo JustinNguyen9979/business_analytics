@@ -37,14 +37,19 @@ const [DatePicker1, DatePicker2] = [
 ];
 
 function DateRangeFilterMenu({ open, anchorEl, onClose, initialDateRange, onApply }) {
-    const [tempDateRange, setTempDateRange] = useState(initialDateRange);
+    const [tempDateRange, setTempDateRange] = useState(initialDateRange || [dayjs().startOf('month'), dayjs().endOf('month')]);
+
 
     // Effect để reset lại lựa chọn tạm thời mỗi khi Menu được mở
     useEffect(() => {
         if (open) {
-            setTempDateRange(initialDateRange);
+            // Nếu prop là null (trường hợp của dialog xóa), state sẽ dùng giá trị dự phòng.
+            // Nếu prop có giá trị, state sẽ dùng giá trị đó.
+            setTempDateRange(initialDateRange || [dayjs().startOf('month'), dayjs().endOf('month')]);
         }
     }, [open, initialDateRange]);
+
+    
 
     const handleShortcutClick = (shortcut) => {
         // Bây giờ 'shortcut' là một object hoàn chỉnh { label, type, getValue }
@@ -62,16 +67,22 @@ function DateRangeFilterMenu({ open, anchorEl, onClose, initialDateRange, onAppl
             open={open}
             anchorEl={anchorEl}
             onClose={onClose}
-            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-            PaperProps={{ 
-                sx: { 
-                    mt: 1, 
-                    borderRadius: 3, 
-                    backdropFilter: 'blur(15px)', 
-                    backgroundColor: 'rgba(30, 41, 59, 0.8)',
-                    border: (theme) => `1px solid ${theme.palette.divider}`,
-                } 
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'center' }}
+            slotProps={{
+                paper: { // <-- Đúng: Thêm "paper:" để nhắm vào đúng thành phần
+                    sx: {
+                        mt: 1, // Khoảng cách sẽ được áp dụng tại đây
+                        borderRadius: 3,
+                        backdropFilter: 'blur(15px)',
+                        backgroundColor: 'rgba(30, 41, 59, 0.8)',
+                        border: (theme) => `1px solid ${theme.palette.divider}`,
+                        '& .MuiMenu-list': {
+                            paddingTop: 0,
+                            paddingBottom: 0,
+                        },
+                    },
+                },
             }}
         >
             <Box sx={{ display: 'flex' }}>
@@ -79,7 +90,11 @@ function DateRangeFilterMenu({ open, anchorEl, onClose, initialDateRange, onAppl
                 <Box sx={{ borderRight: 1, borderColor: 'divider', width: 180, flexShrink: 0 }}>
                     <List>
                         {dateShortcuts.map((shortcut) => (
-                            <ListItemButton key={shortcut.label} onClick={() => handleShortcutClick(shortcut)}>
+                            <ListItemButton 
+                                key={shortcut.label} 
+                                onClick={() => handleShortcutClick(shortcut)}
+                                sx={{ py: 0.6 }}
+                            >
                                 <ListItemText primary={shortcut.label} />
                             </ListItemButton>
                         ))}

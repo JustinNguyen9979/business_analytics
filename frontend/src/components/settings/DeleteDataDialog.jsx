@@ -13,13 +13,16 @@ import { dateShortcuts } from '../../config/dashboardConfig';
 import { getAllBrands, getSourcesForBrand, deleteDataInRange } from '../../services/api';
 import { useNotification } from '../../context/NotificationContext';
 
-const defaultDateRange = dateShortcuts.find(s => s.type === 'this_month').getValue();
-const defaultDateLabel = dateShortcuts.find(s => s.type === 'this_month').label;
+// const defaultDateRange = dateShortcuts.find(s => s.type === 'this_month').getValue();
+// const defaultDateLabel = dateShortcuts.find(s => s.type === 'this_month').label;
 
 function DeleteDataDialog({ open, onClose, brandId }) {
+    const [dateRange, setDateRange] = useState(null);
+    const [dateLabel, setDateLabel] = useState('Chọn khoảng thời gian');
+
     const [brandName, setBrandName] = useState('');
-    const [dateRange, setDateRange] = useState(defaultDateRange);
-    const [dateLabel, setDateLabel] = useState(defaultDateLabel);
+    // const [dateRange, setDateRange] = useState(defaultDateRange);
+    // const [dateLabel, setDateLabel] = useState(defaultDateLabel);
     const [anchorEl, setAnchorEl] = useState(null);
     const [confirmationText, setConfirmationText] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
@@ -52,8 +55,8 @@ function DeleteDataDialog({ open, onClose, brandId }) {
         } else {
             // Reset state when closing
             setBrandName('');
-            setDateRange(defaultDateRange);
-            setDateLabel(defaultDateLabel);
+            setDateRange(null);
+            setDateLabel('Chọn khoảng thời gian');
             setConfirmationText('');
             setIsDeleting(false);
             setSources([]);
@@ -137,6 +140,12 @@ function DeleteDataDialog({ open, onClose, brandId }) {
                                     value={selectedSource}
                                     label="Nguồn Dữ liệu"
                                     onChange={(e) => setSelectedSource(e.target.value)}
+                                    sx={{
+                                        color: 'white', 
+                                        '.MuiSelect-icon': {
+                                            color: 'white',
+                                        },
+                                    }}
                                 >
                                     {sources.map(source => (
                                         <MenuItem key={source} value={source}>
