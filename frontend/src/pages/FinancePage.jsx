@@ -40,7 +40,7 @@ function FinancePage() {
     const [dateLabel, setDateLabel] = useState(defaultDateLabel);
     const [anchorEl, setAnchorEl] = useState(null);
     
-    const { data, loading, error } = useFinanceData(brandId, dateRange);
+    const { currentData, previousData, loading, error } = useFinanceData(brandId, dateRange);
 
     const handleOpenFilter = (event) => setAnchorEl(event.currentTarget);
     const handleCloseFilter = () => setAnchorEl(null);
@@ -54,15 +54,56 @@ function FinancePage() {
     };
 
     // Tách dữ liệu tổng và chi tiết
-    const summaryData = data?.find(item => item.platform === 'Tổng cộng') || {};
-    const platformData = data?.filter(item => item.platform !== 'Tổng cộng') || [];
+    const summaryData = currentData?.find(item => item.platform === 'Tổng cộng') || {};
+    const prevSummaryData = previousData?.find(item => item.platform === 'Tổng cộng') || {};
+    const platformData = currentData?.filter(item => item.platform !== 'Tổng cộng') || [];
 
     const kpiCards = [
-        { title: 'Tổng Lợi nhuận', value: formatCurrency(summaryData.profit), icon: <MonetizationOnIcon />, color: 'success.main' },
-        { title: 'Tổng GMV', value: formatCurrency(summaryData.gmv), icon: <AccountBalanceWalletIcon />, color: 'primary.main' },
-        { title: 'Tổng Doanh thu thuần', value: formatCurrency(summaryData.netRevenue), icon: <TrendingUpIcon />, color: 'info.main' },
-        { title: 'Tổng Chi phí', value: formatCurrency(summaryData.totalCost), icon: <AttachMoneyIcon />, color: 'error.main' }, // Thêm thẻ Tổng chi phí
-        { title: 'ROI Tổng', value: formatPercentage(summaryData.roi), icon: <StackedLineChartIcon />, color: 'secondary.main' },
+        { 
+            title: 'Tổng Lợi nhuận', 
+            value: summaryData.profit, 
+            previousValue: prevSummaryData.profit,
+            icon: <MonetizationOnIcon />, 
+            color: 'success.main',
+            format: 'currency',
+            direction: 'up',
+        },
+        { 
+            title: 'Tổng GMV', 
+            value: summaryData.gmv, 
+            previousValue: prevSummaryData.gmv,
+            icon: <AccountBalanceWalletIcon />, 
+            color: 'primary.main',
+            format: 'currency',
+            direction: 'up',
+        },
+        { 
+            title: 'Tổng Doanh thu thuần', 
+            value: summaryData.netRevenue, 
+            previousValue: prevSummaryData.netRevenue,
+            icon: <TrendingUpIcon />, 
+            color: 'info.main',
+            format: 'currency',
+            direction: 'up',
+        },
+        { 
+            title: 'Tổng Chi phí', 
+            value: summaryData.totalCost, 
+            previousValue: prevSummaryData.totalCost,
+            icon: <AttachMoneyIcon />, 
+            color: 'error.main',
+            format: 'currency',
+            direction: 'down', // Chi phí giảm là tốt
+        },
+        { 
+            title: 'ROI Tổng', 
+            value: summaryData.roi, 
+            previousValue: prevSummaryData.roi,
+            icon: <StackedLineChartIcon />, 
+            color: 'secondary.main',
+            format: 'percent',
+            direction: 'up',
+        },
     ];
 
     return (
@@ -97,13 +138,21 @@ function FinancePage() {
             <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
                 {loading 
                     ? Array.from(new Array(5)).map((_, index) => (
-                        <Box key={index} sx={{ flex: 1, minWidth: '180px' }}>
+                        <Box key={index} sx={{ flex: 1, minWidth: '200px' }}>
                             <KpiCardSkeleton />
                         </Box>
                       ))
                     : kpiCards.map(card => (
-                        <Box key={card.title} sx={{ flex: 1, minWidth: '180px' }}>
-                            <KpiCard title={card.title} value={card.value} icon={card.icon} color={card.color} />
+                        <Box key={card.title} sx={{ flex: 1, minWidth: '200px' }}>
+                            <KpiCard 
+                                title={card.title} 
+                                value={card.value} 
+                                icon={card.icon} 
+                                color={card.color}
+                                previousValue={card.previousValue}
+                                format={card.format}
+                                direction={card.direction}
+                            />
                         </Box>
                 ))}
             </Box>

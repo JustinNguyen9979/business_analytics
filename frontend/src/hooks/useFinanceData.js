@@ -1,19 +1,19 @@
 import { useState, useEffect } from 'react';
+import dayjs from 'dayjs';
 import { fetchAsyncData } from '../services/api';
 
-
 /**
- * Custom Hook để lấy dữ liệu tài chính theo từng platform.
+ * Custom Hook để lấy dữ liệu tài chính cho kỳ hiện tại và kỳ trước đó.
  * @param {string} brandId - ID của thương hiệu.
- * @param {Array<dayjs>} dateRange - Mảng chứa [ngày bắt đầu, ngày kết thúc].
+ * @param {Array<dayjs>} dateRange - Mảng chứa [ngày bắt đầu, ngày kết thúc] của kỳ hiện tại.
  */
 export const useFinanceData = (brandId, dateRange) => {
-    const [data, setData] = useState(null);
+    const [currentData, setCurrentData] = useState(null);
+    const [previousData, setPreviousData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        // Không chạy nếu thiếu thông tin
         if (!brandId || !dateRange || !dateRange[0] || !dateRange[1]) {
             return;
         }
@@ -21,11 +21,28 @@ export const useFinanceData = (brandId, dateRange) => {
         const fetchData = async () => {
             setLoading(true);
             setError(null);
+
             try {
-                const result = await fetchAsyncData('kpis_by_platform', brandId, dateRange);
-                setData(result);
+                // 1. Tính toán kỳ trước
+                const [start, end] = dateRange;
+                const duration = end.diff(start, 'day'); // 0-based diff
+                const prevEnd = start.subtract(1, 'day');
+                const prevStart = prevEnd.subtract(duration, 'day');
+                const previousDateRange = [prevStart, prevEnd];
+
+                // 2. Gọi API song song cho cả hai kỳ
+                const [currentResult, previousResult] = await Promise.all([
+                    fetchAsyncData('kpis_by_platform', brandId, dateRange),
+                    fetchAsyncData('kpis_by_platform', brandId, previousDateRange)
+                ]);
+
+                setCurrentData(currentResult);
+                setPreviousData(previousResult);
+
             } catch (err) {
                 setError(err.message || 'Lỗi không xác định khi tải dữ liệu tài chính.');
+                setCurrentData(null);
+                setPreviousData(null);
             } finally {
                 setLoading(false);
             }
@@ -33,7 +50,8 @@ export const useFinanceData = (brandId, dateRange) => {
 
         fetchData();
         
-    }, [brandId, dateRange]); // Chạy lại mỗi khi brandId hoặc dateRange thay đổi
+    }, [brandId, dateRange]);
 
-    return { data, loading, error };
+    // Đổi tên `data` thành `currentData` để rõ ràng hơn
+    return { currentData, previousData, loading, error };
 };
