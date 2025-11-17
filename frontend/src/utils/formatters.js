@@ -25,3 +25,15 @@ export const formatNumber = (value) => {
     }
     return Math.round(value).toLocaleString('vi-VN');
 };
+
+/**
+ * Định dạng một số thành chuỗi phần trăm.
+ * @param {number} value - Số cần định dạng (ví dụ: 0.15 cho 15%).
+ * @returns {string} Chuỗi đã định dạng, ví dụ: "15.00%".
+ */
+export const formatPercentage = (value) => {
+    if (typeof value !== 'number' || !isFinite(value)) {
+        return '0.00%';
+    }
+    return (value * 100).toFixed(2) + '%';
+};

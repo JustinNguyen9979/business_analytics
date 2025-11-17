@@ -192,3 +192,56 @@ export const getCustomerDistribution = async (brandId, startDate, endDate) => {
         throw error;
     }
 };
+
+/**
+ * Hàm tổng hợp: Gửi yêu cầu, và tự động "hỏi thăm" (poll) cho đến khi có kết quả.
+ * Đây là logic bất đồng bộ chính được các hook sử dụng.
+ * @param {string} requestType - Loại dữ liệu cần tính (kpi_summary, kpis_by_platform, ...).
+ * @param {number} brandId - ID của brand.
+ * @param {Array<dayjs>} dateRange - Mảng [ngày bắt đầu, ngày kết thúc].
+ * @param {object} params - Các tham số bổ sung.
+ * @returns {Promise<object>} - Dữ liệu đã được xử lý thành công.
+ */
+export const fetchAsyncData = async (requestType, brandId, dateRange, params = {}) => {
+    const [start, end] = dateRange;
+    if (!start || !end) return null;
+    
+    const fullParams = { 
+        start_date: start.format('YYYY-MM-DD'), 
+        end_date: end.format('YYYY-MM-DD'), 
+        ...params 
+    };
+
+    try {
+        const initialResponse = await requestData(requestType, brandId, fullParams);
+        
+        if (initialResponse.status === 'SUCCESS') {
+            return initialResponse.data;
+        }
+
+        if (initialResponse.status === 'PROCESSING') {
+            return new Promise((resolve, reject) => {
+                const pollingInterval = setInterval(async () => {
+                    try {
+                        const statusResponse = await pollDataStatus(initialResponse.cache_key);
+                        if (statusResponse.status === 'SUCCESS') {
+                            clearInterval(pollingInterval);
+                            resolve(statusResponse.data);
+                        } else if (statusResponse.status === 'FAILED') {
+                            clearInterval(pollingInterval);
+                            reject(new Error(statusResponse.error || `Worker xử lý '${requestType}' thất bại.`));
+                        }
+                    } catch (pollError) {
+                        clearInterval(pollingInterval);
+                        reject(pollError);
+                    }
+                }, 2000); // Hỏi thăm mỗi 2 giây
+            });
+        }
+        // Các trường hợp trạng thái khác không mong muốn
+        throw new Error(`Trạng thái phản hồi không mong muốn: ${initialResponse.status}`);
+    } catch (error) {
+        console.error(`Lỗi khi fetch ${requestType}:`, error);
+        throw error;
+    }
+};

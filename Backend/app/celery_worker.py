@@ -100,6 +100,11 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                 # Gọi hàm crud tương ứng để lấy dữ liệu
                 result_data = crud.get_customer_distribution_with_coords(db, brand_id, start_date, end_date)
 
+            # Nhánh 5: Xử lý yêu cầu KPI theo Platform
+            elif request_type == "kpis_by_platform":
+                print(f"WORKER: Đang xử lý yêu cầu '{request_type}'...")
+                result_data = crud.get_kpis_by_platform(db, brand_id, start_date, end_date)
+
             else:
                 raise ValueError(f"Loại yêu cầu không hợp lệ: {request_type}")
 

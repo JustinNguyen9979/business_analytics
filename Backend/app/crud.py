@@ -326,3 +326,48 @@ def get_customer_distribution_with_coords(db: Session, brand_id: int, start_date
         print(f"!!! LỖI KHI LẤY DỮ LIỆU BẢN ĐỒ: {e}")
         traceback.print_exc()
         return [] # Trả về danh sách rỗng nếu có lỗi để tránh crash frontend
+
+def get_kpis_by_platform(db: Session, brand_id: int, start_date: date, end_date: date):
+    """
+    Tính toán và tổng hợp các chỉ số KPI, phân tách theo từng nền tảng (platform/source).
+    """
+    import kpi_calculator # Tránh circular import
+
+    # 1. Lấy toàn bộ dữ liệu trong khoảng thời gian đã chọn một lần duy nhất
+    all_orders = get_raw_orders_in_range(db, brand_id, start_date, end_date)
+    all_revenues = get_raw_revenues_in_range(db, brand_id, start_date, end_date)
+    all_ads = get_raw_ads_in_range(db, brand_id, start_date, end_date)
+
+    # 2. Tìm tất cả các 'source' (nền tảng) duy nhất từ dữ liệu đã lấy
+    all_sources = sorted(list(
+        {o.source for o in all_orders if o.source}
+        .union({r.source for r in all_revenues if r.source})
+        .union({a.source for a in all_ads if a.source})
+    ))
+
+    results = []
+
+    # 3. Tính toán dòng "Tổng cộng" cho tất cả các sàn
+    # Chỉ tính nếu có bất kỳ hoạt động nào
+    if all_orders or all_revenues or all_ads:
+        total_kpis = kpi_calculator.calculate_aggregated_kpis(all_orders, all_revenues, all_ads)
+        if total_kpis:
+            total_kpis['platform'] = 'Tổng cộng'
+            results.append(total_kpis)
+
+    # 4. Lặp qua từng sàn và tính toán KPI riêng cho sàn đó
+    for source in all_sources:
+        # Lọc dữ liệu theo 'source' hiện tại
+        orders_for_source = [o for o in all_orders if o.source == source]
+        revenues_for_source = [r for r in all_revenues if r.source == source]
+        ads_for_source = [a for a in all_ads if a.source == source]
+
+        # Chỉ tính toán nếu có dữ liệu cho sàn này
+        if orders_for_source or revenues_for_source or ads_for_source:
+            kpis_for_source = kpi_calculator.calculate_aggregated_kpis(orders_for_source, revenues_for_source, ads_for_source)
+            if kpis_for_source:
+                # Viết hoa chữ cái đầu của tên sàn cho đẹp
+                kpis_for_source['platform'] = source.capitalize()
+                results.append(kpis_for_source)
+
+    return results

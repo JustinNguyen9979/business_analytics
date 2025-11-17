@@ -119,7 +119,7 @@ function ChartTimeFilter({ value, onChange }) {
             <Menu anchorEl={anchorEl} open={open} onClose={handleClose} PaperProps={{ sx: { mt: 1, backdropFilter: 'blur(15px)', backgroundColor: 'rgba(30, 41, 59, 0.8)' } }}>
                 <Box sx={{ display: 'flex' }}>
                     {/* Cột Tháng */}
-                    <Box sx={{ width: 120 }}>
+                    <Box sx={{ width: 140 }}>
                         <Typography sx={{ p: '6px 16px', fontWeight: 'bold' }}>Tháng</Typography>
                         <List component="nav" dense sx={{ maxHeight: 200, overflow: 'auto' }}>
                             {Array.from({ length: 12 }, (_, i) => {
@@ -148,7 +148,7 @@ function ChartTimeFilter({ value, onChange }) {
                         </List>
                     </Box>
                     {/* Cột Quý */}
-                     <Box sx={{ borderRight: 1, borderColor: 'divider', width: 120 }}>
+                     <Box sx={{ borderRight: 1, borderColor: 'divider', width: 140 }}>
                          <Typography sx={{ p: '6px 16px', fontWeight: 'bold' }}>Quý</Typography>
                          <List component="nav" dense>
                             {[1, 2, 3, 4].map(q => {

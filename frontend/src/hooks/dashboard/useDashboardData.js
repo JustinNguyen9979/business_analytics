@@ -1,7 +1,5 @@
-// FILE: frontend/src/hooks/useDashboardData.js
-
 import { useState, useEffect } from 'react';
-import { requestData, pollDataStatus } from '../../services/api';
+import { fetchAsyncData } from '../../services/api';
 import dayjs from 'dayjs';
 import { processChartData } from '../../utils/chartDataProcessor';
 
@@ -39,40 +37,6 @@ const getPreviousPeriod = (startDate, endDate, filterType = 'custom') => {
     const prevEndDate = startDate.clone().subtract(1, 'day');
     const prevStartDate = prevEndDate.clone().subtract(durationInDays - 1, 'day');
     return [prevStartDate.startOf('day'), prevEndDate.endOf('day')];
-};
-
-// HÀM TIỆN ÍCH FETCH DỮ LIỆU BẤT ĐỒNG BỘ
-const fetchAsyncData = async (requestType, brandId, dateRange, params = {}) => {
-    const [start, end] = dateRange;
-    if (!start || !end) return null;
-    const fullParams = { start_date: start.format('YYYY-MM-DD'), end_date: end.format('YYYY-MM-DD'), ...params };
-    try {
-        const initialResponse = await requestData(requestType, brandId, fullParams);
-        if (initialResponse.status === 'SUCCESS') return initialResponse.data;
-        if (initialResponse.status === 'PROCESSING') {
-            return new Promise((resolve, reject) => {
-                const pollingInterval = setInterval(async () => {
-                    try {
-                        const statusResponse = await pollDataStatus(initialResponse.cache_key);
-                        if (statusResponse.status === 'SUCCESS') {
-                            clearInterval(pollingInterval);
-                            resolve(statusResponse.data);
-                        } else if (statusResponse.status === 'FAILED') {
-                            clearInterval(pollingInterval);
-                            reject(new Error(statusResponse.error || `Worker xử lý '${requestType}' thất bại.`));
-                        }
-                    } catch (pollError) {
-                        clearInterval(pollingInterval);
-                        reject(pollError);
-                    }
-                }, 2000);
-            });
-        }
-        return null;
-    } catch (error) {
-        console.error(`Lỗi khi fetch ${requestType}:`, error);
-        throw error;
-    }
 };
 
 /**

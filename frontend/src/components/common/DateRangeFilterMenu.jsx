@@ -76,7 +76,7 @@ function DateRangeFilterMenu({ open, anchorEl, onClose, initialDateRange, onAppl
         >
             <Box sx={{ display: 'flex' }}>
                 {/* Cột trái: Lối tắt */}
-                <Box sx={{ borderRight: 1, borderColor: 'divider', width: 160, flexShrink: 0 }}>
+                <Box sx={{ borderRight: 1, borderColor: 'divider', width: 180, flexShrink: 0 }}>
                     <List>
                         {dateShortcuts.map((shortcut) => (
                             <ListItemButton key={shortcut.label} onClick={() => handleShortcutClick(shortcut)}>
