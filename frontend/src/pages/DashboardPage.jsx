@@ -2,11 +2,10 @@
 
 import { useTheme } from '@mui/material/styles';
 import React, { useState, useCallback, useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, Stack } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import dayjs from 'dayjs';
-import { getAllBrands } from '../services/api';
 import { useDashboardData } from '../hooks/dashboard/useDashboardData';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import ChartTimeFilter from '../components/common/ChartTimeFilter';
@@ -18,11 +17,12 @@ import CostDonutChart from '../components/charts/CostDonutChart';
 import GeoMapChart from '../components/charts/GeoMapChart';
 import ChartPlaceholder from '../components/common/ChartPlaceholder';
 import { useLayout } from '../context/LayoutContext';
+import { useBrand } from '../context/BrandContext';
+
 
 function DashboardPage() {
     const theme = useTheme();
-    const { brandId } = useParams();
-    const [brandName, setBrandName] = useState('');
+    const { id: brandId, name: brandName } = useBrand();
     const [searchParams, setSearchParams] = useSearchParams();
     const { isSidebarOpen } = useLayout();
 
@@ -51,17 +51,6 @@ function DashboardPage() {
     // --- STATE QUẢN LÝ UI ---
     const [kpiAnchorEl, setKpiAnchorEl] = useState(null);
     const [chartRevision, setChartRevision] = useState(0);
-
-    useEffect(() => {
-        const fetchBrandName = async () => {
-            try {
-                const allBrands = await getAllBrands();
-                const currentBrand = allBrands.find(b => b.id === parseInt(brandId));
-                if (currentBrand) setBrandName(currentBrand.name);
-            } catch (error) { console.error("Lỗi khi lấy tên brand:", error); }
-        };
-        fetchBrandName();
-    }, [brandId]);
 
     useEffect(() => {
         const timer = setTimeout(() => setChartRevision(prev => prev + 1), 300);

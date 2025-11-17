@@ -1,12 +1,12 @@
-// FILE: frontend/src/layouts/DashboardLayout.jsx (PHIÊN BẢN CHUẨN HÓA VÀ SỬA LỖI)
+// FILE: frontend/src/layouts/DashboardLayout.jsx
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { styled } from '@mui/material/styles';
 import { Link as RouterLink, Outlet, useParams, useNavigate, useLocation } from 'react-router-dom';
-import { 
-    Box, Drawer as MuiDrawer, AppBar as MuiAppBar, Toolbar, List, 
-    Typography, Divider, IconButton, ListItem, ListItemButton, 
-    ListItemIcon, ListItemText, CssBaseline, ListSubheader 
+import {
+    Box, Drawer as MuiDrawer, AppBar as MuiAppBar, Toolbar, List,
+    Typography, Divider, IconButton, ListItem, ListItemButton,
+    ListItemIcon, ListItemText, CssBaseline, ListSubheader, CircularProgress
 } from '@mui/material';
 
 // --- Icons ---
@@ -18,9 +18,9 @@ import SettingsIcon from '@mui/icons-material/Settings';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import MonetizationOnIcon from '@mui/icons-material/MonetizationOn'; 
-import TrackChangesIcon from '@mui/icons-material/TrackChanges';   
-import TuneIcon from '@mui/icons-material/Tune';                 
+import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
+import TrackChangesIcon from '@mui/icons-material/TrackChanges';
+import TuneIcon from '@mui/icons-material/Tune';
 import GroupIcon from '@mui/icons-material/Group';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 
@@ -28,13 +28,13 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import AuroraBackground from '../components/ui/AuroraBackground';
 import SingleImportDialog from '../components/import/SingleImportDialog';
 import DeleteDataDialog from '../components/settings/DeleteDataDialog';
-
-// BƯỚC 1: DỌN DẸP LẠI IMPORT, CHỈ GIỮ LẠI NHỮNG GÌ CẦN THIẾT
-import { recalculateBrandData, uploadStandardFile, recalculateBrandDataAndWait } from '../services/api';
+import { recalculateBrandDataAndWait, uploadStandardFile, getAllBrands } from '../services/api';
 import { useLayout } from '../context/LayoutContext';
 import { useNotification } from '../context/NotificationContext';
+import { slugify } from '../utils/slugify';
+import { BrandProvider, useBrand } from '../context/BrandContext';
 
-// --- Các hằng số và Styled Components (Giữ nguyên) ---
+// --- Styled Components ---
 const drawerWidth = 240;
 
 const openedMixin = (theme) => ({
@@ -101,39 +101,18 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
   }),
 );
 
-
-export default function DashboardLayout() {
-    const { brandId } = useParams();
+// --- Component con chứa toàn bộ layout và logic sau khi đã có context ---
+function LayoutWithBrandContext() {
+    const { id: brandId, name: brandName } = useBrand();
+    const { brandIdentifier } = useParams();
     const navigate = useNavigate();
     const { isSidebarOpen, setIsSidebarOpen } = useLayout();
     const { showNotification } = useNotification();
     const { pathname } = useLocation();
-    
+
     const [isImportDialogOpen, setImportDialogOpen] = useState(false);
     const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [isRecalculating, setIsRecalculating] = useState(false);
-
-    // BƯỚC 3: CHUẨN HÓA LẠI CÁC HÀM HANDLER
-    const handleDrawerToggle = () => setIsSidebarOpen(!isSidebarOpen);
-    const handleOpenImportDialog = () => setImportDialogOpen(true);
-    const handleCloseImportDialog = () => setImportDialogOpen(false);
-    const handleOpenDeleteDialog = () => setDeleteDialogOpen(true);
-    const handleCloseDeleteDialog = () => setDeleteDialogOpen(false);
-    
-    const handleUpload = async (platform, file) => {
-        try {
-            await uploadStandardFile(platform, brandId, file);
-            showNotification(`Upload thành công! Bắt đầu quá trình tính toán lại dữ liệu...`, 'info');
-
-            await recalculateBrandDataAndWait(brandId);
-
-            showNotification(`Dữ liệu đã được tính toán lại thành công!`, 'success');
-            navigate(0); // Tải lại trang để thấy dữ liệu mới
-        } catch (error) {
-            const errorMessage = error.response?.data?.detail || 'Lỗi khi upload file.';
-            showNotification(errorMessage, 'error');
-        }
-    };
 
     const handleRecalculate = async () => {
         if (!brandId || isRecalculating) return;
@@ -141,62 +120,47 @@ export default function DashboardLayout() {
         try {
             await recalculateBrandDataAndWait(brandId);
             showNotification("Dữ liệu đã được làm mới thành công!", "success");
-            // Sau khi thành công, tự động tải lại trang
-            navigate(0); 
+            navigate(0);
         } catch (error) {
             const errorMessage = error.response?.data?.detail || "Lỗi khi yêu cầu tính toán lại.";
             showNotification(errorMessage, 'error');
-            // Nếu lỗi thì cho phép người dùng thử lại
             setIsRecalculating(false);
         }
     };
 
-    const reportMenuItems = [
-        {
-            text: 'Tổng quan',
-            path: '', // Để trống cho trang dashboard chính
-            icon: <DashboardIcon />
-        },
-        {
-            text: 'Tài chính',
-            path: '/finance',
-            icon: <MonetizationOnIcon />
-        },
-        {
-            text: 'Marketing',
-            path: '/marketing',
-            icon: <TrackChangesIcon />
-        },
-        {
-            text: 'Vận hành',
-            path: '/operation',
-            icon: <TuneIcon />
-        },
-        {
-            text: 'Khách hàng',
-            path: '/customer',
-            icon: <GroupIcon />
+    const handleUpload = async (platform, file) => {
+        if (!brandId) return;
+        try {
+            await uploadStandardFile(platform, brandId, file);
+            showNotification(`Upload thành công! Bắt đầu tính toán lại...`, 'info');
+            await recalculateBrandDataAndWait(brandId);
+            showNotification(`Tính toán lại thành công!`, 'success');
+            navigate(0);
+        } catch (error) {
+            showNotification(error.response?.data?.detail || 'Lỗi khi upload.', 'error');
         }
+    };
+
+    const reportMenuItems = [
+        { text: 'Tổng quan', path: '', icon: <DashboardIcon /> },
+        { text: 'Tài chính', path: '/finance', icon: <MonetizationOnIcon /> },
+        { text: 'Marketing', path: '/marketing', icon: <TrackChangesIcon /> },
+        { text: 'Vận hành', path: '/operation', icon: <TuneIcon /> },
+        { text: 'Khách hàng', path: '/customer', icon: <GroupIcon /> }
     ];
 
     return (
         <Box sx={{ display: 'flex' }}>
             <CssBaseline />
             <AuroraBackground />
-            
+
             <AppBar position="fixed" open={isSidebarOpen}>
                 <Toolbar>
-                    <IconButton
-                        color="inherit"
-                        aria-label="open drawer"
-                        onClick={handleDrawerToggle}
-                        edge="start"
-                        sx={{ marginRight: 5, ...(isSidebarOpen && { display: 'none' }) }}
-                    >
+                    <IconButton color="inherit" aria-label="open drawer" onClick={() => setIsSidebarOpen(!isSidebarOpen)} edge="start" sx={{ marginRight: 5, ...(isSidebarOpen && { display: 'none' }) }}>
                         <MenuIcon />
                     </IconButton>
                     <Typography variant="h6" noWrap component="div">
-                        Dashboard
+                        Dashboard: {brandName}
                     </Typography>
                 </Toolbar>
             </AppBar>
@@ -207,20 +171,16 @@ export default function DashboardLayout() {
                         <QueryStatsIcon sx={{ color: 'primary.main', mr: 1.5, fontSize: 30 }} />
                         <Typography variant="h6" noWrap>Analytics</Typography>
                     </Box>
-                    <IconButton onClick={handleDrawerToggle} sx={{ opacity: isSidebarOpen ? 1 : 0, color: 'inherit' }}>
+                    <IconButton onClick={() => setIsSidebarOpen(!isSidebarOpen)} sx={{ opacity: isSidebarOpen ? 1 : 0, color: 'inherit' }}>
                         <ChevronLeftIcon />
                     </IconButton>
                 </DrawerHeader>
                 <Divider />
-
                 <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                     <Box sx={{ overflowY: 'auto', overflowX: 'hidden' }}>
-                        {/* Menu Báo cáo */}
                         <List subheader={isSidebarOpen ? <ListSubheader>BÁO CÁO</ListSubheader> : null}>
                             {reportMenuItems.map((item) => {
-                                // Nối chuỗi để tạo ra đường dẫn đầy đủ
-                                const fullPath = `/dashboard/${brandId}${item.path}`;
-
+                                const fullPath = `/dashboard/${brandIdentifier}${item.path}`;
                                 return (
                                     <ListItem key={item.text} disablePadding>
                                         <ListItemButton component={RouterLink} to={fullPath} selected={pathname === fullPath}>
@@ -231,8 +191,6 @@ export default function DashboardLayout() {
                                 );
                             })}
                         </List>
-
-                        {/* BƯỚC 4: ĐƠN GIẢN HÓA HOÀN TOÀN MENU CÔNG CỤ */}
                         <List subheader={isSidebarOpen ? <ListSubheader>CÔNG CỤ</ListSubheader> : null}>
                             <ListItem disablePadding>
                                 <ListItemButton onClick={handleRecalculate} disabled={isRecalculating} sx={{ minHeight: 48 }}>
@@ -241,21 +199,19 @@ export default function DashboardLayout() {
                                 </ListItemButton>
                             </ListItem>
                             <ListItem disablePadding>
-                                <ListItemButton onClick={handleOpenImportDialog} sx={{ minHeight: 48 }}>
+                                <ListItemButton onClick={() => setImportDialogOpen(true)} sx={{ minHeight: 48 }}>
                                     <ListItemIcon><CloudUploadIcon /></ListItemIcon>
                                     <ListItemText primary="Import Dữ liệu" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
                                 </ListItemButton>
                             </ListItem>
                             <ListItem disablePadding>
-                                <ListItemButton onClick={handleOpenDeleteDialog} sx={{ minHeight: 48 }}>
+                                <ListItemButton onClick={() => setDeleteDialogOpen(true)} sx={{ minHeight: 48 }}>
                                     <ListItemIcon><DeleteForeverIcon sx={{ color: 'error.main' }} /></ListItemIcon>
                                     <ListItemText primary="Xóa Dữ liệu" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
                                 </ListItemButton>
                             </ListItem>
                         </List>
                     </Box>
-
-                    {/* Menu dưới cùng */}
                     <Box sx={{ marginTop: 'auto' }}>
                         <Divider />
                         <List>
@@ -277,22 +233,64 @@ export default function DashboardLayout() {
             </Drawer>
 
             <Box component="main" sx={{ flexGrow: 1, py: 3, overflow: 'auto', height: '100vh' }}>
-                <Toolbar /> 
+                <Toolbar />
                 <Outlet />
             </Box>
 
-            <SingleImportDialog
-                open={isImportDialogOpen}
-                onClose={handleCloseImportDialog}
-                onUpload={handleUpload}
-                brandId={brandId}
-            />
-
-            <DeleteDataDialog
-                open={isDeleteDialogOpen}
-                onClose={handleCloseDeleteDialog}
-                brandId={brandId}
-            />
+            <SingleImportDialog open={isImportDialogOpen} onClose={() => setImportDialogOpen(false)} onUpload={handleUpload} brandId={brandId} />
+            <DeleteDataDialog open={isDeleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} brandId={brandId} />
         </Box>
+    );
+}
+
+// --- Component cha cuối cùng, chỉ làm nhiệm vụ giải quyết URL ---
+export default function DashboardLayout() {
+    const { brandIdentifier } = useParams();
+    const navigate = useNavigate();
+    const [brandInfo, setBrandInfo] = useState({ id: null, name: null, isLoading: true });
+
+    useEffect(() => {
+        const resolveIdentifier = async () => {
+            if (!brandIdentifier) return;
+            setBrandInfo({ id: null, name: null, isLoading: true });
+            try {
+                const allBrands = await getAllBrands();
+                let currentBrand = null;
+                if (!isNaN(brandIdentifier)) {
+                    currentBrand = allBrands.find(b => b.id === parseInt(brandIdentifier, 10));
+                    if (currentBrand) {
+                        const brandSlug = slugify(currentBrand.name);
+                        const newPath = window.location.pathname.replace(brandIdentifier, brandSlug);
+                        window.history.replaceState(null, '', newPath);
+                    }
+                } else {
+                    currentBrand = allBrands.find(b => slugify(b.name) === brandIdentifier);
+                }
+                if (currentBrand) {
+                    setBrandInfo({ id: currentBrand.id, name: currentBrand.name, isLoading: false });
+                } else {
+                    navigate('/');
+                }
+            } catch (error) {
+                console.error("Lỗi khi giải quyết định danh brand:", error);
+                navigate('/');
+            }
+        };
+        resolveIdentifier();
+    }, [brandIdentifier, navigate]);
+
+    if (brandInfo.isLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+                 <AuroraBackground />
+                <CircularProgress />
+            </Box>
+        );
+    }
+
+    return (
+        <BrandProvider value={brandInfo}>
+            <LayoutWithBrandContext />
+        </BrandProvider>
     );
 }

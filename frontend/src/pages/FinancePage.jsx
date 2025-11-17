@@ -17,6 +17,7 @@ import KpiCard from '../components/dashboard/KpiCard';
 import { useFinanceData } from '../hooks/useFinanceData';
 import { dateShortcuts } from '../config/dashboardConfig';
 import { formatCurrency, formatPercentage } from '../utils/formatters';
+import { useBrand } from '../context/BrandContext';
 
 // Lấy giá trị mặc định là "Tháng này"
 const defaultDateRange = dateShortcuts.find(s => s.type === 'this_month').getValue();
@@ -34,7 +35,7 @@ const KpiCardSkeleton = () => (
 );
 
 function FinancePage() {
-    const { brandId } = useParams();
+    const { id: brandId } = useBrand();
     
     const [dateRange, setDateRange] = useState(defaultDateRange);
     const [dateLabel, setDateLabel] = useState(defaultDateLabel);

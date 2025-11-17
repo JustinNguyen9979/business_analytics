@@ -27,11 +27,11 @@ function App() {
                     <Routes>
                         <Route path="/" element={<BrandLobby />} />
                         <Route element={<DashboardLayout />}>
-                            <Route path="/dashboard/:brandId" element={<DashboardPage />} />
-                            <Route path="/dashboard/:brandId/finance" element={<FinancePage />} />
-                            <Route path="/dashboard/:brandId/marketing" element={<MarketingPage />} />
-                            <Route path="/dashboard/:brandId/operation" element={<OperationPage />} />
-                            <Route path="/dashboard/:brandId/customer" element={<CustomerPage />} />
+                            <Route path="/dashboard/:brandIdentifier" element={<DashboardPage />} />
+                            <Route path="/dashboard/:brandIdentifier/finance" element={<FinancePage />} />
+                            <Route path="/dashboard/:brandIdentifier/marketing" element={<MarketingPage />} />
+                            <Route path="/dashboard/:brandIdentifier/operation" element={<OperationPage />} />
+                            <Route path="/dashboard/:brandIdentifier/customer" element={<CustomerPage />} />
                         </Route>
                     </Routes>
                 </LayoutProvider>

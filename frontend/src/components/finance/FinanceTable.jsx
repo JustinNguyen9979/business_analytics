@@ -26,6 +26,7 @@ const columns = [
     { id: 'totalCost', label: 'Tổng chi phí', minWidth: 120, align: 'right', format: (value) => formatCurrency(value) },
     { id: 'profitMargin', label: 'Tỷ suất lợi nhuận', minWidth: 100, align: 'right', format: (value) => formatPercentage(value) },
     { id: 'roi', label: 'ROI', minWidth: 100, align: 'right', format: (value) => formatPercentage(value) },
+    { id: 'takeRate', label: 'Take Rate', minWidth: 100, align: 'right', format: (value) => formatPercentage(value) },
 ];
 
 // Component Skeleton để hiển thị khi đang tải dữ liệu
