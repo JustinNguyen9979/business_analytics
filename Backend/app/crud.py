@@ -1,7 +1,6 @@
 # FILE: backend/app/crud.py
 
 import models, json, schemas, traceback, re, unicodedata
-import pandas as pd
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func, union_all, select, and_
@@ -266,6 +265,7 @@ def _calculate_and_cache_single_day(db: Session, brand_id: int, target_date: dat
     return daily_kpis
 
 def get_top_selling_products(db: Session, brand_id: int, start_date: date, end_date: date, limit: int = 10):
+    import pandas as pd
     """
     Lấy danh sách các sản phẩm bán chạy nhất.
     """

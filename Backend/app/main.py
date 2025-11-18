@@ -12,7 +12,7 @@ from datetime import date
 from cache import redis_client
 from celery_worker import process_data_request, recalculate_all_brand_data
 
-models.Base.metadata.create_all(bind=engine)
+# models.Base.metadata.create_all(bind=engine)
 app = FastAPI(
     title="CEO Dashboard API by Julice",
     default_response_class=ORJSONResponse 
