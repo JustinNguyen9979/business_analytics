@@ -50,12 +50,20 @@ class Revenue(RevenueBase):
 class BrandBase(BaseModel):
     name: str
 class BrandInfo(BrandBase):
-    id: int; model_config = ConfigDict(from_attributes=True)
+    id: int
+    slug: str
+    model_config = ConfigDict(from_attributes=True)
 class BrandCreate(BrandBase):
     pass
 class Brand(BrandBase):
-    id: int; products: List[Product] = []; customers: List[Customer] = []; orders: List[Order] = []
-    ads: List[Ad] = []; revenues: List[Revenue] = []; model_config = ConfigDict(from_attributes=True)
+    id: int
+    slug: str
+    products: List[Product] = []
+    customers: List[Customer] = []
+    orders: List[Order] = []
+    ads: List[Ad] = []
+    revenues: List[Revenue] = []
+    model_config = ConfigDict(from_attributes=True)
 
 # === SỬA LỖI Ở ĐÂY: ĐỒNG BỘ HÓA TÊN KEY SANG camelCase ===
 

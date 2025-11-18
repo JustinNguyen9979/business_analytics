@@ -17,13 +17,19 @@ app = FastAPI(
     default_response_class=ORJSONResponse 
 )
 
-# --- Dependency ---
+# --- Dependencies ---
 def get_db(): 
     db = SessionLocal()
     try: 
         yield db 
     finally: 
         db.close()
+
+def get_brand_from_slug(brand_slug: str, db: Session = Depends(get_db)):
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    if db_brand is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
+    return db_brand
 
 # ==============================================================================
 # === 1. ENDPOINTS QUẢN LÝ THƯƠNG HIỆU (BRAND MANAGEMENT) ===
@@ -35,7 +41,7 @@ def read_root():
 
 @app.get("/brands/", response_model=List[schemas.BrandInfo])
 def read_brands(db: Session = Depends(get_db)): 
-    return db.query(models.Brand).all()
+    return crud.get_all_brands(db)
 
 @app.post("/brands/", response_model=schemas.BrandInfo)
 def create_brand_api(brand: schemas.BrandCreate, db: Session = Depends(get_db)):
@@ -69,39 +75,36 @@ def clone_brand_api(brand_id: int, db: Session = Depends(get_db)):
 # === 2. ENDPOINTS XỬ LÝ DỮ LIỆU (DATA PROCESSING) ===
 # ==============================================================================
 
-@app.post("/brands/{brand_id}/upload-standard-file", status_code=status.HTTP_202_ACCEPTED)
+@app.post("/brands/{brand_slug}/upload-standard-file", status_code=status.HTTP_202_ACCEPTED)
 async def upload_standard_file(
-    brand_id: int, platform: str, db: Session = Depends(get_db), file: UploadFile = File(...)
+    platform: str, 
+    brand: models.Brand = Depends(get_brand_from_slug),
+    db: Session = Depends(get_db), 
+    file: UploadFile = File(...)
 ):
     """Nhận file, xử lý và kích hoạt worker tính toán lại toàn bộ."""
-    if not crud.get_brand(db, brand_id):
-        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
-    
-    result = standard_parser.process_standard_file(db, await file.read(), brand_id, platform)
+    result = standard_parser.process_standard_file(db, await file.read(), brand.id, platform)
     if result.get("status") == "error":
         raise HTTPException(status_code=400, detail=result.get("message"))
     
     # Kích hoạt task tính toán lại toàn bộ
-    recalculate_all_brand_data.delay(brand_id)
+    recalculate_all_brand_data.delay(brand.id)
     return {"message": "Upload thành công! Dữ liệu đang được tính toán lại trong nền."}
 
-@app.post("/brands/{brand_id}/recalculate-and-wait", status_code=status.HTTP_200_OK)
-def recalculate_and_wait(brand_id: int, db: Session = Depends(get_db)):
+@app.post("/brands/{brand_slug}/recalculate-and-wait", status_code=status.HTTP_200_OK)
+def recalculate_and_wait(brand: models.Brand = Depends(get_brand_from_slug)):
     """
     Kích hoạt Worker để tính toán lại và BLOCK cho đến khi task hoàn thành.
     """
-    if not crud.get_brand(db, brand_id):
-        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
-    
-    print(f"API: Nhận yêu cầu recalculate-and-wait cho brand {brand_id}.")
+    print(f"API: Nhận yêu cầu recalculate-and-wait cho brand {brand.id}.")
     
     # Gửi task đến Worker và lấy về đối tượng AsyncResult
-    task_result = recalculate_all_brand_data.delay(brand_id)
+    task_result = recalculate_all_brand_data.delay(brand.id)
     
     try:
         # Dòng quan trọng: Chờ đợi kết quả của task, với timeout là 5 phút (300 giây)
         task_result.get(timeout=300) 
-        print(f"API: Worker đã hoàn thành recalculate cho brand {brand_id}.")
+        print(f"API: Worker đã hoàn thành recalculate cho brand {brand.id}.")
         return {"message": "Tính toán lại hoàn tất!"}
     except TimeoutError:
         raise HTTPException(status_code=504, detail="Quá trình tính toán mất quá nhiều thời gian.")
@@ -110,28 +113,23 @@ class DateRangePayload(BaseModel):
     start_date: date
     end_date: date
 
-@app.get("/brands/{brand_id}/sources", response_model=List[str])
-def get_brand_sources(brand_id: int, db: Session = Depends(get_db)):
+@app.get("/brands/{brand_slug}/sources", response_model=List[str])
+def get_brand_sources(brand: models.Brand = Depends(get_brand_from_slug), db: Session = Depends(get_db)):
     """Lấy danh sách tất cả các 'source' duy nhất cho một brand."""
-    if not crud.get_brand(db, brand_id):
-        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
-    return crud.get_sources_for_brand(db, brand_id)
+    return crud.get_sources_for_brand(db, brand.id)
 
-@app.post("/brands/{brand_id}/delete-data-in-range", status_code=status.HTTP_200_OK)
+@app.post("/brands/{brand_slug}/delete-data-in-range", status_code=status.HTTP_200_OK)
 def delete_data_in_range(
-    brand_id: int, 
     payload: DateRangePayload,
+    brand: models.Brand = Depends(get_brand_from_slug),
     db: Session = Depends(get_db),
     source: str = Query(None, description="Optional: Filter by source (e.g., 'shopee', 'tiktok'). If not provided, deletes from all sources.")
 ):
     """Deletes transactional data for a brand within a specified date range, optionally filtered by source."""
-    if not crud.get_brand(db, brand_id):
-        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
-    
     try:
-        crud.delete_brand_data_in_range(db, brand_id, payload.start_date, payload.end_date, source)
+        crud.delete_brand_data_in_range(db, brand.id, payload.start_date, payload.end_date, source)
         # Invalidate relevant cache after deletion
-        recalculate_all_brand_data.delay(brand_id)
+        recalculate_all_brand_data.delay(brand.id)
         return {"message": "Yêu cầu xóa dữ liệu đã được thực hiện. Dữ liệu đang được tính toán lại."}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi server khi xóa dữ liệu: {str(e)}")
@@ -197,74 +195,66 @@ def get_request_status(cache_key: str):
         # Vẫn đang xử lý
         return {"status": "PROCESSING"}
 
-@app.post("/brands/{brand_id}/recalculate", status_code=status.HTTP_200_OK)
-def recalculate_brand_data(brand_id: int, db: Session = Depends(get_db)):
+@app.post("/brands/{brand_slug}/recalculate", status_code=status.HTTP_200_OK)
+def recalculate_brand_data(brand: models.Brand = Depends(get_brand_from_slug), db: Session = Depends(get_db)):
     """Tính toán lại toàn bộ dữ liệu của một brand một cách đồng bộ."""
-    if not crud.get_brand(db, brand_id):
-        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
-    result = crud.recalculate_brand_data_sync(db, brand_id=brand_id)
+    result = crud.recalculate_brand_data_sync(db, brand_id=brand.id)
     return result
 
 # ==============================================================================
 # === 3. ENDPOINTS LẤY DỮ LIỆU CHO DASHBOARD (DATA RETRIEVAL) ===
 # ==============================================================================
 
-@app.get("/brands/{brand_id}", response_model=schemas.BrandWithKpis)
+@app.get("/brands/{brand_slug}", response_model=schemas.BrandWithKpis)
 def read_brand_kpis(
-    brand_id: int, 
     start_date: date, 
     end_date: date, 
+    brand: models.Brand = Depends(get_brand_from_slug),
     db: Session = Depends(get_db)
 ):
     """Lấy thông tin tổng quan và các chỉ số KPI tổng hợp của một brand."""
-    db_brand, cache_was_missing = crud.get_brand_details(db, brand_id, start_date, end_date)
+    db_brand, cache_was_missing = crud.get_brand_details(db, brand.id, start_date, end_date)
     if not db_brand: 
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     if cache_was_missing:
-        print(f"API: Phát hiện cache lỗi thời cho brand ID {brand_id}. Kích hoạt worker tự sửa chữa.")
-        process_brand_data.delay(brand_id)
+        print(f"API: Phát hiện cache lỗi thời cho brand ID {brand.id}. Kích hoạt worker tự sửa chữa.")
+        process_brand_data.delay(brand.id)
     return db_brand
 
-@app.get("/brands/{brand_id}/daily-kpis", response_model=schemas.DailyKpiResponse)
+@app.get("/brands/{brand_slug}/daily-kpis", response_model=schemas.DailyKpiResponse)
 def read_brand_daily_kpis(
-    brand_id: int, 
     start_date: date, 
     end_date: date, 
+    brand: models.Brand = Depends(get_brand_from_slug),
     db: Session = Depends(get_db)
 ):
     """Lấy dữ liệu KPI hàng ngày cho việc vẽ biểu đồ."""
-    if not crud.get_brand(db, brand_id):
-        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
-    daily_data = crud.get_daily_kpis_for_range(db, brand_id, start_date, end_date)
+    daily_data = crud.get_daily_kpis_for_range(db, brand.id, start_date, end_date)
     return {"data": daily_data}
 
-@app.get("/brands/{brand_id}/top-products", response_model=List[schemas.TopProduct])
+@app.get("/brands/{brand_slug}/top-products", response_model=List[schemas.TopProduct])
 def read_top_products(
-    brand_id: int,
     start_date: date,
     end_date: date,
+    brand: models.Brand = Depends(get_brand_from_slug),
     limit: int = 10,
     db: Session = Depends(get_db)
 ):
     """Lấy top N sản phẩm bán chạy nhất."""
-    if not crud.get_brand(db, brand_id):
-        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     try:
-        top_products = crud.get_top_selling_products(db, brand_id, start_date, end_date, limit)
+        top_products = crud.get_top_selling_products(db, brand.id, start_date, end_date, limit)
         return top_products
     except Exception as e:
         print(f"!!! LỖI ENDPOINT TOP PRODUCTS: {e}")
         raise HTTPException(status_code=500, detail="Lỗi server khi xử lý yêu cầu.")
 
-@app.get("/brands/{brand_id}/customer-map-distribution", response_model=List[schemas.CustomerMapDistributionItem])
+@app.get("/brands/{brand_slug}/customer-map-distribution", response_model=List[schemas.CustomerMapDistributionItem])
 def read_customer_map_distribution(
-    brand_id: int,
     start_date: date,
     end_date: date,
+    brand: models.Brand = Depends(get_brand_from_slug),
     db: Session = Depends(get_db)
 ):
     """Lấy dữ liệu phân bổ khách hàng theo tỉnh/thành để vẽ bản đồ."""
-    if not crud.get_brand(db, brand_id):
-        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
-    distribution_data = crud.get_customer_distribution_with_coords(db, brand_id, start_date, end_date)
+    distribution_data = crud.get_customer_distribution_with_coords(db, brand.id, start_date, end_date)
     return distribution_data

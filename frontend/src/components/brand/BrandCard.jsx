@@ -82,7 +82,7 @@ function BrandCard({ brand, onClick, onRename, onClone, onDelete }) {
             </Menu>
 
             <CardActionArea 
-                onClick={() => onClick(brand.id)} 
+                onClick={() => onClick(brand.slug)} 
                 sx={{ 
                     flexGrow: 1, 
                     display: 'flex', 

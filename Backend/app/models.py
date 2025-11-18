@@ -9,7 +9,8 @@ class Brand(Base):
     __tablename__ = "brands"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
-    
+    slug = Column(String, unique=True, index=True)
+
     # Các mối quan hệ không thay đổi, vẫn giữ nguyên
     products = relationship("Product", back_populates="owner_brand", cascade="all, delete-orphan")
     customers = relationship("Customer", back_populates="owner_brand", cascade="all, delete-orphan")

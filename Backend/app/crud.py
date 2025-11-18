@@ -1,6 +1,6 @@
 # FILE: backend/app/crud.py
 
-import models, json, schemas, traceback
+import models, json, schemas, traceback, re, unicodedata
 import pandas as pd
 
 from sqlalchemy.orm import Session
@@ -8,6 +8,21 @@ from sqlalchemy import func, union_all, select, and_
 from datetime import date, timedelta
 from cache import redis_client
 from province_centroids import PROVINCE_CENTROIDS
+
+
+def slugify(value: str) -> str:
+    """
+    Normalizes string, converts to lowercase, removes non-alpha characters,
+    and converts spaces to hyphens.
+    """
+    if not isinstance(value, str):
+        value = str(value)
+    # Chuyển đổi ký tự có dấu thành không dấu (ví dụ: 'á' -> 'a')
+    value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+    # Xóa các ký tự không phải là chữ, số, khoảng trắng hoặc dấu gạch ngang
+    value = re.sub(r'[^\w\s-]', '', value).strip().lower()
+    # Thay thế khoảng trắng hoặc nhiều dấu gạch ngang bằng một dấu gạch ngang duy nhất
+    return re.sub(r'[-\s]+', '-', value)
 
 
 def get_raw_revenues_in_range(db: Session, brand_id: int, start_date: date, end_date: date) -> list[models.Revenue]:
@@ -74,21 +89,33 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
 
     return daily_kpi_list
 
-def get_all_brand_ids(db: Session):
-    """Lấy danh sách ID của tất cả các brand."""
-    return [id for id, in db.query(models.Brand.id).all()]
+def get_all_brands(db: Session):
+    """Lấy danh sách tất cả các brand."""
+    return db.query(models.Brand).all()
 
 def get_brand(db: Session, brand_id: int):
     return db.query(models.Brand).filter(models.Brand.id == brand_id).first()
+
+def get_brand_by_slug(db: Session, slug: str):
+    return db.query(models.Brand).filter(models.Brand.slug == slug).first()
 
 def get_brand_by_name(db: Session, name: str):
     return db.query(models.Brand).filter(models.Brand.name == name).first()
 
 def create_brand(db: Session, brand: schemas.BrandCreate):
     clean_name = brand.name.strip()
-    if db.query(models.Brand).filter(models.Brand.name == clean_name).first():
+    if db.query(models.Brand).filter(func.lower(models.Brand.name) == func.lower(clean_name)).first():
         return None
-    db_brand = models.Brand(name=clean_name)
+    
+    # Tạo slug và đảm bảo nó là duy nhất
+    base_slug = slugify(clean_name)
+    unique_slug = base_slug
+    counter = 1
+    while db.query(models.Brand).filter(models.Brand.slug == unique_slug).first():
+        unique_slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    db_brand = models.Brand(name=clean_name, slug=unique_slug)
     db.add(db_brand)
     db.commit()
     db.refresh(db_brand)
@@ -148,27 +175,54 @@ def delete_brand_by_id(db: Session, brand_id: int):
 
 def update_brand_name(db: Session, brand_id: int, new_name: str):
     db_brand = db.query(models.Brand).filter(models.Brand.id == brand_id).first()
-    if db_brand:
-        clean_new_name = new_name.strip()
-        existing_brand = db.query(models.Brand).filter(models.Brand.name == clean_new_name, models.Brand.id != brand_id).first()
-        if existing_brand:
-            return None
-        db_brand.name = clean_new_name
-        db.commit()
-        db.refresh(db_brand)
+    if not db_brand:
+        return None # Brand không tồn tại
+
+    clean_new_name = new_name.strip()
+    # Kiểm tra xem tên mới có bị trùng với brand khác không (không phân biệt hoa thường)
+    existing_brand = db.query(models.Brand).filter(
+        func.lower(models.Brand.name) == func.lower(clean_new_name),
+        models.Brand.id != brand_id
+    ).first()
+    if existing_brand:
+        return None # Tên đã tồn tại
+
+    db_brand.name = clean_new_name
+    
+    # Cập nhật slug và đảm bảo nó là duy nhất
+    base_slug = slugify(clean_new_name)
+    unique_slug = base_slug
+    counter = 1
+    while db.query(models.Brand).filter(models.Brand.slug == unique_slug, models.Brand.id != brand_id).first():
+        unique_slug = f"{base_slug}-{counter}"
+        counter += 1
+    db_brand.slug = unique_slug
+    
+    db.commit()
+    db.refresh(db_brand)
     return db_brand
 
 def clone_brand(db: Session, brand_id: int):
     original_brand = db.query(models.Brand).filter(models.Brand.id == brand_id).first()
     if not original_brand:
         return None
-    base_name = original_brand.name.split(' - Copy')[0]
+        
+    base_name = original_brand.name.split(' - Copy')[0].strip()
     copy_number = 1
     new_name = f"{base_name} - Copy"
-    while db.query(models.Brand).filter(models.Brand.name == new_name).first():
+    while db.query(models.Brand).filter(func.lower(models.Brand.name) == func.lower(new_name)).first():
         copy_number += 1
         new_name = f"{base_name} - Copy {copy_number}"
-    cloned_brand = models.Brand(name=new_name)
+
+    # Tạo slug cho brand mới và đảm bảo duy nhất
+    base_slug = slugify(new_name)
+    unique_slug = base_slug
+    counter = 1
+    while db.query(models.Brand).filter(models.Brand.slug == unique_slug).first():
+        unique_slug = f"{base_slug}-{counter}"
+        counter += 1
+
+    cloned_brand = models.Brand(name=new_name, slug=unique_slug)
     db.add(cloned_brand)
     db.commit()
     db.refresh(cloned_brand)

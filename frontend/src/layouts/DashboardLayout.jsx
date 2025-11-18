@@ -31,7 +31,7 @@ import DeleteDataDialog from '../components/settings/DeleteDataDialog';
 import { recalculateBrandDataAndWait, uploadStandardFile, getAllBrands } from '../services/api';
 import { useLayout } from '../context/LayoutContext';
 import { useNotification } from '../context/NotificationContext';
-import { slugify } from '../utils/slugify';
+// import { slugify } from '../utils/slugify'; // Không cần slugify ở đây nữa vì backend đã trả về slug
 import { BrandProvider, useBrand } from '../context/BrandContext';
 
 // --- Styled Components ---
@@ -104,7 +104,7 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
 // --- Component con chứa toàn bộ layout và logic sau khi đã có context ---
 function LayoutWithBrandContext() {
     const { id: brandId, name: brandName } = useBrand();
-    const { brandIdentifier } = useParams();
+    const { brandIdentifier } = useParams(); // brandIdentifier bây giờ là slug
     const navigate = useNavigate();
     const { isSidebarOpen, setIsSidebarOpen } = useLayout();
     const { showNotification } = useNotification();
@@ -115,12 +115,12 @@ function LayoutWithBrandContext() {
     const [isRecalculating, setIsRecalculating] = useState(false);
 
     const handleRecalculate = async () => {
-        if (!brandId || isRecalculating) return;
+        if (!brandIdentifier || isRecalculating) return;
         setIsRecalculating(true);
         try {
-            await recalculateBrandDataAndWait(brandId);
+            await recalculateBrandDataAndWait(brandIdentifier); // Dùng brandIdentifier (slug)
             showNotification("Dữ liệu đã được làm mới thành công!", "success");
-            navigate(0);
+            navigate(0); // Refresh trang để tải lại dữ liệu
         } catch (error) {
             const errorMessage = error.response?.data?.detail || "Lỗi khi yêu cầu tính toán lại.";
             showNotification(errorMessage, 'error');
@@ -129,13 +129,13 @@ function LayoutWithBrandContext() {
     };
 
     const handleUpload = async (platform, file) => {
-        if (!brandId) return;
+        if (!brandIdentifier) return;
         try {
-            await uploadStandardFile(platform, brandId, file);
+            await uploadStandardFile(platform, brandIdentifier, file); // Dùng brandIdentifier (slug)
             showNotification(`Upload thành công! Bắt đầu tính toán lại...`, 'info');
-            await recalculateBrandDataAndWait(brandId);
+            await recalculateBrandDataAndWait(brandIdentifier); // Dùng brandIdentifier (slug)
             showNotification(`Tính toán lại thành công!`, 'success');
-            navigate(0);
+            navigate(0); // Refresh trang để tải lại dữ liệu
         } catch (error) {
             showNotification(error.response?.data?.detail || 'Lỗi khi upload.', 'error');
         }
@@ -237,8 +237,8 @@ function LayoutWithBrandContext() {
                 <Outlet />
             </Box>
 
-            <SingleImportDialog open={isImportDialogOpen} onClose={() => setImportDialogOpen(false)} onUpload={handleUpload} brandId={brandId} />
-            <DeleteDataDialog open={isDeleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} brandId={brandId} />
+            <SingleImportDialog open={isImportDialogOpen} onClose={() => setImportDialogOpen(false)} onUpload={handleUpload} brandSlug={brandIdentifier} />
+            <DeleteDataDialog open={isDeleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} brandSlug={brandIdentifier} />
         </Box>
     );
 }
@@ -256,19 +256,25 @@ export default function DashboardLayout() {
             try {
                 const allBrands = await getAllBrands();
                 let currentBrand = null;
-                if (!isNaN(brandIdentifier)) {
+                
+                // Kiểm tra nếu brandIdentifier là một số (ID cũ)
+                if (!isNaN(brandIdentifier) && Number.isInteger(parseFloat(brandIdentifier))) {
                     currentBrand = allBrands.find(b => b.id === parseInt(brandIdentifier, 10));
-                    if (currentBrand) {
-                        const brandSlug = slugify(currentBrand.name);
-                        const newPath = window.location.pathname.replace(brandIdentifier, brandSlug);
-                        window.history.replaceState(null, '', newPath);
+                    if (currentBrand && currentBrand.slug) {
+                        // Chuyển hướng sang URL dùng slug
+                        const newPath = window.location.pathname.replace(brandIdentifier, currentBrand.slug);
+                        navigate(newPath, { replace: true }); // Dùng navigate để cập nhật URL
+                        return; // Dừng xử lý tiếp để tránh render với ID cũ
                     }
-                } else {
-                    currentBrand = allBrands.find(b => slugify(b.name) === brandIdentifier);
-                }
+                } 
+                
+                // Nếu không phải ID hoặc đã chuyển hướng, tìm bằng slug
+                currentBrand = allBrands.find(b => b.slug === brandIdentifier);
+                
                 if (currentBrand) {
                     setBrandInfo({ id: currentBrand.id, name: currentBrand.name, isLoading: false });
                 } else {
+                    // Nếu không tìm thấy brand nào, chuyển hướng về trang chính
                     navigate('/');
                 }
             } catch (error) {

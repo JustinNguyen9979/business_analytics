@@ -99,112 +99,37 @@ export const cloneBrand = async (brandId) => {
     }
 };
 
-// Hàm tải lên file cho Shopee
-export const uploadPlatformFiles = async (platform, brandId, files) => {
-    const formData = new FormData();
-    if (files.orderFile) formData.append('order_file', files.orderFile);
-    if (files.revenueFile) formData.append('revenue_file', files.revenueFile);
-    if (files.adsFile) formData.append('ad_file', files.adsFile);
-
-    try {
-        // URL được tạo động dựa trên platform
-        const response = await apiClient.post(`/upload/${platform.toLowerCase()}/${brandId}`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
-        });
-        return response.data;
-    } catch (error) {
-        console.error(`Error uploading files for ${platform} and brand ${brandId}:`, error);
-        throw error;
-    }
-};
-
-export const uploadStandardFile = async (platform, brandId, file) => {
+export const uploadStandardFile = async (platform, brandSlug, file) => {
     const formData = new FormData();
     formData.append('file', file);
     try {
         const response = await apiClient.post(
-            `/brands/${brandId}/upload-standard-file?platform=${platform.toLowerCase()}`,
+            `/brands/${brandSlug}/upload-standard-file?platform=${platform.toLowerCase()}`,
             formData, { headers: { 'Content-Type': 'multipart/form-data' } }
         );
         return response.data;
     } catch (error) { throw error; }
 };
 
-export const recalculateBrandData = async (brandId) => {
-    try {
-        const response = await apiClient.post(`/brands/${brandId}/recalculate`);
-        return response.data;
-    } catch (error) { throw error; }
-};
-
-export const recalculateBrandDataAndWait = async (brandId) => {
+export const recalculateBrandDataAndWait = async (brandSlug) => {
     try {
         // Trỏ đến endpoint mới
-        const response = await apiClient.post(`/brands/${brandId}/recalculate-and-wait`);
+        const response = await apiClient.post(`/brands/${brandSlug}/recalculate-and-wait`);
         return response.data;
     } catch (error) { throw error; }
 };
 
-// Hàm tải lên file chi phí cho Shopee
-export const uploadCostFile = async (brandId, costFile) => {
-    const formData = new FormData();
-    formData.append('cost_file', costFile);
-
+export const getSourcesForBrand = async (brandSlug) => {
     try {
-        const response = await apiClient.post(`/brands/${brandId}/upload-cost-file`, formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-            },
-        });
+        const response = await apiClient.get(`/brands/${brandSlug}/sources`);
         return response.data;
     } catch (error) {
-        console.error(`Error uploading cost file for brand ${brandId}:`, error);
+        console.error(`Error fetching sources for brand ${brandSlug}:`, error);
         throw error;
     }
 };
 
-export const requestCustomerDistribution = async (brandId, startDate, endDate) => {
-    try {
-        await apiClient.post(`/brands/${brandId}/async-customer-distribution`, null, {
-            params: {
-                start_date: startDate.format('YYYY-MM-DD'),
-                end_date: endDate.format('YYYY-MM-DD'),
-            },
-        });
-    } catch (error) {
-        console.error(`Error requesting customer distribution calculation for brand ${brandId}:`, error);
-        throw error;
-    }
-};
-
-export const getCustomerDistribution = async (brandId, startDate, endDate) => {
-    try {
-        const response = await apiClient.get(`/brands/${brandId}/customer-distribution`, {
-            params: {
-                start_date: startDate.format('YYYY-MM-DD'),
-                end_date: endDate.format('YYYY-MM-DD'),
-            },
-        });
-        return response.data;
-    } catch (error) {
-        console.error(`Error fetching customer distribution for brand ${brandId}:`, error);
-        throw error;
-    }
-};
-
-export const getSourcesForBrand = async (brandId) => {
-    try {
-        const response = await apiClient.get(`/brands/${brandId}/sources`);
-        return response.data;
-    } catch (error) {
-        console.error(`Error fetching sources for brand ${brandId}:`, error);
-        throw error;
-    }
-};
-
-export const deleteDataInRange = async (brandId, startDate, endDate, source = null) => {
+export const deleteDataInRange = async (brandSlug, startDate, endDate, source = null) => {
     try {
         const params = {};
         if (source && source !== 'all') {
@@ -212,13 +137,13 @@ export const deleteDataInRange = async (brandId, startDate, endDate, source = nu
         }
 
         const response = await apiClient.post(
-            `/brands/${brandId}/delete-data-in-range`,
+            `/brands/${brandSlug}/delete-data-in-range`,
             { start_date: startDate, end_date: endDate },
             { params }
         );
         return response.data;
     } catch (error) {
-        console.error(`Error deleting data for brand ${brandId}:`, error);
+        console.error(`Error deleting data for brand ${brandSlug}:`, error);
         throw error;
     }
 };

@@ -35,8 +35,8 @@ function BrandLobby() {
         fetchBrands();
     }, []);
 
-    const handleBrandClick = (brandId) => {
-        navigate(`/dashboard/${brandId}`);
+    const handleBrandClick = (brandSlug) => {
+        navigate(`/dashboard/${brandSlug}`);
     };
 
     const handleBrandCreated = async (brandName) => {
