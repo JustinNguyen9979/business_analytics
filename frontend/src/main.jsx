@@ -8,11 +8,11 @@ import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
+  // <React.StrictMode>
     <BrowserRouter>
       <LocalizationProvider dateAdapter={AdapterDayjs}>
         <App />
       </LocalizationProvider>
     </BrowserRouter>
-  </React.StrictMode>,
+  // </React.StrictMode>,
 )

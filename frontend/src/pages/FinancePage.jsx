@@ -61,53 +61,70 @@ function FinancePage() {
         ?.filter(item => item.platform !== 'Tổng cộng')
         .sort((a, b) => (b.netRevenue || 0) - (a.netRevenue || 0)) || [];
 
-    const kpiCards = [
-        { 
-            title: 'Tổng Lợi nhuận', 
-            value: summaryData.profit, 
-            previousValue: prevSummaryData.profit,
-            icon: <MonetizationOnIcon />, 
-            color: 'success.main',
-            format: 'currency',
-            direction: 'up',
-        },
-        { 
-            title: 'Tổng GMV', 
-            value: summaryData.gmv, 
-            previousValue: prevSummaryData.gmv,
-            icon: <AccountBalanceWalletIcon />, 
-            color: 'primary.main',
-            format: 'currency',
-            direction: 'up',
-        },
-        { 
-            title: 'Tổng Doanh thu thuần', 
-            value: summaryData.netRevenue, 
-            previousValue: prevSummaryData.netRevenue,
-            icon: <TrendingUpIcon />, 
-            color: 'info.main',
-            format: 'currency',
-            direction: 'up',
-        },
-        { 
-            title: 'Tổng Chi phí', 
-            value: summaryData.totalCost, 
-            previousValue: prevSummaryData.totalCost,
-            icon: <AttachMoneyIcon />, 
-            color: 'error.main',
-            format: 'currency',
-            direction: 'down', // Chi phí giảm là tốt
-        },
-        { 
-            title: 'ROI Tổng', 
-            value: summaryData.roi, 
-            previousValue: prevSummaryData.roi,
-            icon: <StackedLineChartIcon />, 
-            color: 'secondary.main',
-            format: 'percent',
-            direction: 'up',
-        },
+    // const kpiCards = [
+    //     { 
+    //         title: 'Tổng Lợi nhuận', 
+    //         value: summaryData.profit, 
+    //         previousValue: prevSummaryData.profit,
+    //         icon: <MonetizationOnIcon />, 
+    //         color: 'success.main',
+    //         format: 'currency',
+    //         direction: 'up',
+    //     },
+    //     { 
+    //         title: 'Tổng GMV', 
+    //         value: summaryData.gmv, 
+    //         previousValue: prevSummaryData.gmv,
+    //         icon: <AccountBalanceWalletIcon />, 
+    //         color: 'primary.main',
+    //         format: 'currency',
+    //         direction: 'up',
+    //     },
+    //     { 
+    //         title: 'Tổng Doanh thu thuần', 
+    //         value: summaryData.netRevenue, 
+    //         previousValue: prevSummaryData.netRevenue,
+    //         icon: <TrendingUpIcon />, 
+    //         color: 'info.main',
+    //         format: 'currency',
+    //         direction: 'up',
+    //     },
+    //     { 
+    //         title: 'Tổng Chi phí', 
+    //         value: summaryData.totalCost, 
+    //         previousValue: prevSummaryData.totalCost,
+    //         icon: <AttachMoneyIcon />, 
+    //         color: 'error.main',
+    //         format: 'currency',
+    //         direction: 'down', // Chi phí giảm là tốt
+    //     },
+    //     { 
+    //         title: 'ROI Tổng', 
+    //         value: summaryData.roi, 
+    //         previousValue: prevSummaryData.roi,
+    //         icon: <StackedLineChartIcon />, 
+    //         color: 'secondary.main',
+    //         format: 'percent',
+    //         direction: 'up',
+    //     },
+    // ];
+
+    const cardConfigs = [
+        { key: 'profit', title: 'Tổng Lợi nhuận', icon: <MonetizationOnIcon />, color: 'success.main' },
+        { key: 'gmv', title: 'Tổng GMV', icon: <AccountBalanceWalletIcon />, color: 'primary.main' },
+        { key: 'netRevenue', title: 'Tổng Doanh thu thuần', icon: <TrendingUpIcon />, color: 'info.main' },
+        { key: 'totalCost', title: 'Tổng Chi phí', icon: <AttachMoneyIcon />, color: 'error.main', direction: 'down' }, // Chi phí giảm là tốt
+        { key: 'roi', title: 'ROI Tổng', icon: <StackedLineChartIcon />, color: 'secondary.main', format: 'percent' },
     ];
+
+    // 2. Tạo danh sách kpiCards bằng cách map qua cấu hình và gán dữ liệu động
+    const kpiCards = cardConfigs.map(config => ({
+        ...config, // Kế thừa toàn bộ thuộc tính static (title, icon, color...)
+        value: summaryData[config.key],
+        previousValue: prevSummaryData[config.key],
+        format: config.format || 'currency', // Mặc định là 'currency' nếu không khai báo
+        direction: config.direction || 'up',   // Mặc định là 'up' nếu không khai báo
+    }));
 
     return (
         <Box sx={{ px: 4, py: 3 }}>

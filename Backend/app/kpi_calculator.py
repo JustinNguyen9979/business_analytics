@@ -10,7 +10,7 @@ def _calculate_core_kpis(
     ads: list[models.Ad]
 ) -> dict:
     # === DEBUGGING: In ra thông tin đầu vào ===
-    print(f"[DEBUG] Received {len(orders)} orders and {len(revenues)} revenues records.")
+    # print(f"[DEBUG] Received {len(orders)} orders and {len(revenues)} revenues records.")
 
     # === KHỐI 1: PHÂN LOẠI ĐƠN HÀNG DỰA TRÊN LOGIC CHUẨN TỪ REVENUES ===
     
@@ -33,7 +33,7 @@ def _calculate_core_kpis(
     completed_order_codes = valid_revenue_order_codes - refunded_order_codes
 
     # === DEBUGGING: In ra các mã đơn hàng đã phân loại ===
-    print(f"[DEBUG] Found {len(completed_order_codes)} completed order codes: {list(completed_order_codes)[:10]}...") # In 10 mã đầu
+    # print(f"[DEBUG] Found {len(completed_order_codes)} completed order codes: {list(completed_order_codes)[:10]}...") # In 10 mã đầu
 
     # === KHỐI 2: TÍNH TOÁN CÁC CHỈ SỐ TÀI CHÍNH THEO LOGIC ĐÚNG ===
 
@@ -45,12 +45,12 @@ def _calculate_core_kpis(
     for o in orders:
         cogs_map[o.order_code] = cogs_map.get(o.order_code, 0) + o.cogs
     # === DEBUGGING: In ra một phần của cogs_map ===
-    print(f"[DEBUG] COGS map (first 5 items): {dict(list(cogs_map.items())[:5])}")
+    # print(f"[DEBUG] COGS map (first 5 items): {dict(list(cogs_map.items())[:5])}")
 
     cogs = sum(cogs_map.get(code, 0) for code in completed_order_codes)
     
     # === DEBUGGING: In ra giá trị COGS cuối cùng ===
-    print(f"[DEBUG] Final calculated COGS: {cogs}")
+    # print(f"[DEBUG] Final calculated COGS: {cogs}")
 
     adSpend = sum(a.expense for a in ads)
 
@@ -59,7 +59,6 @@ def _calculate_core_kpis(
     totalCost = cogs + executionCost + adSpend
     profit = gmv - totalCost
 
-    # ... (phần còn lại của hàm giữ nguyên) ...
     roi = (profit / totalCost) if totalCost > 0 else 0
     profitMargin = (profit / netRevenue) if netRevenue != 0 else 0
     takeRate = (executionCost / gmv) if gmv > 0 else 0
@@ -140,10 +139,10 @@ def calculate_aggregated_kpis(
     Tính toán KPI tổng hợp cho một khoảng thời gian.
     Hàm này giờ chỉ là một wrapper gọi đến hàm tính toán cốt lõi.
     """
-    print("CALCULATOR: Bắt đầu tính toán các chỉ số tổng hợp...")
+    # print("CALCULATOR: Bắt đầu tính toán các chỉ số tổng hợp...")
     try:
         kpis = _calculate_core_kpis(all_orders, all_revenues, all_ads)
-        print("CALCULATOR: Hoàn thành tính toán.")
+        # print("CALCULATOR: Hoàn thành tính toán.")
         return kpis
     except Exception as e:
         print(f"CALCULATOR ERROR (aggregated): {e}")

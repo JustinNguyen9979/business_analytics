@@ -2,6 +2,7 @@
 
 import json, crud, models, schemas, standard_parser
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, status, Query, Body
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -16,6 +17,8 @@ app = FastAPI(
     title="CEO Dashboard API by Julice",
     default_response_class=ORJSONResponse 
 )
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # --- Dependencies ---
 def get_db(): 

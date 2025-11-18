@@ -1,49 +1,56 @@
 // FILE: frontend/src/App.jsx
 
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { ThemeProvider, CssBaseline } from '@mui/material';
+import { ThemeProvider, CssBaseline, Box, CircularProgress } from '@mui/material';
 import theme from './theme'; 
 import { LayoutProvider } from './context/LayoutContext';
 
 import { NotificationProvider } from './context/NotificationProvider';
 import { Tooltip } from 'react-tooltip';
-
-import BrandLobby from './pages/BrandLobby';
 import DashboardLayout from './layouts/DashboardLayout';
-import DashboardPage from './pages/DashboardPage';
-import FinancePage from './pages/FinancePage';
-import MarketingPage from './pages/MarketingPage'; 
-import OperationPage from './pages/OperationPage'; 
-import CustomerPage from './pages/CustomerPage';   
+
+const BrandLobby = lazy(() => import('./pages/BrandLobby'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage'));
+const FinancePage = lazy(() => import('./pages/FinancePage'));
+const MarketingPage = lazy(() => import('./pages/MarketingPage'));
+const OperationPage = lazy(() => import('./pages/OperationPage'));
+const CustomerPage = lazy(() => import('./pages/CustomerPage'));
+
+const PageLoader = () => (
+    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100%' }}>
+        <CircularProgress />
+    </Box>
+);
 
 function App() {
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
             <NotificationProvider>
-                {/* <<< BỌC CÁC ROUTE CẦN DÙNG LAYOUT BẰNG PROVIDER MỚI >>> */}
                 <LayoutProvider>
-                    <Routes>
-                        <Route path="/" element={<BrandLobby />} />
-                        <Route element={<DashboardLayout />}>
-                            <Route path="/dashboard/:brandIdentifier" element={<DashboardPage />} />
-                            <Route path="/dashboard/:brandIdentifier/finance" element={<FinancePage />} />
-                            <Route path="/dashboard/:brandIdentifier/marketing" element={<MarketingPage />} />
-                            <Route path="/dashboard/:brandIdentifier/operation" element={<OperationPage />} />
-                            <Route path="/dashboard/:brandIdentifier/customer" element={<CustomerPage />} />
-                        </Route>
-                    </Routes>
+                    {/* 3. Bọc Routes bằng Suspense */}
+                    <Suspense fallback={<PageLoader />}>
+                        <Routes>
+                            <Route path="/" element={<BrandLobby />} />
+                            <Route element={<DashboardLayout />}>
+                                <Route path="/dashboard/:brandIdentifier" element={<DashboardPage />} />
+                                <Route path="/dashboard/:brandIdentifier/finance" element={<FinancePage />} />
+                                <Route path="/dashboard/:brandIdentifier/marketing" element={<MarketingPage />} />
+                                <Route path="/dashboard/:brandIdentifier/operation" element={<OperationPage />} />
+                                <Route path="/dashboard/:brandIdentifier/customer" element={<CustomerPage />} />
+                            </Route>
+                        </Routes>
+                    </Suspense>
                 </LayoutProvider>
             </NotificationProvider>
             <Tooltip 
-                id="map-tooltip" // ID này phải khớp với `data-tooltip-id` trong ComposableMap
+                id="map-tooltip" 
                 style={{ 
                     backgroundColor: 'rgba(30, 41, 59, 0.8)',
                     backdropFilter: 'blur(10px)',
-                    // border: `1px solid ${theme.palette.divider}`,
                     borderRadius: '8px',
-                    zIndex: 9999 // Đảm bảo nó nổi lên trên tất cả
+                    zIndex: 9999
                 }}
             />
         </ThemeProvider>

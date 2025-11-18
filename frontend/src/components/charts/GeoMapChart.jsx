@@ -2,15 +2,25 @@
 
 import React, { memo, useMemo, useEffect, useState } from 'react';
 import { ComposableMap, Geographies, Geography, Marker } from '@vnedyalk0v/react19-simple-maps';
-import { Box, Grid, Stack, Typography } from '@mui/material';
+import { Box, Grid, Stack, Typography, CircularProgress } from '@mui/material';
 import { scaleLinear } from 'd3-scale';
 
-import geoShapeData from '../../assets/vietnam-shape.json';
+// import geoShapeData from '../../assets/vietnam-shape.json';
 
 function GeoMapChartComponent({ data }) {
+    // 1. Hook lấy dữ liệu bản đồ
+    const [geoShapeData, setGeoShapeData] = useState(null);
+
+    useEffect(() => {
+        // Tải dữ liệu bất đồng bộ
+        fetch('/vietnam-shape.json')
+            .then(res => res.json())
+            .then(data => setGeoShapeData(data));
+    }, []);
 
     const [showMarkers, setShowMarkers] = useState(false);
 
+    // 3. Hook tính toán scale
     const { sizeScale, opacityScale } = useMemo(() => {
         if (!data || data.length === 0) {
             return { sizeScale: () => 0, opacityScale: () => 0 };
@@ -25,6 +35,7 @@ function GeoMapChartComponent({ data }) {
         return { sizeScale: size, opacityScale: opacity };
     }, [data]);
 
+    // 4. Hook tính toán Top 5
     const top5Provinces = useMemo(() => {
         if (!data || data.length === 0) {
             return [];
@@ -35,6 +46,7 @@ function GeoMapChartComponent({ data }) {
             .slice(0, 5);
     }, [data]);
 
+    // 5. Hook hiệu ứng delay
     useEffect(() => {
         // Chúng ta dùng setTimeout để trì hoãn việc hiển thị các điểm chấm một chút (50ms).
         // Khoảng thời gian này đủ để trình duyệt vẽ xong nền bản đồ phức tạp trước.
@@ -46,6 +58,7 @@ function GeoMapChartComponent({ data }) {
         return () => clearTimeout(timer);
     }, []);
 
+    // 6. Hook click outside
     useEffect(() => {
         // Hàm này sẽ được gọi mỗi khi có một cú click bất kỳ trên trang
         const handleOutsideClick = (event) => {
@@ -64,6 +77,14 @@ function GeoMapChartComponent({ data }) {
             document.removeEventListener('click', handleOutsideClick);
         };
     }, []);
+
+    if (!geoShapeData) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                <CircularProgress />
+            </Box>
+        );
+    }
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>

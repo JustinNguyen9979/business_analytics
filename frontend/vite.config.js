@@ -19,7 +19,7 @@ export default defineConfig({
       port: 24678,
     },
     watch: {
-      usePolling: true,
+      // usePolling: true,
     },
 
     allowedHosts: [
@@ -28,5 +28,18 @@ export default defineConfig({
       '192.168.1.*',
       '192.168.100.*'
     ]
-  }
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Tách plotly.js và react-plotly.js ra thành một file chunk riêng
+          // Giúp trình duyệt tải nhanh hơn và không phải tải lại nếu code chính thay đổi
+          plotly: ['plotly.js', 'react-plotly.js'], 
+        },
+      },
+    },
+    // Tăng giới hạn cảnh báo kích thước file (vì plotly vẫn nặng) để không bị spam warning
+    chunkSizeWarningLimit: 1600, 
+  },
 })
