@@ -132,23 +132,34 @@ function FinancePage() {
 
             {/* --- PHẦN 2: CHART PHÂN BỔ (HÀNG DƯỚI - MỚI THÊM) --- */}
             <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
-                {loading
-                    ? Array.from(new Array(5)).map((_, index) => (
-                        <Box key={index} sx={{ flex: 1, minWidth: '200px', height: 250 }}>
-                             <Skeleton variant="rectangular" width="100%" height="100%" sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.05)' }} />
-                        </Box>
-                    ))
-                    : cardConfigs.map(config => (
-                        <Box key={config.key} sx={{ flex: 1, minWidth: '200px', height: 250 }}>
+                {(() => {
+                    // 1. TÍNH TOÁN CHIỀU CAO ĐỘNG
+                    // Nếu có dữ liệu -> 400px, Ngược lại (Loading hoặc Rỗng) -> 250px
+                    const hasData = platformData && platformData.length > 0;
+                    const dynamicHeight = hasData ? 400 : 250;
+
+                    if (loading) {
+                        return Array.from(new Array(5)).map((_, index) => (
+                            // Áp dụng chiều cao 250px cho Skeleton lúc đang tải
+                            <Box key={index} sx={{ flex: 1, minWidth: '200px', height: 250 }}>
+                                 <Skeleton variant="rectangular" width="100%" height="100%" sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.05)' }} />
+                            </Box>
+                        ));
+                    }
+
+                    return cardConfigs.map(config => (
+                        // Áp dụng chiều cao động vào Box chứa
+                        <Box key={config.key} sx={{ flex: 1, minWidth: '200px', height: dynamicHeight }}>
                             <SourceDistributionChart
-                                data={platformData}         // Dữ liệu danh sách các sàn
-                                dataKey={config.key}        // Key cần vẽ (ví dụ: 'profit', 'gmv')
+                                data={platformData}
+                                dataKey={config.key}
                                 title={config.title}
                                 format={config.format || 'currency'}
+                                height={dynamicHeight} 
                             />
                         </Box>
-                    ))
-                }
+                    ));
+                })()}
             </Box>
 
             {/* Bảng chi tiết */}

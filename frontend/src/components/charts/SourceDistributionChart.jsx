@@ -153,7 +153,9 @@ function SourceDistributionChart({ data, dataKey, title, format, height = 250 })
                 tickfont: { color: theme.palette.text.primary, size: 13 },
                 ticks: 'outside',
                 ticklen: 10,
-                tickcolor: 'transparent'
+                tickcolor: 'transparent',
+                tickangle: -45,
+                automargin: true
             },
             yaxis: { 
                 showgrid: true, 
