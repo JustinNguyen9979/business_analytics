@@ -87,6 +87,19 @@ function SourceDistributionChart({ data, dataKey, title, format, height = 250 })
     // LOGIC 2: Dùng BAR CHART cho các chỉ số Phần trăm (ROI) - Vì % không cộng dồn được
     else {
         const maxValue = Math.max(...values, 0);
+
+        let dynamicDtick;
+        if (maxValue <= 1.5) {
+            dynamicDtick = 0.2; // Nếu Max <= 150%: Chia mỗi 20% (0, 20%, 40%...)
+        } else if (maxValue <= 4.0) {
+            dynamicDtick = 0.5; // Nếu Max <= 400%: Chia mỗi 50% (0, 50%, 100%...)
+        } else if (maxValue <= 10.0) {
+            dynamicDtick = 1.0; // Nếu Max <= 1000%: Chia mỗi 100% (0, 100%, 200%...)
+        } else {
+            // Nếu siêu lớn (> 1000%): Chia trục thành khoảng 5 phần bằng nhau
+            // Math.ceil để làm tròn lên số nguyên gần nhất
+            dynamicDtick = Math.ceil(maxValue / 5); 
+        }
         
         const coloredLabels = labels.map((label, index) => {
             const color = colors[index % colors.length];
@@ -149,7 +162,7 @@ function SourceDistributionChart({ data, dataKey, title, format, height = 250 })
                 // Thêm padding cho trục Y để cột không chạm nóc
                 zeroline: false,
                 range: [0, maxValue * 1.2],
-                dtick: 0.2,
+                dtick: dynamicDtick,
                 tickformat: '.0%',
             },
         };
