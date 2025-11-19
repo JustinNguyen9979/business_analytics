@@ -25,7 +25,6 @@ import GroupIcon from '@mui/icons-material/Group';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 
 // --- Components & Services ---
-import AuroraBackground from '../components/ui/AuroraBackground';
 import SingleImportDialog from '../components/import/SingleImportDialog';
 import DeleteDataDialog from '../components/settings/DeleteDataDialog';
 import { recalculateBrandDataAndWait, uploadStandardFile, getAllBrands } from '../services/api';
@@ -154,7 +153,6 @@ function LayoutWithBrandContext() {
     return (
         <Box sx={{ display: 'flex' }}>
             <CssBaseline />
-            <AuroraBackground />
 
             <AppBar position="fixed" open={isSidebarOpen}>
                 <Toolbar>
@@ -290,7 +288,6 @@ export default function DashboardLayout() {
     if (brandInfo.isLoading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
-                 <AuroraBackground />
                 <CircularProgress />
             </Box>
         );

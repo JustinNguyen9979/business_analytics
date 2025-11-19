@@ -1,9 +1,9 @@
 // FILE: frontend/src/pages/DashboardPage.jsx (PHIÊN BẢN HOÀN THIỆN)
 
 import { useTheme } from '@mui/material/styles';
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, Stack } from '@mui/material';
+import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, Stack, Skeleton } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import dayjs from 'dayjs';
 import { useDashboardData } from '../hooks/dashboard/useDashboardData';
@@ -11,14 +11,27 @@ import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import ChartTimeFilter from '../components/common/ChartTimeFilter';
 import { StatItem } from '../components/dashboard/StatItem';
 import { kpiGroups } from '../config/dashboardConfig';
-import RevenueProfitChart from '../components/charts/RevenueProfitChart';
-import TopProductsChart from '../components/charts/TopProductsChart';
-import CostDonutChart from '../components/charts/CostDonutChart';
-import GeoMapChart from '../components/charts/GeoMapChart';
+// import RevenueProfitChart from '../components/charts/RevenueProfitChart';
+// import TopProductsChart from '../components/charts/TopProductsChart';
+// import CostDonutChart from '../components/charts/CostDonutChart';
+// import GeoMapChart from '../components/charts/GeoMapChart';
 import ChartPlaceholder from '../components/common/ChartPlaceholder';
 import { useLayout } from '../context/LayoutContext';
 import { useBrand } from '../context/BrandContext';
 
+const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
+const CostDonutChart = lazy(() => import('../components/charts/CostDonutChart'));
+const TopProductsChart = lazy(() => import('../components/charts/TopProductsChart'));
+const GeoMapChart = lazy(() => import('../components/charts/GeoMapChart'));
+
+const ChartSkeleton = () => (
+    <Skeleton 
+        variant="rectangular" 
+        width="100%" 
+        height="100%" 
+        sx={{ borderRadius: 2, bgcolor: 'rgba(255, 255, 255, 0.05)' }} 
+    />
+);
 
 function DashboardPage() {
     const theme = useTheme();
@@ -163,15 +176,17 @@ function DashboardPage() {
                 </Box>
                 
                 <Box sx={{ pb: 3, pt: 1, height: 450, position: 'relative' }}>
-                    {lineChart.loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
-                        lineChart.data.current && lineChart.data.current.length > 0 ? (
-                            <RevenueProfitChart 
-                                data={lineChart.data.current} 
-                                comparisonData={lineChart.data.previous}
-                                chartRevision={chartRevision}
-                                aggregationType={lineChart.data.aggregationType}
-                            />
-                        ) : <ChartPlaceholder title="Doanh thu & Lợi nhuận" />
+                    {lineChart.loading ? <ChartSkeleton /> : (
+                        <Suspense fallback={<ChartSkeleton />}>
+                            {lineChart.data.current && lineChart.data.current.length > 0 ? (
+                                <RevenueProfitChart 
+                                    data={lineChart.data.current} 
+                                    comparisonData={lineChart.data.previous}
+                                    chartRevision={chartRevision}
+                                    aggregationType={lineChart.data.aggregationType}
+                                />
+                            ) : <ChartPlaceholder title="Doanh thu & Lợi nhuận" />}
+                        </Suspense>
                     )}
                 </Box>
             </Paper>

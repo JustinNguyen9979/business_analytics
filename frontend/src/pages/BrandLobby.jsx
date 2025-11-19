@@ -6,7 +6,6 @@ import { Container, Typography, Box, CircularProgress, Alert, Grid, Dialog, Dial
 import { getAllBrands, createBrand, deleteBrand, updateBrand, cloneBrand } from '../services/api';
 import BrandCard from '../components/brand/BrandCard';
 import CreateBrandCard from '../components/brand/CreateBrandCard';
-import AuroraBackground from '../components/ui/AuroraBackground';
 
 function BrandLobby() {
     const [brands, setBrands] = useState([]);
@@ -106,7 +105,6 @@ function BrandLobby() {
     if (loading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: 'background.default' }}>
-                <AuroraBackground />
                 <CircularProgress />
             </Box>
         );
@@ -114,8 +112,6 @@ function BrandLobby() {
 
     return (
         <>
-            <AuroraBackground />
-
             <Box 
                 component="main" 
                 // maxWidth="lg" 

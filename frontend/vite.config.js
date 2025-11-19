@@ -30,16 +30,22 @@ export default defineConfig({
     ]
   },
   build: {
+    target: 'esnext', // Build cho trình duyệt hiện đại (nhẹ hơn)
+    minify: 'esbuild', // Minify nhanh hơn
     rollupOptions: {
       output: {
         manualChunks: {
-          // Tách plotly.js và react-plotly.js ra thành một file chunk riêng
-          // Giúp trình duyệt tải nhanh hơn và không phải tải lại nếu code chính thay đổi
-          plotly: ['plotly.js', 'react-plotly.js'], 
+          // Tách lõi React riêng
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          // Tách MUI riêng (vì nó rất nặng)
+          'mui-vendor': ['@mui/material', '@mui/icons-material', '@mui/x-date-pickers'],
+          // Tách Plotly riêng (Cái này quan trọng nhất)
+          'plotly-vendor': ['plotly.js', 'react-plotly.js'],
+          // Tách Map riêng
+          'map-vendor': ['@vnedyalk0v/react19-simple-maps', 'd3-geo', 'd3-scale'],
         },
       },
     },
-    // Tăng giới hạn cảnh báo kích thước file (vì plotly vẫn nặng) để không bị spam warning
-    chunkSizeWarningLimit: 1600, 
+    chunkSizeWarningLimit: 2000,
   },
 })
