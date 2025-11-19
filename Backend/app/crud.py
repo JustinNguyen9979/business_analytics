@@ -6,8 +6,97 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, union_all, select, and_
 from datetime import date, timedelta
 from cache import redis_client
+from models import DailyStat
 from province_centroids import PROVINCE_CENTROIDS
 
+def update_daily_stats(db: Session, brand_id: int, target_date: date):
+    """
+    Hàm này được Worker gọi.
+    Nhiệm vụ: Lấy dữ liệu thô của 1 ngày -> Tính KPI -> Lưu/Cập nhật vào bảng DailyStat.
+    """
+    import kpi_calculator # Import local
+
+    # 1. Lấy REVENUE và ADS của ngày 'transaction_date' (Ngày tiền về)
+    revenues = db.query(models.Revenue).filter(
+        models.Revenue.brand_id == brand_id,
+        models.Revenue.transaction_date == target_date
+    ).all()
+    
+    ads = db.query(models.Ad).filter(
+        models.Ad.brand_id == brand_id,
+        models.Ad.ad_date == target_date
+    ).all()
+
+    # 2. LẤY ĐƠN HÀNG (PHẦN SỬA ĐỔI QUAN TRỌNG)
+    
+    # 2.1. Lấy danh sách order_code có trong Revenue hôm nay 
+    # (Để tìm lại đơn gốc tính COGS, dù đơn đó đặt từ quá khứ)
+    revenue_order_codes = [r.order_code for r in revenues if r.order_code]
+
+    orders_for_cogs = []
+    if revenue_order_codes:
+        # Tìm tất cả đơn hàng liên quan đến dòng tiền hôm nay
+        orders_for_cogs = db.query(models.Order).filter(
+            models.Order.brand_id == brand_id,
+            models.Order.order_code.in_(revenue_order_codes)
+        ).all()
+
+    # 2.2. Lấy danh sách đơn hàng ĐƯỢC TẠO ra hôm nay (order_date)
+    # (Để đếm số lượng đơn phát sinh - Total Orders)
+    orders_created_today = db.query(models.Order).filter(
+        models.Order.brand_id == brand_id, 
+        models.Order.order_date == target_date
+    ).all()
+
+    # 2.3. Gộp 2 danh sách này lại để đưa vào máy tính
+    # Dùng Dictionary để loại bỏ trùng lặp (nếu đơn vừa đặt hôm nay vừa có tiền về hôm nay)
+    all_orders_map = {}
+    
+    # Ưu tiên đơn dùng để tính COGS trước
+    for o in orders_for_cogs:
+        all_orders_map[o.order_code] = o
+        
+    # Bổ sung đơn tạo hôm nay
+    for o in orders_created_today:
+        all_orders_map[o.order_code] = o
+    
+    final_orders_list = list(all_orders_map.values())
+
+    # 3. Gọi "Đầu bếp" tính toán
+    # Lưu ý: Calculator sẽ dùng final_orders_list để tra cứu COGS cho Profit.
+    kpis = kpi_calculator.calculate_daily_kpis(final_orders_list, revenues, ads)
+
+    # 4. Lưu vào bảng DailyStat
+    stat_entry = db.query(models.DailyStat).filter(
+        models.DailyStat.brand_id == brand_id,
+        models.DailyStat.date == target_date
+    ).first()
+
+    if not stat_entry:
+        stat_entry = models.DailyStat(brand_id=brand_id, date=target_date)
+        db.add(stat_entry)
+    
+    # Map dữ liệu
+    stat_entry.net_revenue = kpis.get('netRevenue', 0)
+    stat_entry.gmv = kpis.get('gmv', 0)
+    stat_entry.profit = kpis.get('profit', 0)
+    stat_entry.total_cost = kpis.get('totalCost', 0)
+    stat_entry.ad_spend = kpis.get('adSpend', 0)
+    stat_entry.cogs = kpis.get('cogs', 0)
+    stat_entry.execution_cost = kpis.get('executionCost', 0)
+
+    stat_entry.total_orders = len(orders_created_today)
+
+    db.commit()
+    
+    # 5. Xóa Cache Redis cũ
+    chart_keys = redis_client.keys(f"data_req:{brand_id}:daily_kpis_chart:*")
+    if chart_keys: redis_client.delete(*chart_keys)
+    
+    summary_keys = redis_client.keys(f"data_req:{brand_id}:kpi_summary:*")
+    if summary_keys: redis_client.delete(*summary_keys)
+
+    return stat_entry
 
 def slugify(value: str) -> str:
     """
@@ -55,38 +144,44 @@ def get_all_activity_dates(db: Session, brand_id: int):
 
 def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_date: date) -> list:
     """
-    Lấy danh sách KPI hàng ngày cho biểu đồ, ưu tiên từ cache.
-    Nếu cache miss hoặc lỗi, sẽ tính toán lại cho ngày đó.
+    Phiên bản mới: Đọc trực tiếp từ bảng DailyStat.
+    Tốc độ cực nhanh, không cần tính toán lại, không sợ quá tải DB.
     """
-    all_days = [start_date + timedelta(days=x) for x in range((end_date - start_date).days + 1)]
-    cache_keys = [f"kpi_daily:{brand_id}:{day.isoformat()}" for day in all_days]
+    # Truy vấn thẳng vào bảng tổng hợp
+    stats = db.query(models.DailyStat).filter(
+        models.DailyStat.brand_id == brand_id,
+        models.DailyStat.date.between(start_date, end_date)
+    ).order_by(models.DailyStat.date).all()
+
+    # Chuyển đổi format để trả về cho Frontend (giữ nguyên format cũ để Frontend không bị lỗi)
+    results = []
     
-    cached_data = redis_client.mget(cache_keys)
-    daily_kpi_list = []
-
-    for i, daily_kpi_json in enumerate(cached_data):
-        target_date = all_days[i]
-        kpis_for_day = None
+    # Tạo một map để điền những ngày thiếu (nếu có)
+    stats_map = {s.date: s for s in stats}
+    
+    # Loop qua từng ngày trong khoảng để đảm bảo biểu đồ liên tục
+    current_date = start_date
+    while current_date <= end_date:
+        stat = stats_map.get(current_date)
         
-        if daily_kpi_json:
-            try:
-                kpis_for_day = json.loads(daily_kpi_json)
-            except (json.JSONDecodeError, TypeError):
-                # Cache bị lỗi, sẽ tính lại ở dưới
-                pass
-        
-        # Nếu cache miss hoặc cache bị lỗi, tính toán lại
-        if kpis_for_day is None:
-            kpis_for_day = _calculate_and_cache_single_day(db, brand_id, target_date)
+        if stat:
+            results.append({
+                "date": current_date.isoformat(),
+                "netRevenue": stat.net_revenue,
+                "profit": stat.profit,
+                "gmv": stat.gmv,
+                "adSpend": stat.ad_spend
+            })
+        else:
+            # Nếu ngày đó chưa có dữ liệu (Worker chưa chạy xong hoặc không có đơn), trả về 0
+            results.append({
+                "date": current_date.isoformat(),
+                "netRevenue": 0, "profit": 0, "gmv": 0, "adSpend": 0
+            })
+            
+        current_date += timedelta(days=1)
 
-        # Chỉ lấy các trường cần thiết cho biểu đồ
-        daily_kpi_list.append({
-            "date": target_date.isoformat(), # Trả về dạng chuỗi ISO cho an toàn
-            "netRevenue": kpis_for_day.get("netRevenue", 0),
-            "profit": kpis_for_day.get("profit", 0)
-        })
-
-    return daily_kpi_list
+    return results
 
 def get_all_brands(db: Session):
     """Lấy danh sách tất cả các brand."""

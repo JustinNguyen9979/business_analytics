@@ -111,3 +111,27 @@ class Revenue(Base):
     )
 
     owner_brand = relationship("Brand", back_populates="revenues")
+
+class DailyStat(Base):
+    __tablename__ = "daily_stats"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
+    date = Column(Date, index=True)
+    
+    # Các chỉ số quan trọng đã được tính toán sẵn
+    net_revenue = Column(Float, default=0.0)  # Doanh thu ròng
+    gmv = Column(Float, default=0.0)          # Tổng GMV
+    profit = Column(Float, default=0.0)       # Lợi nhuận
+    total_cost = Column(Float, default=0.0)   # Tổng chi phí
+    ad_spend = Column(Float, default=0.0)     # Chi phí Ads
+    total_orders = Column(Integer, default=0) # Tổng số đơn hàng
+    cogs = Column(Float, default=0.0)            # Giá vốn hàng bán
+    execution_cost = Column(Float, default=0.0)  # Chi phí thực thi (từ total_fees)
+    
+    # Đảm bảo mỗi brand chỉ có 1 dòng dữ liệu cho 1 ngày (Chống trùng lặp)
+    __table_args__ = (
+        UniqueConstraint('brand_id', 'date', name='uq_brand_date_stat'),
+    )
+
+    owner_brand = relationship("Brand")
