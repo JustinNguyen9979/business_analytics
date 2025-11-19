@@ -4,6 +4,7 @@ import React, { memo, useMemo, useEffect, useState } from 'react';
 import { ComposableMap, Geographies, Geography, Marker } from '@vnedyalk0v/react19-simple-maps';
 import { Box, Grid, Stack, Typography, CircularProgress } from '@mui/material';
 import { scaleLinear } from 'd3-scale';
+import { Tooltip } from 'react-tooltip'; // << FIX: Thêm import
 
 // import geoShapeData from '../../assets/vietnam-shape.json';
 
@@ -58,25 +59,18 @@ function GeoMapChartComponent({ data }) {
         return () => clearTimeout(timer);
     }, []);
 
-    // 6. Hook click outside
-    useEffect(() => {
-        // Hàm này sẽ được gọi mỗi khi có một cú click bất kỳ trên trang
-        const handleOutsideClick = (event) => {
-            // Nếu phần tử được click không phải là (hoặc không nằm trong)
-            // một phần tử có class 'map-dot', thì ẩn tooltip đi.
-            if (!event.target.closest('.map-dot')) {
-                Tooltip.hide();
-            }
-        };
-
-        // Gắn listener vào document
-        document.addEventListener('click', handleOutsideClick);
-
-        // Quan trọng: Gỡ listener khi component bị unmount để tránh rò rỉ bộ nhớ
-        return () => {
-            document.removeEventListener('click', handleOutsideClick);
-        };
-    }, []);
+    // << FIX: Xóa bỏ useEffect gây lỗi "Tooltip is not defined"
+    // useEffect(() => {
+    //     const handleOutsideClick = (event) => {
+    //         if (!event.target.closest('.map-dot')) {
+    //             Tooltip.hide();
+    //         }
+    //     };
+    //     document.addEventListener('click', handleOutsideClick);
+    //     return () => {
+    //         document.removeEventListener('click', handleOutsideClick);
+    //     };
+    // }, []);
 
     if (!geoShapeData) {
         return (
@@ -88,6 +82,8 @@ function GeoMapChartComponent({ data }) {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {/* << FIX: Thêm component Tooltip để nó hoạt động */}
+            <Tooltip id="map-tooltip" style={{ backgroundColor: 'rgba(5, 10, 20, 0.9)', border: '1px solid rgba(0, 229, 255, 0.3)', backdropFilter: 'blur(4px)' }}/>
             <Box sx={{ flexGrow: 1, position: 'relative' }}>
                 <ComposableMap
                     projection="geoMercator"
@@ -118,47 +114,35 @@ function GeoMapChartComponent({ data }) {
                             <Marker
                                 key={item.city}
                                 coordinates={item.coords}
-                                // data-tooltip-content={`${item.city}: ${item.customer_count.toLocaleString('vi-VN')} khách`}
                             >
-                                {/* Group chứa toàn bộ hiệu ứng cho một điểm */}
                                 <g style={{ cursor: 'pointer', pointerEvents: 'none' }}>
-                                    {/* <<< SỬ DỤNG THẺ <animate> GỐC CỦA SVG >>> */}
-
-                                    {/* Vòng sóng 1 */}
                                     <circle
-                                        className="ripple" // Class chung
+                                        className="ripple"
                                         r={size} 
                                         fill="none" 
                                         stroke="#FF5252" 
                                         strokeWidth={2}
                                     />
-                                    
-                                    {/* Vòng sóng 2 */}
                                      <circle
-                                        className="ripple ripple-2" // Class chung và class delay
+                                        className="ripple ripple-2"
                                         r={size} 
                                         fill="none" 
                                         stroke="#FF5252" 
                                         strokeWidth={2}
                                     />
-                                    
-                                    {/* Chấm tròn trung tâm */}
                                     <circle
                                         className="map-dot"
                                         r={size}
                                         data-tooltip-id="map-tooltip"
                                         data-tooltip-content={`${item.city}: ${item.customer_count.toLocaleString('vi-VN')} khách`}
-                                        // data-tooltip-events="mouseenter click"
-
                                         fill={`rgba(255, 82, 82, ${opacity})`}
                                         stroke="#FFFFFF"
                                         strokeWidth={0.5}
                                         style={{ transition: 'transform 0.2s ease', pointerEvents: 'auto' }}
-                                        
                                         onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.8)'; }}
                                         onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-
-                                        onClick={(e) => Tooltip.show(e.currentTarget)}
+                                        // << FIX: Xóa onClick gây lỗi
+                                        // onClick={(e) => Tooltip.show(e.currentTarget)}
                                     />
                                 </g>
                             </Marker>

@@ -1,6 +1,6 @@
 # FILE: Backend/app/standard_parser.py
 
-# import pandas as pd
+import pandas as pd
 from sqlalchemy.orm import Session
 import traceback
 import io
@@ -51,7 +51,6 @@ def find_sheet_name(sheet_names: List[str], keywords: List[str]) -> str | None:
 
 # --- HÀM XỬ LÝ CHÍNH - "SIÊU PARSER" ĐÃ NÂNG CẤP ---
 def process_standard_file(db: Session, file_content: bytes, brand_id: int, source: str):
-    import pandas as pd
     results = {}
     print(f"\n--- BẮT ĐẦU XỬ LÝ FILE CHUẨN CHO BRAND {brand_id}, NGUỒN {source.upper()} ---")
     try:

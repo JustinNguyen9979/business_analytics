@@ -69,18 +69,10 @@ function DateRangeFilterMenu({ open, anchorEl, onClose, initialDateRange, onAppl
             onClose={onClose}
             anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
             transformOrigin={{ vertical: 'top', horizontal: 'center' }}
-            slotProps={{
-                paper: { // <-- Đúng: Thêm "paper:" để nhắm vào đúng thành phần
+            slotProps={{ // Đã thêm lại slotProps để điều chỉnh spacing
+                paper: {
                     sx: {
-                        mt: 1, // Khoảng cách sẽ được áp dụng tại đây
-                        borderRadius: 3,
-                        backdropFilter: 'blur(15px)',
-                        backgroundColor: 'rgba(30, 41, 59, 0.8)',
-                        border: (theme) => `1px solid ${theme.palette.divider}`,
-                        '& .MuiMenu-list': {
-                            paddingTop: 0,
-                            paddingBottom: 0,
-                        },
+                        mt: 1, // Thêm margin-top để tạo khoảng cách
                     },
                 },
             }}
@@ -127,8 +119,7 @@ function DateRangeFilterMenu({ open, anchorEl, onClose, initialDateRange, onAppl
                     </Box>
                 </Box>
             </Box>
-        </Menu>
-    );
+        </Menu>    );
 }
 
 export default DateRangeFilterMenu;

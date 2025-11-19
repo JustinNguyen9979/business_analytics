@@ -2,100 +2,352 @@
 
 import { createTheme } from '@mui/material/styles';
 
-// --- ĐỊNH NGHĨA CÁC MÃ MÀU CƠ BẢN ---
+// --- ĐỊNH NGHĨA CÁC MÃ MÀU NEON / CYBERPUNK ---
 const PALETTE = {
+    mode: 'dark', // Đặt chế độ tối mặc định
     primary: {
-        main: '#00BFFF', // Deep Sky Blue
-        contrastText: '#FFFFFF',
+        main: '#00E5FF', // Neon Cyan (Màu chính phát sáng)
+        light: '#5FFFFF',
+        dark: '#00B2CC',
+        contrastText: '#000000', // Chữ đen trên nền Cyan để dễ đọc
     },
     secondary: {
-        main: '#9370DB', // Medium Purple
+        main: '#2979FF', // Electric Blue (Màu phụ)
         contrastText: '#FFFFFF',
     },
     background: {
-        default: '#10273eff', // Nền chính
-        paper: 'rgba(10, 25, 41, 0.6)', // Nền mặc định của các component Paper
-        darker: '#071225', // Nền phụ tối hơn
-        
-        // Màu "kính mờ" (glassmorphism)
-        glassPrimary: 'rgba(15, 23, 42, 0.7)',  // Dùng cho AppBar, Drawer
-        glassSecondary: 'rgba(30, 41, 59, 0.7)', // Dùng cho Dialog, Tooltip
+        default: '#02040A', // Đen sâu thẳm (Deep Space Black)
+        paper: 'rgba(2, 4, 10, 0.6)', // Kính trong suốt tối màu
+        darker: '#000000', // Đen tuyền
+
+        // Màu kính mờ cho các thành phần cụ thể
+        glassPrimary: 'rgba(2, 4, 10, 0.8)',  
+        glassSecondary: 'rgba(10, 25, 41, 0.9)', 
     },
     text: {
-        primary: '#E0E0E0',
-        secondary: '#B0B0B0',
+        primary: '#E0F7FA', // Trắng hơi xanh (Ice White)
+        secondary: '#80DEEA', // Xanh Cyan nhạt
+        disabled: 'rgba(255, 255, 255, 0.5)',
     },
-    divider: 'rgba(255, 255, 255, 0.12)',
+    divider: 'rgba(0, 229, 255, 0.15)', // Đường kẻ mờ màu Cyan
+    action: {
+        hover: 'rgba(0, 229, 255, 0.08)',
+        selected: 'rgba(0, 229, 255, 0.16)',
+        disabled: 'rgba(255, 255, 255, 0.3)',
+        disabledBackground: 'rgba(255, 255, 255, 0.12)',
+    },
+    success: { main: '#00E676' }, // Neon Green
+    warning: { main: '#FFEA00' }, // Neon Yellow
+    error: { main: '#FF1744' },   // Neon Red
 };
 
 // --- TẠO THEME ---
 const theme = createTheme({
     palette: PALETTE,
+    shape: {
+        borderRadius: 8, // Bo góc nhẹ
+    },
     typography: {
         fontFamily: "'Inter', 'Roboto', sans-serif",
-        h3: {
-            fontWeight: 700,
-            fontSize: '2.5rem',
-        },
-        h5: {
-            fontWeight: 300,
-            fontSize: '1.5rem',
-        },
+        h1: { fontWeight: 700, color: PALETTE.primary.main, textShadow: '0 0 10px rgba(0, 229, 255, 0.5)' },
+        h2: { fontWeight: 700, color: PALETTE.primary.main, textShadow: '0 0 10px rgba(0, 229, 255, 0.5)' },
+        h3: { fontWeight: 700, fontSize: '2.5rem', color: PALETTE.primary.main, textShadow: '0 0 10px rgba(0, 229, 255, 0.5)' },
+        h4: { fontWeight: 600, color: PALETTE.primary.main },
+        h5: { fontWeight: 500, fontSize: '1.5rem' },
+        h6: { fontWeight: 500, color: PALETTE.secondary.light },
     },
-    // --- TÙY CHỈNH STYLE CHO CÁC COMPONENT CỤ THỂ ---
+    
+    // --- TÙY CHỈNH STYLE CHO COMPONENT ---
     components: {
+        // 1. Button Base (Hiệu ứng gợn sóng)
         MuiButtonBase: {
             styleOverrides: {
-                    root: {
-                    // Áp dụng style cho hiệu ứng ripple trên TẤT CẢ các component
-                    // sử dụng ButtonBase (Button, IconButton, ListItemButton, etc.)
+                root: {
                     '& .MuiTouchRipple-rippleVisible': {
-                        backgroundColor: PALETTE.primary.main + '26',
+                        color: PALETTE.primary.main,
+                        opacity: 0.3,
                     },
                 },
             },
         },
 
-        // Nút bấm
+        // 2. Nút bấm (Button) - Thêm hiệu ứng Glow
         MuiButton: {
             styleOverrides: {
                 root: {
-                    borderRadius: 10,
+                    borderRadius: 20, // Bo tròn nhiều hơn cho phong cách Tech
                     textTransform: 'none',
-                    transition: 'transform 0.12s ease, box-shadow 0.12s ease',
-                    
-                    // === PHẦN CODE MỚI THÊM VÀO ===
-                    // Ghi đè style cho nút khi ở trạng thái disabled
-                    "&.Mui-disabled": {
-                        // Nút Hủy (variant="text" hoặc "outlined")
-                        color: 'rgba(255, 255, 255, 0.5)',
-                        cursor: 'not-allowed',
-                        pointerEvents: 'auto'
+                    fontWeight: 600,
+                    transition: 'all 0.2s ease-in-out',
+                    '&.Mui-disabled': {
+                        color: 'rgba(255, 255, 255, 0.3)',
+                        borderColor: 'rgba(255, 255, 255, 0.1)',
                     }
-                    // ==============================
                 },
-                containedPrimary: {
-                    boxShadow: '0 6px 18px rgba(0,179,255,0.08)',
-                    
-                    // === PHẦN CODE MỚI THÊM VÀO ===
-                    // Ghi đè style cho nút "Đang xử lý..." (variant="contained")
-                    "&.Mui-disabled": {
-                        backgroundColor: 'rgba(255, 255, 255, 0.12)',
-                        color: 'rgba(255, 255, 255, 0.7)',
+                contained: {
+                    backgroundColor: 'rgba(0, 229, 255, 0.1)', // Nền trong suốt nhẹ
+                    color: PALETTE.primary.main,
+                    border: `1px solid ${PALETTE.primary.main}`,
+                    boxShadow: '0 0 10px rgba(0, 229, 255, 0.2)', // Glow nhẹ mặc định
+                    '&:hover': {
+                        backgroundColor: PALETTE.primary.main,
+                        color: '#000', // Chữ đen khi hover
+                        boxShadow: '0 0 20px rgba(0, 229, 255, 0.6)', // Glow mạnh khi hover
+                        transform: 'translateY(-2px)',
+                    },
+                    '&.Mui-disabled': {
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
                     }
-                    // ==============================
+                },
+                outlined: {
+                    borderColor: PALETTE.primary.main,
+                    color: PALETTE.primary.main,
+                    '&:hover': {
+                        backgroundColor: 'rgba(0, 229, 255, 0.1)',
+                        borderColor: PALETTE.primary.main,
+                        boxShadow: '0 0 15px rgba(0, 229, 255, 0.3)',
+                    }
                 }
             }
         },
 
-        // Card (Dùng cho BrandLobby)
+        // 3. Ô nhập liệu (TextField / Input)
+        MuiOutlinedInput: {
+            styleOverrides: {
+                root: {
+                    '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'rgba(0, 229, 255, 0.3)',
+                    },
+                    '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: PALETTE.primary.main,
+                        boxShadow: '0 0 5px rgba(0, 229, 255, 0.2)',
+                    },
+                    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: PALETTE.primary.main,
+                        boxShadow: '0 0 10px rgba(0, 229, 255, 0.4)', // Glow khi focus
+                    },
+                    input: {
+                        color: PALETTE.primary.main, // Chữ nhập vào màu Cyan
+                    }
+                }
+            }
+        },
+        MuiInputLabel: {
+            styleOverrides: {
+                root: {
+                    color: 'rgba(0, 229, 255, 0.7)',
+                    '&.Mui-focused': { color: PALETTE.primary.main }
+                }
+            }
+        },
+
+        // 4. Card & Paper (Hiệu ứng kính mờ + Viền phát sáng)
         MuiCard: {
             styleOverrides: {
                 root: {
-                    background: "linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02))",
-                    border: '1px solid rgba(255,255,255,0.06)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)'
+                    backgroundColor: 'rgba(2, 4, 10, 0.6)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: `1px solid ${PALETTE.divider}`,
+                    boxShadow: '0 4px 30px rgba(0, 0, 0, 0.5)',
+                    transition: 'transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease',
+                    '&:hover': {
+                        borderColor: PALETTE.primary.main,
+                        boxShadow: '0 0 20px rgba(0, 229, 255, 0.2)', // Glow khung khi hover
+                    }
+                }
+            }
+        },
+
+        MuiPaper: {
+            variants: [
+                {
+                    props: { variant: 'glass' },
+                    style: {
+                        backgroundColor: 'rgba(255, 255, 255, 0.02)', // Rất trong
+                        backdropFilter: 'blur(16px)',
+                        WebkitBackdropFilter: 'blur(16px)',
+                        border: `1px solid rgba(0, 229, 255, 0.1)`,
+                        borderRadius: 16,
+                        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
+                    },
+                },
+                {
+                    props: { variant: 'placeholder' },
+                    style: {
+                        backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                        backdropFilter: 'blur(10px)',
+                        border: `1px dashed rgba(0, 229, 255, 0.3)`, // Viền nét đứt màu Cyan
+                        borderRadius: 16,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: 400,
+                    },
+                },
+            ]
+        },
+
+        // 5. AppBar & Drawer (Glassmorphism tối)
+        MuiAppBar: {
+            styleOverrides: {
+                root: {
+                    backgroundColor: PALETTE.background.glassPrimary,
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                    boxShadow: 'none',
+                    borderBottom: `1px solid ${PALETTE.divider}`,
+                }
+            }
+        },
+        MuiDrawer: {
+            styleOverrides: {
+                paper: {
+                    backgroundColor: PALETTE.background.glassPrimary,
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                    borderRight: `1px solid ${PALETTE.divider}`,
+                }
+            }
+        },
+
+        // 6. Menu & Dialog (Popups)
+        MuiMenu: {
+            styleOverrides: {
+                paper: {
+                    backgroundColor: '#050A14', // Nền tối gần như đen tuyệt đối
+                    border: `1px solid ${PALETTE.primary.main}`, // Viền sáng
+                    boxShadow: '0 0 20px rgba(0, 229, 255, 0.2)', // Glow toàn bộ menu
+                }
+            }
+        },
+
+        MuiDialog: {
+            styleOverrides: {
+                paper: ({ theme }) => ({
+                    backgroundColor: 'rgba(5, 10, 20, 0.85)', // Nền tối hơn, đậm hơn
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                    border: `1px solid ${theme.palette.primary.main}`, // Viền sáng màu Cyan
+                    borderRadius: 20,
+                    // Hiệu ứng đổ bóng phát sáng mạnh (Glow)
+                    boxShadow: `0 0 40px rgba(0, 229, 255, 0.15), inset 0 0 20px rgba(0, 229, 255, 0.05)`,
+                    backgroundImage: 'none',
+                }),
+            },
+        },
+
+        MuiDialogContent: {
+            styleOverrides: {
+                root: {
+                    padding: '24px',
+                }
+            }
+        },
+
+        MuiDialogActions: {
+            styleOverrides: {
+                root: {
+                    padding: '16px 24px 24px',
+                    borderTop: `1px solid ${PALETTE.divider}`,
+                    justifyContent: 'space-between', // Dàn đều nút 2 bên
+                }
+            }
+        },
+
+        MuiDialogTitle: {
+            styleOverrides: {
+                root: {
+                    fontSize: '1.25rem',
+                    fontWeight: 700,
+                    textAlign: 'center',
+                    textTransform: 'uppercase',
+                    letterSpacing: '1px',
+                    borderBottom: `1px solid ${PALETTE.divider}`,
+                    marginBottom: '16px',
+                    padding: '20px 24px',
+                    // Hiệu ứng chữ phát sáng
+                    textShadow: `0 0 10px ${PALETTE.primary.main}`, 
+                }
+            }
+        },
+
+        // 7. List Item (Menu Sidebar)
+        MuiListItemButton: {
+            styleOverrides: {
+                root: {
+                    borderRadius: 8,
+                    margin: '4px 8px',
+                    '&.Mui-selected': {
+                        backgroundColor: 'rgba(0, 229, 255, 0.15)',
+                        color: PALETTE.primary.main,
+                        borderLeft: `3px solid ${PALETTE.primary.main}`, // Chỉ báo active bên trái
+                        '&:hover': {
+                            backgroundColor: 'rgba(0, 229, 255, 0.25)',
+                        },
+                        '& .MuiListItemIcon-root': {
+                            color: PALETTE.primary.main,
+                        }
+                    },
+                    '&:hover': {
+                        backgroundColor: PALETTE.action.hover,
+                    }
+                },
+            },
+        },
+        MuiListItemIcon: {
+            styleOverrides: {
+                root: { color: PALETTE.text.secondary }
+            }
+        },
+
+        // 8. CSS Global & Animations
+        MuiCssBaseline: {
+            styleOverrides: {
+                body: {
+                    backgroundColor: PALETTE.background.default,
+                    backgroundImage: `
+                        radial-gradient(circle at 15% 50%, rgba(0, 229, 255, 0.08), transparent 25%), 
+                        radial-gradient(circle at 85% 30%, rgba(41, 121, 255, 0.08), transparent 25%)
+                    `, // Tạo hiệu ứng nền không gian mờ ảo
+                    backgroundAttachment: 'fixed',
+                    scrollbarWidth: 'thin',
+                    '&::-webkit-scrollbar': { width: '6px', height: '6px' },
+                    '&::-webkit-scrollbar-track': { background: 'transparent' },
+                    '&::-webkit-scrollbar-thumb': {
+                        backgroundColor: 'rgba(0, 229, 255, 0.2)',
+                        borderRadius: 3,
+                        '&:hover': { backgroundColor: PALETTE.primary.main }
+                    },
+                },
+                // Animation sóng (Ripple) cho bản đồ
+                '@keyframes ripple-effect': {
+                    '0%': { transform: 'scale(0.1)', opacity: 0.8 },
+                    '100%': { transform: 'scale(4)', opacity: 0 }
+                },
+                '.ripple': {
+                    animation: 'ripple-effect 2s infinite linear',
+                    stroke: PALETTE.error.main, // Màu đỏ Neon cho điểm nóng
+                },
+                '.ripple-2': { animationDelay: '1s' },
+                
+                // Utility class cho chữ Neon
+                '.neon-text': {
+                    color: PALETTE.primary.main,
+                    textShadow: '0 0 5px rgba(0, 229, 255, 0.7), 0 0 10px rgba(0, 229, 255, 0.5)',
+                }
+            }
+        },
+
+        // 9. Tooltip & DatePicker
+        MuiTooltip: {
+            styleOverrides: {
+                tooltip: {
+                    backgroundColor: 'rgba(5, 10, 20, 0.9)',
+                    border: `1px solid ${PALETTE.divider}`,
+                    backdropFilter: 'blur(4px)',
+                    fontSize: '0.8rem',
                 }
             }
         },
@@ -103,302 +355,43 @@ const theme = createTheme({
         MuiBox: {
             variants: [
                 {
-                    // Đặt tên cho variant mới
-                    props: { variant: 'loaderContainer' },
-                    // Định nghĩa các thuộc tính CSS cho variant này
-                    style: {
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        height: '100%',
+                    props: { variant: 'dropzone' },
+                    style: ({ theme }) => ({
+                        position: 'relative',
                         width: '100%',
-                    },
+                        height: 250,
+                        border: `2px dashed ${theme.palette.text.secondary}`,
+                        borderRadius: 16,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        textAlign: 'center',
+                        cursor: 'pointer',
+                        backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                        transition: 'all 0.3s ease',
+                        
+                        // Hiệu ứng khi Hover
+                        '&:hover': {
+                            borderColor: theme.palette.primary.main,
+                            backgroundColor: 'rgba(0, 229, 255, 0.08)',
+                            boxShadow: `inset 0 0 20px rgba(0, 229, 255, 0.1)`,
+                            transform: 'scale(1.01)',
+                        }
+                    }),
                 },
             ],
         },
 
-        // AppBar (Thanh header trong Dashboard)
-        MuiAppBar: {
-            styleOverrides: {
-                root: {
-                    backgroundColor: PALETTE.background.glassPrimary, 
-                    backdropFilter: 'blur(12px)', // Tăng độ mờ
-                    WebkitBackdropFilter: 'blur(12px)',
-                    boxShadow: 'none',
-                    borderBottom: `1px solid ${PALETTE.divider}`,
-                }
-            }
-        },
-
-        // Drawer (Thanh sidebar trong Dashboard)
-        MuiDrawer: {
-            styleOverrides: {
-                paper: {
-                    backgroundColor: PALETTE.background.glassPrimary,
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    borderRight: `1px solid ${PALETTE.divider}`,
-                }
-            }
-        },
-
-        // Icon trong ListItem (Menu sidebar)
-        MuiListItemIcon: {
-            styleOverrides: {
-                root: {
-                    color: PALETTE.text.secondary, // Màu mặc định cho icon
-                }
-            }
-        },
-
-        MuiDialog: {
-            styleOverrides: {
-                paper: ({ theme }) => ({ // Sử dụng arrow function để truy cập theme
-                    borderRadius: theme.shape.borderRadius * 2, // Bo tròn góc nhiều hơn một chút
-                    backgroundColor: theme.palette.background.glassSecondary,
-                    backdropFilter: 'blur(15px)',
-                    WebkitBackdropFilter: 'blur(15px)',
-                    border: `1px solid ${theme.palette.divider}`,
-                }),
-            },
-        },
-
-        // Tùy chỉnh CSS toàn cục, bao gồm cả thanh cuộn
-        MuiCssBaseline: {
-            styleOverrides: (theme) => ({
-                ':root': {
-                    '--accent-primary': '#00BFFF',
-                    '--accent-secondary': '#9370DB',
-                    '--text-main': '#E0E0E0',
-                    '--muted': '#A0A0A0',
-                },
-                body: {
-                    color: 'var(--text-main)',
-                    background: `linear-gradient(135deg, ${theme.palette.background.default} 0%, ${theme.palette.background.darker} 100%)`,
-                    fontFamily: "'Inter', 'Roboto', sans-serif",
-                    fontSize: '14px !important',
-                    WebkitFontSmoothing: 'antialiased',
-                    MozOsxFontSmoothing: 'grayscale',
-                    // Scrollbar styles
-                    scrollbarWidth: 'thin',
-                    scrollbarColor: `${theme.palette.text.secondary} ${theme.palette.background.default}`,
-                    '&::-webkit-scrollbar': { width: '4px' },
-                    '&::-webkit-scrollbar-track': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
-                    '&::-webkit-scrollbar-thumb': {
-                        backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                        borderRadius: theme.shape.borderRadius,
-                        border: '2px solid transparent',
-                        backgroundClip: 'content-box',
-                        '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.4)' },
-                    },
-                },
-                '*::selection': {
-                    backgroundColor: theme.palette.primary.main + '2D',
-                    color: theme.palette.text.primary,
-                },
-                // Animations
-                '@keyframes ripple-effect': {
-                    'from': { transform: 'scale(0.1)', opacity: 0.8 },
-                    'to': { transform: 'scale(5)', opacity: 0 }
-                },
-                '.ripple': {
-                    animationName: 'ripple-effect',
-                    animationDuration: '2.2s',
-                    animationIterationCount: 'infinite',
-                    transformOrigin: 'center',
-                    transformBox: 'fill-box',
-                },
-                '.ripple-2': { animationDelay: '1.1s' },
-                // Utility classes
-                '.primary-btn': {
-                    background: 'linear-gradient(90deg, var(--accent-primary), #00A3E0)',
-                    color: '#fff',
-                    borderRadius: '10px',
-                    position: 'relative',
-                    zIndex: 1,
-                    transition: 'transform 0.12s ease',
-                    willChange: 'transform',
-                    '&::after': {
-                        content: "''",
-                        position: 'absolute',
-                        zIndex: -1,
-                        top: 0, left: 0, right: 0, bottom: 0,
-                        borderRadius: 'inherit',
-                        background: 'inherit',
-                        boxShadow: '0 10px 20px rgba(0, 179, 255, 0.14)',
-                        opacity: 0,
-                        transition: 'opacity 0.12s ease',
-                        willChange: 'opacity',
-                    },
-                    '&:hover': { transform: 'translateY(-3px)' },
-                    '&:hover::after': { opacity: 1 },
-                },
-                '.muted': { color: 'var(--muted)' },
-                // 3rd party overrides
-                '.js-plotly-plot .plotly, .js-plotly-plot .plotly-graph-div': {
-                    backgroundColor: 'transparent !important',
-                },
-                '.MuiButton-contained, .MuiButton-outlined': {
-                    transition: 'transform 0.2s ease-in-out !important',
-                    willChange: 'transform',
-                },
-                '.MuiButton-contained:hover': {
-                    transform: 'scale(1.03)',
-                    boxShadow: '0 0 15px #00BFFF',
-                },
-                '.MuiButton-outlined:hover': {
-                    transform: 'scale(1.03)',
-                    boxShadow: '0 0 15px #9370DB',
-                },
-            }),
-        },
-
-        // Tùy chỉnh DatePicker để phù hợp với theme kính mờ
         MuiDatePicker: {
             defaultProps: {
                 slotProps: {
-                    // Tự động áp dụng style cho ô input
-                    textField: {
-                        variant: 'standard',
-                        size: 'small',
-                        sx: {
-                            '& .MuiInput-underline:before': { borderBottom: 'none' },
-                            '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottom: 'none' },
-                        },
-                    },
-                    // Tự động áp dụng style cho pop-up lịch
-                    popper: {
-                        placement: 'bottom', 
-                        sx: {
-                            '& .MuiPaper-root': {
-                                backdropFilter: 'blur(15px)',
-                                backgroundColor: (theme) => theme.palette.background.glassSecondary,
-                                border: (theme) => `1px solid ${theme.palette.divider}`,
-                            },
-                        },
-                    },
-                     dialog: { // Dành cho mobile
-                        PaperProps: {
-                            sx: {
-                                backdropFilter: 'blur(15px)',
-                                backgroundColor: (theme) => theme.palette.background.glassSecondary,
-                                border: (theme) => `1px solid ${theme.palette.divider}`,
-                            },
-                        },
-                    },
-                    // Tự động áp dụng style cho các icon và nút bấm
-                    openPickerButton: {
-                        sx: { color: (theme) => theme.palette.text.secondary },
-                    },
-                    calendarHeader: {
-                        sx: {
-                            '& .MuiPickersArrowSwitcher-button': { color: (theme) => theme.palette.text.secondary },
-                            '& .MuiPickersCalendarHeader-label': { color: (theme) => theme.palette.text.primary },
-                            '& .MuiPickersCalendarHeader-switchViewIcon': { color: (theme) => theme.palette.text.secondary },
-                        },
-                    },
-                    day: {
-                        sx: {
-                            '&.Mui-selected': {
-                                backgroundColor: (theme) => theme.palette.primary.main,
-                                color: (theme) => theme.palette.primary.contrastText,
-                            },
-                            '&:hover': {
-                                backgroundColor: (theme) => theme.palette.action.hover,
-                            },
-                        },
-                    },
-                },
-            },
-        },
-
-        // Tùy chỉnh Paper để tạo hiệu ứng kính mờ và placeholder
-        MuiPaper: {
-            variants: [
-                {
-                    props: { variant: 'glass' },
-                    style: ({ theme }) => ({
-                        backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                        backdropFilter: 'blur(10px)',
-                        WebkitBackdropFilter: 'blur(10px)',
-                        border: `1px solid ${theme.palette.divider}`,
-                        borderRadius: theme.shape.borderRadius * 4, // Bo tròn nhiều hơn
-                    }),
-                },
-                {
-                    props: { variant: 'placeholder' },
-                    style: ({ theme }) => ({
-                        backgroundColor: 'rgba(255, 255, 255, 0.03)',
-                        backdropFilter: 'blur(10px)',
-                        WebkitBackdropFilter: 'blur(10px)',
-                        border: `1px solid ${theme.palette.divider}`,
-                        borderRadius: theme.shape.borderRadius * 4,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        height: 400,
-                    }),
-                },
-            ]
-        },
-
-        // Tùy chỉnh Tooltip để phù hợp với theme kính mờ
-        MuiTooltip: {
-            styleOverrides: {
-                tooltip: ({ theme }) => ({
-                    backgroundColor: theme.palette.background.glassSecondary, // Màu nền kính mờ
-                    backdropFilter: 'blur(10px)',
-                    WebkitBackdropFilter: 'blur(10px)',
-                    border: `1px solid ${theme.palette.divider}`,
-                    fontSize: '0.875rem', // Tăng cỡ chữ một chút cho dễ đọc
-                    padding: theme.spacing(1.5),
-                }),
-                arrow: ({ theme }) => ({
-                    color: theme.palette.background.glassSecondary, 
-                }),
-            },
-        },
-
-        MuiListItemButton: {
-            styleOverrides: {
-                root: {
-                borderRadius: 8,
-                margin: '4px 8px',
-                width: 'auto',
-                
-                '&.Mui-selected': {
-                    backgroundColor: PALETTE.primary.main,
-                    color: PALETTE.primary.contrastText,
-                    '&:hover': {
-                    backgroundColor: '#00A3E0',
-                    },
-                    '& .MuiListItemIcon-root': {
-                    color: PALETTE.primary.contrastText,
-                    }
-                },
-                },
-            },
-        },
-
-        // Tùy chỉnh Menu để phù hợp với theme kính mờ
-        MuiMenu: {
-            styleOverrides: {
-                paper: ({ theme }) => ({
-                    minWidth: 180, // Đặt chiều rộng tối thiểu cho menu
-                    backgroundColor: '#1e293b',
-                    border: `1px solid ${theme.palette.divider}`,
-                    borderRadius: theme.shape.borderRadius,
-                    boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-                }),
-                list: {
-                    padding: '4px 0',
+                    popper: { sx: { '& .MuiPaper-root': { border: `1px solid ${PALETTE.primary.main}`, boxShadow: '0 0 15px rgba(0, 229, 255, 0.2)' } } },
+                    day: { sx: { '&.Mui-selected': { backgroundColor: PALETTE.primary.main, color: '#000' } } }
                 }
             }
         }
     }
 });
-
-
-
 
 export default theme;

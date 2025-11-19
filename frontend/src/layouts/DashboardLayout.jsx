@@ -128,16 +128,18 @@ function LayoutWithBrandContext() {
         }
     };
 
-    const handleUpload = async (platform, file) => {
-        if (!brandIdentifier) return;
+    const handleUploadComplete = async () => {
+        if (!brandIdentifier) return Promise.reject("Không có định danh brand."); // Reject if no brandIdentifier
         try {
-            await uploadStandardFile(platform, brandIdentifier, file); // Dùng brandIdentifier (slug)
             showNotification(`Upload thành công! Bắt đầu tính toán lại...`, 'info');
             await recalculateBrandDataAndWait(brandIdentifier); // Dùng brandIdentifier (slug)
             showNotification(`Tính toán lại thành công!`, 'success');
             navigate(0); // Refresh trang để tải lại dữ liệu
+            return Promise.resolve(); // Trả về Promise resolve khi hoàn tất
         } catch (error) {
-            showNotification(error.response?.data?.detail || 'Lỗi khi upload.', 'error');
+            const errorMessage = error.response?.data?.detail || 'Lỗi khi tính toán lại.';
+            showNotification(errorMessage, 'error');
+            return Promise.reject(errorMessage); // Trả về Promise reject khi có lỗi
         }
     };
 
@@ -237,8 +239,8 @@ function LayoutWithBrandContext() {
                 <Outlet />
             </Box>
 
-            <SingleImportDialog open={isImportDialogOpen} onClose={() => setImportDialogOpen(false)} onUpload={handleUpload} brandSlug={brandIdentifier} />
-            <DeleteDataDialog open={isDeleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} brandSlug={brandIdentifier} />
+            <SingleImportDialog open={isImportDialogOpen} onClose={() => setImportDialogOpen(false)} onUploadComplete={handleUploadComplete} brandSlug={brandIdentifier} />
+            <DeleteDataDialog open={isDeleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} brandSlug={brandIdentifier} brandName={brandName} />
         </Box>
     );
 }

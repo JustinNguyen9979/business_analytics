@@ -1,177 +1,193 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     Dialog, DialogTitle, DialogContent, DialogActions, Button,
-    IconButton, CircularProgress, Box, FormControl, InputLabel,
-    Select, MenuItem, FormHelperText, TextField, InputAdornment
+    IconButton, Box, FormControl, InputLabel, Select, MenuItem, 
+    FormHelperText, TextField, InputAdornment, LinearProgress, Typography
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import DownloadIcon from '@mui/icons-material/Download'; // Import DownloadIcon
+import DownloadIcon from '@mui/icons-material/Download';
 import FileDropzone from './FileDropzone';
+import { useNotification } from '../../context/NotificationContext';
+import { uploadStandardFile } from '../../services/api';
 
 const MAX_SOURCE_LENGTH = 20;
+const DEFAULT_PLATFORMS = [ { key: 'shopee', name: 'Shopee' }, { key: 'tiktok', name: 'TikTok Shop' }];
 
-// Danh sách các sàn mặc định
-const DEFAULT_PLATFORMS = [
-    { key: 'shopee', name: 'Shopee' },
-    { key: 'tiktok', name: 'TikTok Shop' },
-];
-
-// Lấy danh sách sàn tùy chỉnh từ localStorage cho một brand cụ thể
-const getCustomPlatforms = (brandId) => {
-    if (!brandId) return [];
-    const saved = localStorage.getItem(`customPlatforms_${brandId}`);
-    return saved ? JSON.parse(saved) : [];
+const getCustomPlatforms = (brandSlug) => {
+    if (!brandSlug) return [];
+    try {
+        const saved = localStorage.getItem(`customPlatforms_${brandSlug}`);
+        return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
 };
 
-// Lưu danh sách sàn tùy chỉnh vào localStorage cho một brand cụ thể
-const saveCustomPlatforms = (brandId, platforms) => {
-    if (!brandId) return;
-    localStorage.setItem(`customPlatforms_${brandId}`, JSON.stringify(platforms));
+const saveCustomPlatforms = (brandSlug, platforms) => {
+    if (!brandSlug) return;
+    localStorage.setItem(`customPlatforms_${brandSlug}`, JSON.stringify(platforms));
 };
 
-function SingleImportDialog({ open, onClose, onUpload, brandId }) {
-    const [platforms, setPlatforms] = useState([...DEFAULT_PLATFORMS, ...getCustomPlatforms(brandId)]);
+function SingleImportDialog({ open, onClose, onUploadComplete, brandSlug }) {
+    const { showNotification } = useNotification();
+    const [platforms, setPlatforms] = useState(() => [...DEFAULT_PLATFORMS, ...getCustomPlatforms(brandSlug)]);
     const [selectedPlatform, setSelectedPlatform] = useState('');
     const [selectedFile, setSelectedFile] = useState(null);
-    const [isUploading, setIsUploading] = useState(false);
+    const [isWorking, setIsWorking] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [progressText, setProgressText] = useState('');
     const [customSource, setCustomSource] = useState('');
     const [customSourceError, setCustomSourceError] = useState('');
+    const intervalRef = useRef(null);
 
     useEffect(() => {
-        // Luôn cập nhật danh sách platform khi brandId thay đổi
-        if (brandId) {
-            setPlatforms([...DEFAULT_PLATFORMS, ...getCustomPlatforms(brandId)]);
-        }
-
-        // Chỉ reset các trường của form khi dialog được mở
         if (open) {
+            setPlatforms([...DEFAULT_PLATFORMS, ...getCustomPlatforms(brandSlug)]);
             setSelectedPlatform('');
             setSelectedFile(null);
-            setIsUploading(false);
+            setIsWorking(false);
+            setProgress(0);
+            setProgressText('');
             setCustomSource('');
             setCustomSourceError('');
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
         }
-    }, [open, brandId]);
+    }, [open, brandSlug]);
 
-    const handleClose = () => {
-        if (!isUploading) {
-            onClose();
-        }
-    };
+    useEffect(() => {
+        return () => {
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
+        };
+    }, []);
 
     const handleAddCustomSource = () => {
-        if (!brandId) {
-            setCustomSourceError('Không thể thêm sàn khi không có brand ID.');
+        if (!brandSlug) {
+            setCustomSourceError('Cần có Brand Slug.');
             return;
         }
         const trimmedSource = customSource.trim();
         if (!trimmedSource) {
-            setCustomSourceError('Tên sàn không được để trống.');
+            setCustomSourceError('Tên không được để trống.');
             return;
         }
         if (trimmedSource.length > MAX_SOURCE_LENGTH) {
-            setCustomSourceError(`Tên sàn không được vượt quá ${MAX_SOURCE_LENGTH} ký tự.`);
+            setCustomSourceError(`Tối đa ${MAX_SOURCE_LENGTH} ký tự.`);
             return;
         }
         const newPlatformKey = trimmedSource.toLowerCase().replace(/\s+/g, '_');
-        const isDuplicate = platforms.some(p => p.key === newPlatformKey);
-        if (isDuplicate) {
+        if (platforms.some(p => p.key === newPlatformKey)) {
             setCustomSourceError('Sàn này đã tồn tại.');
             return;
         }
-
         const newPlatform = { key: newPlatformKey, name: trimmedSource };
-        const currentCustomPlatforms = getCustomPlatforms(brandId);
-        const updatedCustomPlatforms = [...currentCustomPlatforms, newPlatform];
-        saveCustomPlatforms(brandId, updatedCustomPlatforms);
-
+        const updatedCustomPlatforms = [...getCustomPlatforms(brandSlug), newPlatform];
+        saveCustomPlatforms(brandSlug, updatedCustomPlatforms);
         setPlatforms([...DEFAULT_PLATFORMS, ...updatedCustomPlatforms]);
-        setSelectedPlatform(newPlatformKey); // Tự động chọn sàn vừa thêm
+        setSelectedPlatform(newPlatformKey);
         setCustomSource('');
         setCustomSourceError('');
     };
 
     const handleUpload = async () => {
-        if (!selectedFile || !selectedPlatform) return;
+        if (!selectedFile || !selectedPlatform || !brandSlug) return;
 
-        setIsUploading(true);
+        setIsWorking(true);
+        setProgress(0);
+        setProgressText('Đang tải tệp lên...');
+        
+        intervalRef.current = setInterval(() => {
+            setProgress(prev => {
+                const next = prev + 5;
+                if (next >= 90) {
+                    clearInterval(intervalRef.current);
+                    return 90;
+                }
+                return next;
+            });
+        }, 150);
+
         try {
-            await onUpload(selectedPlatform, selectedFile);
-        } finally {
-            onClose();
+            await uploadStandardFile(selectedPlatform, brandSlug, selectedFile);
+            
+            if (intervalRef.current) clearInterval(intervalRef.current);
+            setProgress(90);
+            setProgressText('Máy chủ đang xử lý dữ liệu...');
+            
+            intervalRef.current = setInterval(() => {
+                setProgress(prev => Math.min(prev + 1, 99));
+            }, 1000);
+
+            await onUploadComplete();
+
+            clearInterval(intervalRef.current);
+            setProgress(100);
+            setProgressText('Hoàn thành!');
+            
+            setTimeout(() => onClose(), 500);
+
+        } catch (error) {
+            showNotification(error.message || 'Lỗi khi upload hoặc xử lý file.', 'error');
+            setIsWorking(false);
+            setProgress(0);
+            if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+            }
         }
     };
-
+    
     return (
-        <Dialog
-            open={open}
-            onClose={handleClose}
-            maxWidth="sm"
-            fullWidth
-        >
-            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                Import Dữ liệu từ Template Chuẩn
-                <IconButton edge="end" color="inherit" onClick={handleClose} aria-label="close">
+        <Dialog open={open} onClose={() => !isWorking && onClose()} maxWidth="sm" fullWidth>
+            <DialogTitle>
+                Import Dữ liệu
+                <IconButton onClick={() => !isWorking && onClose()} sx={{ position: 'absolute', right: 16, top: 16, color: 'text.secondary' }} disabled={isWorking}>
                     <CloseIcon />
                 </IconButton>
             </DialogTitle>
 
             <DialogContent>
                 <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <FormControl fullWidth required>
-                        <InputLabel id="platform-select-label">Chọn Sàn Hoặc Thêm Sàn Mới</InputLabel>
-                        <Select
-                            labelId="platform-select-label"
-                            value={selectedPlatform}
-                            label="Chọn Sàn Hoặc Thêm Sàn Mới *"
-                            onChange={(e) => setSelectedPlatform(e.target.value)}
-                            renderValue={(selected) => platforms.find(p => p.key === selected)?.name || ''}
-                            sx={{
-                                color: 'white', // Ensures the text is white
-                                '.MuiSelect-icon': {
-                                    color: 'white', // Changes the dropdown arrow to white
-                                },
-                            }}
-                        >
+                    <FormControl fullWidth disabled={isWorking}>
+                        <InputLabel>Chọn Sàn Hoặc Thêm Mới</InputLabel>
+                        <Select value={selectedPlatform} label="Chọn Sàn Hoặc Thêm Mới" onChange={(e) => setSelectedPlatform(e.target.value)}>
                             {platforms.map((platform) => (
-                                <MenuItem key={platform.key} value={platform.key}>
+                                <MenuItem 
+                                    key={platform.key} 
+                                    value={platform.key}
+                                    sx={{
+                                        backgroundColor: 'rgba(5, 10, 20, 0.85) !important', 
+                                        '&:hover': {
+                                            backgroundColor: (theme) => `${theme.palette.action.hover} !important`,
+                                        },
+                                        '&.Mui-selected': {
+                                            backgroundColor: (theme) => `${theme.palette.action.selected} !important`,
+                                        },
+                                        '&.Mui-selected:hover': {
+                                            backgroundColor: (theme) => `${theme.palette.action.selected} !important`,
+                                        },
+                                    }}
+                                >
                                     {platform.name}
                                 </MenuItem>
                             ))}
-                            <Box sx={{ p: 2, borderTop: '1px solid rgba(255, 255, 255, 0.12)' }}>
+                            <Box sx={{ p: 2, borderTop: '1px solid rgba(255, 255, 255, 0.1)', backgroundColor: 'rgba(0,0,0,0.2)' }}>
                                 <TextField
                                     fullWidth
-                                    variant="outlined"
+                                    variant="standard"
                                     size="small"
-                                    placeholder="Nhập tên sàn mới..."
+                                    placeholder="Nhập tên sàn khác..."
                                     value={customSource}
-                                    onChange={(e) => {
-                                        setCustomSource(e.target.value);
-                                        if (customSourceError) setCustomSourceError('');
-                                    }}
+                                    onChange={(e) => { setCustomSource(e.target.value); setCustomSourceError(''); }}
                                     error={!!customSourceError}
                                     helperText={customSourceError}
                                     inputProps={{ maxLength: MAX_SOURCE_LENGTH }}
-                                    onKeyDown={(e) => {
-                                        // Ngăn sự kiện lan lên component Select,
-                                        // tránh việc Select bắt phím 's' để tìm kiếm
-                                        e.stopPropagation();
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            handleAddCustomSource();
-                                        }
-                                    }}
+                                    onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); handleAddCustomSource(); } }}
                                     InputProps={{
                                         endAdornment: (
                                             <InputAdornment position="end">
-                                                <IconButton
-                                                    aria-label="add custom source"
-                                                    onClick={handleAddCustomSource}
-                                                    edge="end"
-                                                    size="small"
-                                                    sx={{ color: 'white' }} // Changes the add icon to white
-                                                >
+                                                <IconButton onClick={handleAddCustomSource} edge="end" size="small" color="primary">
                                                     <AddCircleOutlineIcon />
                                                 </IconButton>
                                             </InputAdornment>
@@ -180,47 +196,31 @@ function SingleImportDialog({ open, onClose, onUpload, brandId }) {
                                 />
                             </Box>
                         </Select>
-                        <FormHelperText>
-                            Chọn sàn có sẵn hoặc thêm sàn mới của bạn.
-                        </FormHelperText>
+                        <FormHelperText>Chọn sàn có sẵn hoặc nhập tên mới để thêm.</FormHelperText>
                     </FormControl>
 
-                    <Box sx={{
-                        opacity: selectedPlatform ? 1 : 0.5,
-                        pointerEvents: selectedPlatform ? 'auto' : 'none',
-                        transition: 'opacity 0.3s ease'
-                    }}>
-                        <FileDropzone
-                            title="Tải lên File Template"
-                            onFileChange={setSelectedFile}
-                        />
+                    <Box sx={{ opacity: selectedPlatform && !isWorking ? 1 : 0.5, pointerEvents: selectedPlatform && !isWorking ? 'auto' : 'none', transition: 'opacity 0.3s ease' }}>
+                        <FileDropzone title="Tải lên File Template" onFileChange={setSelectedFile} />
                     </Box>
+
+                    {isWorking && (
+                        <Box sx={{ width: '100%' }}>
+                            <LinearProgress variant="determinate" value={progress} />
+                            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
+                                {`${progressText} ${Math.round(progress)}%`}
+                            </Typography>
+                        </Box>
+                    )}
                 </Box>
             </DialogContent>
 
-            <DialogActions sx={{ p: '0 24px 16px', justifyContent: 'space-between' }}>
-                <Button
-                    component="a" // Render as an anchor tag
-                    href="/Standard_Template.xlsx" // Path to the sample file
-                    download="Standard_Template.xlsx" // Suggests filename for download
-                    startIcon={<DownloadIcon />}
-                    color="info" // Use an appropriate color
-                    variant="outlined"
-                    sx={{ mr: 'auto' }} // Pushes it to the left
-                >
+            <DialogActions>
+                <Button href="/Standard_Template.xlsx" download="Standard_Template.xlsx" startIcon={<DownloadIcon />} color="inherit" size="small" sx={{ mr: 'auto', opacity: 0.7 }}>
                     Tải file mẫu
                 </Button>
-                <Button onClick={handleClose} disabled={isUploading} color="secondary">
-                    Hủy
-                </Button>
-                <Button
-                    onClick={handleUpload}
-                    variant="contained"
-                    color="secondary" // Changed to secondary color
-                    disabled={!selectedFile || !selectedPlatform || isUploading}
-                    startIcon={isUploading ? <CircularProgress size={20} color="inherit" /> : null}
-                >
-                    {isUploading ? 'Đang xử lý...' : 'Bắt đầu Import'}
+                <Button onClick={() => !isWorking && onClose()} disabled={isWorking} color="inherit"> Hủy </Button>
+                <Button onClick={handleUpload} variant="contained" disabled={!selectedFile || !selectedPlatform || isWorking}>
+                    {isWorking ? 'Đang xử lý...' : 'Bắt đầu Import'}
                 </Button>
             </DialogActions>
         </Dialog>
