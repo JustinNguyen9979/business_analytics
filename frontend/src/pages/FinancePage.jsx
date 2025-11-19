@@ -18,6 +18,7 @@ import { useFinanceData } from '../hooks/useFinanceData';
 import { dateShortcuts } from '../config/dashboardConfig';
 import { formatCurrency, formatPercentage } from '../utils/formatters';
 import { useBrand } from '../context/BrandContext';
+import SourceDistributionChart from '../components/charts/SourceDistributionChart';
 
 // Lấy giá trị mặc định là "Tháng này"
 const defaultDateRange = dateShortcuts.find(s => s.type === 'this_month').getValue();
@@ -60,54 +61,6 @@ function FinancePage() {
     const platformData = currentData
         ?.filter(item => item.platform !== 'Tổng cộng')
         .sort((a, b) => (b.netRevenue || 0) - (a.netRevenue || 0)) || [];
-
-    // const kpiCards = [
-    //     { 
-    //         title: 'Tổng Lợi nhuận', 
-    //         value: summaryData.profit, 
-    //         previousValue: prevSummaryData.profit,
-    //         icon: <MonetizationOnIcon />, 
-    //         color: 'success.main',
-    //         format: 'currency',
-    //         direction: 'up',
-    //     },
-    //     { 
-    //         title: 'Tổng GMV', 
-    //         value: summaryData.gmv, 
-    //         previousValue: prevSummaryData.gmv,
-    //         icon: <AccountBalanceWalletIcon />, 
-    //         color: 'primary.main',
-    //         format: 'currency',
-    //         direction: 'up',
-    //     },
-    //     { 
-    //         title: 'Tổng Doanh thu thuần', 
-    //         value: summaryData.netRevenue, 
-    //         previousValue: prevSummaryData.netRevenue,
-    //         icon: <TrendingUpIcon />, 
-    //         color: 'info.main',
-    //         format: 'currency',
-    //         direction: 'up',
-    //     },
-    //     { 
-    //         title: 'Tổng Chi phí', 
-    //         value: summaryData.totalCost, 
-    //         previousValue: prevSummaryData.totalCost,
-    //         icon: <AttachMoneyIcon />, 
-    //         color: 'error.main',
-    //         format: 'currency',
-    //         direction: 'down', // Chi phí giảm là tốt
-    //     },
-    //     { 
-    //         title: 'ROI Tổng', 
-    //         value: summaryData.roi, 
-    //         previousValue: prevSummaryData.roi,
-    //         icon: <StackedLineChartIcon />, 
-    //         color: 'secondary.main',
-    //         format: 'percent',
-    //         direction: 'up',
-    //     },
-    // ];
 
     const cardConfigs = [
         { key: 'profit', title: 'Tổng Lợi nhuận', icon: <MonetizationOnIcon />, color: 'success.main' },
@@ -175,6 +128,27 @@ function FinancePage() {
                             />
                         </Box>
                 ))}
+            </Box>
+
+            {/* --- PHẦN 2: CHART PHÂN BỔ (HÀNG DƯỚI - MỚI THÊM) --- */}
+            <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
+                {loading
+                    ? Array.from(new Array(5)).map((_, index) => (
+                        <Box key={index} sx={{ flex: 1, minWidth: '200px', height: 250 }}>
+                             <Skeleton variant="rectangular" width="100%" height="100%" sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.05)' }} />
+                        </Box>
+                    ))
+                    : cardConfigs.map(config => (
+                        <Box key={config.key} sx={{ flex: 1, minWidth: '200px', height: 250 }}>
+                            <SourceDistributionChart
+                                data={platformData}         // Dữ liệu danh sách các sàn
+                                dataKey={config.key}        // Key cần vẽ (ví dụ: 'profit', 'gmv')
+                                title={config.title}
+                                format={config.format || 'currency'}
+                            />
+                        </Box>
+                    ))
+                }
             </Box>
 
             {/* Bảng chi tiết */}
