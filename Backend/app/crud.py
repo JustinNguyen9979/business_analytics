@@ -9,14 +9,29 @@ from cache import redis_client
 from models import DailyStat
 from province_centroids import PROVINCE_CENTROIDS
 
+def _clear_brand_cache(brand_id: int):
+    """Xóa các cache liên quan đến dashboard của một brand bằng cách dùng SCAN để không block Redis."""
+    print(f"INFO: Clearing dashboard cache for brand_id: {brand_id}")
+    # Dùng SCAN thay cho KEYS để an toàn hơn trên production
+    cache_keys_to_delete = []
+    # Quét tất cả các loại cache liên quan đến brand
+    for key in redis_client.scan_iter(f"data_req:{brand_id}:*"):
+        cache_keys_to_delete.append(key)
+    
+    if cache_keys_to_delete:
+        redis_client.delete(*cache_keys_to_delete)
+        print(f"INFO: Deleted {len(cache_keys_to_delete)} cache keys.")
+
+
+
 def update_daily_stats(db: Session, brand_id: int, target_date: date):
     """
     Hàm này được Worker gọi.
-    Nhiệm vụ: Lấy dữ liệu thô của 1 ngày -> Tính KPI -> Lưu/Cập nhật vào bảng DailyStat.
+    Nhiệm vụ: Lấy dữ liệu thô -> Gọi Calculator -> Lưu kết quả vào DailyStat.
     """
     import kpi_calculator # Import local
 
-    # 1. Lấy REVENUE và ADS của ngày 'transaction_date' (Ngày tiền về)
+    # 1. Lấy dữ liệu thô
     revenues = db.query(models.Revenue).filter(
         models.Revenue.brand_id == brand_id,
         models.Revenue.transaction_date == target_date
@@ -27,46 +42,30 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
         models.Ad.ad_date == target_date
     ).all()
 
-    # 2. LẤY ĐƠN HÀNG (PHẦN SỬA ĐỔI QUAN TRỌNG)
-    
-    # 2.1. Lấy danh sách order_code có trong Revenue hôm nay 
-    # (Để tìm lại đơn gốc tính COGS, dù đơn đó đặt từ quá khứ)
-    revenue_order_codes = [r.order_code for r in revenues if r.order_code]
-
+    # Lấy các loại đơn hàng cần thiết
+    revenue_order_codes = {r.order_code for r in revenues if r.order_code}
     orders_for_cogs = []
     if revenue_order_codes:
-        # Tìm tất cả đơn hàng liên quan đến dòng tiền hôm nay
         orders_for_cogs = db.query(models.Order).filter(
             models.Order.brand_id == brand_id,
             models.Order.order_code.in_(revenue_order_codes)
         ).all()
 
-    # 2.2. Lấy danh sách đơn hàng ĐƯỢC TẠO ra hôm nay (order_date)
-    # (Để đếm số lượng đơn phát sinh - Total Orders)
     orders_created_today = db.query(models.Order).filter(
         models.Order.brand_id == brand_id, 
         models.Order.order_date == target_date
     ).all()
 
-    # 2.3. Gộp 2 danh sách này lại để đưa vào máy tính
-    # Dùng Dictionary để loại bỏ trùng lặp (nếu đơn vừa đặt hôm nay vừa có tiền về hôm nay)
-    all_orders_map = {}
-    
-    # Ưu tiên đơn dùng để tính COGS trước
-    for o in orders_for_cogs:
-        all_orders_map[o.order_code] = o
-        
-    # Bổ sung đơn tạo hôm nay
-    for o in orders_created_today:
-        all_orders_map[o.order_code] = o
-    
+    # Gộp danh sách đơn hàng để tính toán
+    all_orders_map = {o.order_code: o for o in orders_for_cogs}
+    all_orders_map.update({o.order_code: o for o in orders_created_today})
     final_orders_list = list(all_orders_map.values())
 
-    # 3. Gọi "Đầu bếp" tính toán
-    # Lưu ý: Calculator sẽ dùng final_orders_list để tra cứu COGS cho Profit.
-    kpis = kpi_calculator.calculate_daily_kpis(final_orders_list, revenues, ads)
+    # 2. Gọi "Đầu bếp" tính toán, truyền vào mẫu số đúng
+    total_orders_today = len(orders_created_today)
+    kpis = kpi_calculator.calculate_daily_kpis(final_orders_list, revenues, ads, total_orders_today)
 
-    # 4. Lưu vào bảng DailyStat
+    # 3. Tìm hoặc tạo mới bản ghi DailyStat
     stat_entry = db.query(models.DailyStat).filter(
         models.DailyStat.brand_id == brand_id,
         models.DailyStat.date == target_date
@@ -76,25 +75,19 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
         stat_entry = models.DailyStat(brand_id=brand_id, date=target_date)
         db.add(stat_entry)
     
-    # Map dữ liệu
-    stat_entry.net_revenue = kpis.get('netRevenue', 0)
-    stat_entry.gmv = kpis.get('gmv', 0)
-    stat_entry.profit = kpis.get('profit', 0)
-    stat_entry.total_cost = kpis.get('totalCost', 0)
-    stat_entry.ad_spend = kpis.get('adSpend', 0)
-    stat_entry.cogs = kpis.get('cogs', 0)
-    stat_entry.execution_cost = kpis.get('executionCost', 0)
-
-    stat_entry.total_orders = len(orders_created_today)
+    # 4. Map TOÀN BỘ dữ liệu từ kpi_calculator (vì nó đã được tính đúng)
+    # Dùng vòng lặp để code gọn và dễ bảo trì
+    if kpis:
+        for key, value in kpis.items():
+            # Chuyển đổi camelCase từ kpi dict sang snake_case của model
+            snake_case_key = re.sub(r'(?<!^)(?=[A-Z])', '_', key).lower()
+            if hasattr(stat_entry, snake_case_key):
+                setattr(stat_entry, snake_case_key, value)
 
     db.commit()
     
-    # 5. Xóa Cache Redis cũ
-    chart_keys = redis_client.keys(f"data_req:{brand_id}:daily_kpis_chart:*")
-    if chart_keys: redis_client.delete(*chart_keys)
-    
-    summary_keys = redis_client.keys(f"data_req:{brand_id}:kpi_summary:*")
-    if summary_keys: redis_client.delete(*summary_keys)
+    # 5. Xóa cache
+    _clear_brand_cache(brand_id)
 
     return stat_entry
 
@@ -168,20 +161,45 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
             results.append({
                 "date": current_date.isoformat(),
                 "netRevenue": stat.net_revenue,
-                "profit": stat.profit,
                 "gmv": stat.gmv,
-                "adSpend": stat.ad_spend
+                "profit": stat.profit,
+                "totalCost": stat.total_cost,
+                "adSpend": stat.ad_spend,
+                "cogs": stat.cogs,
+                "executionCost": stat.execution_cost,
+                "roi": stat.roi,
+                "profitMargin": stat.profit_margin,
+                "takeRate": stat.take_rate,
+                "completedOrders": stat.completed_orders,
+                "cancelledOrders": stat.cancelled_orders,
+                "refundedOrders": stat.refunded_orders,
+                "aov": stat.aov,
+                "upt": stat.upt,
+                "uniqueSkusSold": stat.unique_skus_sold,
+                "totalQuantitySold": stat.total_quantity_sold,
+                "completionRate": stat.completion_rate,
+                "cancellationRate": stat.cancellation_rate,
+                "refundRate": stat.refund_rate,
+                "totalCustomers": stat.total_customers,
             })
         else:
             # Nếu ngày đó chưa có dữ liệu (Worker chưa chạy xong hoặc không có đơn), trả về 0
             results.append({
                 "date": current_date.isoformat(),
-                "netRevenue": 0, "profit": 0, "gmv": 0, "adSpend": 0
-            })
-            
+                "netRevenue": 0, "gmv": 0, "profit": 0, "totalCost": 0, "adSpend": 0,
+                "cogs": 0, "executionCost": 0, "roi": 0, "profitMargin": 0, "takeRate": 0,
+                "completedOrders": 0, "cancelledOrders": 0, "refundedOrders": 0, "aov": 0,
+                "upt": 0, "uniqueSkusSold": 0, "totalQuantitySold": 0,
+                "completionRate": 0, "cancellationRate": 0, "refundRate": 0,
+                "totalCustomers": 0,
+            })            
         current_date += timedelta(days=1)
 
     return results
+
+def get_all_brands(db: Session):
+    """Lấy danh sách tất cả các brand."""
+    return db.query(models.Brand).all()
 
 def get_all_brands(db: Session):
     """Lấy danh sách tất cả các brand."""
@@ -627,7 +645,19 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
         orders_count = orders_query.count()
         orders_query.delete(synchronize_session=False)
 
+        # THÊM MỚI: Xóa DailyStat nếu xóa tất cả các nguồn trong khoảng thời gian
+        if not source:
+            db.query(models.DailyStat).filter(
+                models.DailyStat.brand_id == brand_id,
+                models.DailyStat.date.between(start_date, end_date)
+            ).delete(synchronize_session=False)
+            print(f"INFO: Đã xóa DailyStat cho brand {brand_id} từ {start_date} đến {end_date}.")
+
         db.commit()
+
+        # THÊM MỚI: Xóa cache để đảm bảo frontend load lại dữ liệu mới
+        _clear_brand_cache(brand_id)
+
         return {"message": f"Successfully deleted data for brand {brand_id} between {start_date} and {end_date}."}
     except Exception as e:
         db.rollback()

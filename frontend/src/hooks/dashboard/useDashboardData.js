@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import axios from 'axios';
 import { fetchAsyncData } from '../../services/api';
 import dayjs from 'dayjs';
 import { processChartData } from '../../utils/chartDataProcessor';
@@ -68,20 +69,27 @@ export const useDashboardData = (brandId, filters) => {
         const filter = filters.kpi;
         if (!brandId || !filter || !filter.range) return;
 
+        const controller = new AbortController();
+
         const fetchKpi = async () => {
             updateState('kpi', { loading: true, error: null });
             const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
             try {
                 const [current, previous] = await Promise.all([
-                    fetchAsyncData('kpi_summary', brandId, filter.range),
-                    fetchAsyncData('kpi_summary', brandId, prevRange)
+                    fetchAsyncData('kpi_summary', brandId, filter.range, {}, controller.signal),
+                    fetchAsyncData('kpi_summary', brandId, prevRange, {}, controller.signal)
                 ]);
                 updateState('kpi', { data: { current, previous }, loading: false });
             } catch (err) {
-                updateState('kpi', { error: err.message || 'Lỗi tải dữ liệu KPI.', loading: false });
+                if (!axios.isCancel(err)) {
+                    updateState('kpi', { error: err.message || 'Lỗi tải dữ liệu KPI.', loading: false });
+                }
             }
         };
+        
         fetchKpi();
+
+        return () => controller.abort();
     }, [brandId, filters.kpi]); // Chỉ phụ thuộc vào bộ lọc KPI
 
     // <<< THAY ĐỔI 3: useEffect riêng cho Biểu đồ đường (Line Chart) >>>
@@ -89,39 +97,18 @@ export const useDashboardData = (brandId, filters) => {
         const filter = filters.lineChart;
         if (!brandId || !filter || !filter.range) return;
         
+        const controller = new AbortController();
+
         const fetchLineChart = async () => {
             updateState('lineChart', { loading: true, error: null });
             const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
             try {
                 const [currentRes, previousRes] = await Promise.all([
-                    fetchAsyncData('daily_kpis_chart', brandId, filter.range),
-                    fetchAsyncData('daily_kpis_chart', brandId, prevRange)
+                    fetchAsyncData('daily_kpis_chart', brandId, filter.range, {}, controller.signal),
+                    fetchAsyncData('daily_kpis_chart', brandId, prevRange, {}, controller.signal)
                 ]);
                 const processedCurrent = processChartData(currentRes?.data, filter);
                 const processedPrevious = processChartData(previousRes?.data, { range: prevRange, type: filter.type });
-
-                // Log tính toán tổng các chỉ số
-                // const calculateTotals = (dataArray) => {
-                //     if (!dataArray || dataArray.length === 0) {
-                //         return { totalRevenue: 0, totalProfit: 0 };
-                //     }
-                //     return dataArray.reduce((acc, item) => {
-                //         acc.totalRevenue += item.netRevenue;
-                //         acc.totalProfit += item.profit;
-                //         return acc;
-                //     }, { totalRevenue: 0, totalProfit: 0 });
-                // };
-
-                // const currentTotals = calculateTotals(processedCurrent.aggregatedData);
-                // const previousTotals = calculateTotals(processedPrevious.aggregatedData);
-
-                // console.log(`--- [LOG BIỂU ĐỒ - TỔNG KỲ HIỆN TẠI (${processedCurrent.aggregationType})] ---`);
-                // console.log('Tổng Doanh thu Ròng:', currentTotals.totalRevenue.toLocaleString('vi-VN'));
-                // console.log('Tổng Lợi nhuận:', currentTotals.totalProfit.toLocaleString('vi-VN'));
-                
-                // console.log(`--- [LOG BIỂU ĐỒ - TỔNG KỲ TRƯỚC (${processedPrevious.aggregationType})] ---`);
-                // console.log('Tổng Doanh thu Ròng (Kỳ trước):', previousTotals.totalRevenue.toLocaleString('vi-VN'));
-                // console.log('Tổng Lợi nhuận (Kỳ trước):', previousTotals.totalProfit.toLocaleString('vi-VN'));
 
                 updateState('lineChart', { 
                     data: {
@@ -132,10 +119,14 @@ export const useDashboardData = (brandId, filters) => {
                     loading: false 
                 });
             } catch (err) {
-                updateState('lineChart', { error: err.message || 'Lỗi tải dữ liệu biểu đồ.', loading: false });
+                if (!axios.isCancel(err)) {
+                    updateState('lineChart', { error: err.message || 'Lỗi tải dữ liệu biểu đồ.', loading: false });
+                }
             }
         };
         fetchLineChart();
+
+        return () => controller.abort();
     }, [brandId, filters.lineChart]); // Chỉ phụ thuộc vào bộ lọc Line Chart
 
     // <<< THAY ĐỔI 4: useEffect riêng cho các biểu đồ còn lại (Donut, Top Products, Map) >>>
@@ -143,16 +134,24 @@ export const useDashboardData = (brandId, filters) => {
     const createSingleChartEffect = (key, requestType, filter) => {
         useEffect(() => {
             if (!brandId || !filter || !filter.range) return;
+            
+            const controller = new AbortController();
+
             const fetchData = async () => {
                 updateState(key, { loading: true, error: null });
                 try {
-                    const result = await fetchAsyncData(requestType, brandId, filter.range);
+                    const result = await fetchAsyncData(requestType, brandId, filter.range, {}, controller.signal);
                     updateState(key, { data: result, loading: false });
                 } catch (err) {
-                    updateState(key, { error: err.message || `Lỗi tải dữ liệu ${key}.`, loading: false });
+                    if (!axios.isCancel(err)) {
+                        updateState(key, { error: err.message || `Lỗi tải dữ liệu ${key}.`, loading: false });
+                    }
                 }
             };
+
             fetchData();
+
+            return () => controller.abort();
         }, [brandId, filter]);
     };
 

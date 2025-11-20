@@ -8,15 +8,38 @@ import { Tooltip } from 'react-tooltip'; // << FIX: Thêm import
 
 // import geoShapeData from '../../assets/vietnam-shape.json';
 
+import { get, set } from '../../utils/db';
+
 function GeoMapChartComponent({ data }) {
-    // 1. Hook lấy dữ liệu bản đồ
+    // 1. Hook lấy dữ liệu bản đồ với cơ chế cache IndexedDB
     const [geoShapeData, setGeoShapeData] = useState(null);
+    const [isLoadingGeo, setIsLoadingGeo] = useState(true);
 
     useEffect(() => {
-        // Tải dữ liệu bất đồng bộ
-        fetch('/vietnam-shape.json')
-            .then(res => res.json())
-            .then(data => setGeoShapeData(data));
+        const loadGeography = async () => {
+            setIsLoadingGeo(true);
+            try {
+                // Thử lấy từ IndexedDB trước
+                const cachedGeo = await get('vietnam-shape');
+                if (cachedGeo) {
+                    setGeoShapeData(cachedGeo);
+                } else {
+                    // Nếu không có, tải từ mạng
+                    const response = await fetch('/vietnam-shape.json');
+                    const fetchedGeo = await response.json();
+                    
+                    // Lưu vào IndexedDB để dùng cho lần sau
+                    await set('vietnam-shape', fetchedGeo);
+                    setGeoShapeData(fetchedGeo);
+                }
+            } catch (error) {
+                console.error("Error loading geography data:", error);
+            } finally {
+                setIsLoadingGeo(false);
+            }
+        };
+
+        loadGeography();
     }, []);
 
     const [showMarkers, setShowMarkers] = useState(false);
@@ -72,7 +95,7 @@ function GeoMapChartComponent({ data }) {
     //     };
     // }, []);
 
-    if (!geoShapeData) {
+    if (isLoadingGeo) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
                 <CircularProgress />

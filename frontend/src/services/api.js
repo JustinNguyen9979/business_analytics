@@ -15,17 +15,21 @@ const apiClient = axios.create({
  * @param {object} params - Các tham số (start_date, end_date, ...).
  * @returns {Promise<object>} - Phản hồi từ API, có thể là dữ liệu ngay (cache hit) hoặc task_id (cache miss).
  */
-export const requestData = async (requestType, brandId, params) => {
+export const requestData = async (requestType, brandId, params, signal) => {
     try {
         const payload = {
             brand_id: brandId,
             request_type: requestType,
             params: params,
         };
-        const response = await apiClient.post('/data-requests', payload);
+        const response = await apiClient.post('/data-requests', payload, { signal });
         return response.data;
     } catch (error) {
-        console.error(`Error requesting data for ${requestType}:`, error);
+        if (axios.isCancel(error)) {
+            console.log('Data request cancelled:', requestType);
+        } else {
+            console.error(`Error requesting data for ${requestType}:`, error);
+        }
         throw error;
     }
 };
@@ -35,12 +39,16 @@ export const requestData = async (requestType, brandId, params) => {
  * @param {string} cacheKey - Cache key được trả về từ hàm requestData.
  * @returns {Promise<object>} - Phản hồi chứa trạng thái (PROCESSING, SUCCESS, FAILED) và dữ liệu (nếu có).
  */
-export const pollDataStatus = async (cacheKey) => {
+export const pollDataStatus = async (cacheKey, signal) => {
     try {
-        const response = await apiClient.get(`/data-requests/status/${cacheKey}`);
+        const response = await apiClient.get(`/data-requests/status/${cacheKey}`, { signal });
         return response.data;
     } catch (error) {
-        console.error(`Error polling status for cache key ${cacheKey}:`, error);
+        if (axios.isCancel(error)) {
+            console.log('Polling request cancelled for:', cacheKey);
+        } else {
+            console.error(`Error polling status for cache key ${cacheKey}:`, error);
+        }
         throw error;
     }
 };
@@ -119,6 +127,13 @@ export const recalculateBrandDataAndWait = async (brandSlug) => {
     } catch (error) { throw error; }
 };
 
+export const triggerRecalculation = async (brandSlug) => {
+    try {
+        const response = await apiClient.post(`/brands/${brandSlug}/trigger-recalculation`);
+        return response.data;
+    } catch (error) { throw error; }
+};
+
 export const getSourcesForBrand = async (brandSlug) => {
     try {
         const response = await apiClient.get(`/brands/${brandSlug}/sources`);
@@ -158,18 +173,24 @@ export const deleteDataInRange = async (brandSlug, startDate, endDate, source = 
  * @param {object} params - Các tham số bổ sung.
  * @returns {Promise<object>} - Dữ liệu đã được xử lý thành công.
  */
-export const fetchAsyncData = async (requestType, brandId, dateRange, params = {}) => {
+export const fetchAsyncData = async (requestType, brandId, dateRange, params = {}, signal) => {
+    // Helper to check for abort signal
+    const throwIfAborted = () => {
+        if (signal?.aborted) {
+            throw new axios.Cancel('Request was aborted.');
+        }
+    };
+
     const cacheKey = generateCacheKey(requestType, brandId, dateRange);
     if (!cacheKey) return null;
-
-    // 1. Kiểm tra client cache trước
+    
     const cachedData = memoryCache.get(cacheKey);
     if (cachedData) {
-        console.log(`CLIENT CACHE HIT for key: ${cacheKey}`);
         return Promise.resolve(cachedData);
     }
     
-    console.log(`CLIENT CACHE MISS for key: ${cacheKey}`);
+    throwIfAborted(); // Check before first request
+
     const [start, end] = dateRange;
     const fullParams = { 
         start_date: start.format('YYYY-MM-DD'), 
@@ -178,39 +199,56 @@ export const fetchAsyncData = async (requestType, brandId, dateRange, params = {
     };
 
     try {
-        const initialResponse = await requestData(requestType, brandId, fullParams);
+        const initialResponse = await requestData(requestType, brandId, fullParams, signal);
         
         if (initialResponse.status === 'SUCCESS') {
             const resultData = initialResponse.data;
-            memoryCache.set(cacheKey, resultData); // Lưu vào cache
+            memoryCache.set(cacheKey, resultData);
             return resultData;
         }
 
         if (initialResponse.status === 'PROCESSING') {
             return new Promise((resolve, reject) => {
-                const pollingInterval = setInterval(async () => {
+                let pollingInterval;
+
+                const cleanup = () => {
+                    if (pollingInterval) clearInterval(pollingInterval);
+                    if (signal) signal.removeEventListener('abort', onAbort);
+                };
+
+                const onAbort = () => {
+                    cleanup();
+                    reject(new axios.Cancel('Polling was aborted.'));
+                };
+                
+                if (signal) signal.addEventListener('abort', onAbort);
+
+                pollingInterval = setInterval(async () => {
                     try {
-                        const statusResponse = await pollDataStatus(initialResponse.cache_key);
+                        throwIfAborted(); // Check before each poll
+                        const statusResponse = await pollDataStatus(initialResponse.cache_key, signal);
+
                         if (statusResponse.status === 'SUCCESS') {
-                            clearInterval(pollingInterval);
+                            cleanup();
                             const resultData = statusResponse.data;
-                            memoryCache.set(cacheKey, resultData); // Lưu vào cache
+                            memoryCache.set(cacheKey, resultData);
                             resolve(resultData);
                         } else if (statusResponse.status === 'FAILED') {
-                            clearInterval(pollingInterval);
+                            cleanup();
                             reject(new Error(statusResponse.error || `Worker xử lý '${requestType}' thất bại.`));
                         }
+                        // If still 'PROCESSING', do nothing and wait for the next poll.
                     } catch (pollError) {
-                        clearInterval(pollingInterval);
+                        cleanup();
                         reject(pollError);
                     }
-                }, 2000); // Hỏi thăm mỗi 2 giây
+                }, 2000); // Poll every 2 seconds
             });
         }
-        // Các trường hợp trạng thái khác không mong muốn
+        
         throw new Error(`Trạng thái phản hồi không mong muốn: ${initialResponse.status}`);
     } catch (error) {
-        console.error(`Lỗi khi fetch ${requestType}:`, error);
+        // The individual functions (requestData, pollDataStatus) already handle logging.
         throw error;
     }
 };

@@ -45,8 +45,7 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
             # --- Nhánh 1: KPI TỔNG HỢP (ĐÃ TỐI ƯU HÓA) ---
             # --------------------------------------------------------------
             if request_type == "kpi_summary":
-                # BƯỚC 1: Lấy các chỉ số TÀI CHÍNH từ bảng DailyStat (Siêu nhanh)
-                # Thay vì load 50.000 dòng đơn hàng, ta chỉ sum khoảng 30 dòng từ DailyStat
+                # TỐI ƯU: Chỉ cần một truy vấn SUM tất cả các cột từ DailyStat
                 summary_query = db.query(
                     func.sum(models.DailyStat.net_revenue).label('netRevenue'),
                     func.sum(models.DailyStat.gmv).label('gmv'),
@@ -56,34 +55,40 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                     func.sum(models.DailyStat.total_orders).label('totalOrders'),
                     func.sum(models.DailyStat.cogs).label('cogs'),
                     func.sum(models.DailyStat.execution_cost).label('executionCost'),
+                    func.sum(models.DailyStat.roi).label('roi'),
+                    func.sum(models.DailyStat.profit_margin).label('profitMargin'),
+                    func.sum(models.DailyStat.take_rate).label('takeRate'),
+                    func.sum(models.DailyStat.aov).label('aov'),
+                    func.sum(models.DailyStat.upt).label('upt'),
+                    func.sum(models.DailyStat.completion_rate).label('completionRate'),
+                    func.sum(models.DailyStat.cancellation_rate).label('cancellationRate'),
+                    func.sum(models.DailyStat.refund_rate).label('refundRate'),
+                    func.sum(models.DailyStat.completed_orders).label('completedOrders'),
+                    func.sum(models.DailyStat.cancelled_orders).label('cancelledOrders'),
+                    func.sum(models.DailyStat.refunded_orders).label('refundedOrders'),
+                    func.sum(models.DailyStat.unique_skus_sold).label('uniqueSkusSold'),
+                    func.sum(models.DailyStat.total_quantity_sold).label('totalQuantitySold'),
+                    func.sum(models.DailyStat.total_customers).label('totalCustomers')
                 ).filter(
                     models.DailyStat.brand_id == brand_id,
                     models.DailyStat.date.between(start_date, end_date)
                 ).first()
 
-                # Khởi tạo dict KPI cơ bản
-                kpis = {
-                    "netRevenue": summary_query.netRevenue or 0,
-                    "gmv": summary_query.gmv or 0,
-                    "profit": summary_query.profit or 0,
-                    "totalCost": summary_query.totalCost or 0,
-                    "adSpend": summary_query.adSpend or 0,
-                    "totalOrders": summary_query.totalOrders or 0,
-                    "cogs": summary_query.cogs or 0,
-                    "executionCost": summary_query.executionCost or 0,
-                    "completedOrders": 0, 
-                    "cancelledOrders": 0, 
-                    "refundedOrders": 0
-                }
+                # Chuyển kết quả từ SQLAlchemy Row thành dictionary
+                if summary_query and summary_query.gmv is not None:
+                    result_data = {key: value or 0 for key, value in summary_query._mapping.items()}
+                else:
+                    # Nếu không có dữ liệu, trả về dict chứa toàn số 0
+                    result_data = {
+                        'netRevenue': 0, 'gmv': 0, 'profit': 0, 'totalCost': 0, 'adSpend': 0,
+                        'totalOrders': 0, 'cogs': 0, 'executionCost': 0, 'roi': 0, 'profitMargin': 0,
+                        'takeRate': 0, 'aov': 0, 'upt': 0, 'completionRate': 0, 'cancellationRate': 0,
+                        'refundRate': 0, 'completedOrders': 0, 'cancelledOrders': 0, 'refundedOrders': 0,
+                        'uniqueSkusSold': 0, 'totalQuantitySold': 0, 'totalCustomers': 0
+                    }
                 
-                # 2.1. Đếm số khách hàng (Total Customers)
-                totalCustomers = db.query(func.count(models.Order.username.distinct())).filter(
-                    models.Order.brand_id == brand_id, 
-                    models.Order.order_date.between(start_date, end_date)
-                ).scalar() or 0
-
-                # 2.2. Đếm khách hàng mới (New Customers)
-                # Logic: Khách có đơn hàng đầu tiên nằm trong khoảng thời gian này
+                # CÁC CHỈ SỐ MỚI (TÍNH TOÁN NHANH) VẪN GIỮ LẠI
+                # Đếm khách hàng mới (New Customers)
                 first_order_subquery = db.query(
                     models.Order.username, 
                     func.min(models.Order.order_date).label('first_order_date')
@@ -92,47 +97,17 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                 newCustomers = db.query(func.count(first_order_subquery.c.username)).filter(
                     first_order_subquery.c.first_order_date.between(start_date, end_date)
                 ).scalar() or 0
-                
-                # Lấy số lượng đơn hoàn/hủy từ DB (Query nhẹ hơn load all)
-                cancelled_count = db.query(func.count(models.Order.id)).filter(
-                    models.Order.brand_id == brand_id,
-                    models.Order.order_date.between(start_date, end_date),
-                    models.Order.status.in_(['hủy', 'cancel', 'đã hủy', 'cancelled'])
-                ).scalar() or 0
-                
-                # Số đơn hoàn thành (xấp xỉ) = Tổng đơn - Đơn hủy (Giản lược cho nhanh)
-                completed_orders_approx = kpis['totalOrders'] - cancelled_count
-                if completed_orders_approx < 0: completed_orders_approx = 0
 
-                kpis['completedOrders'] = completed_orders_approx
-                kpis['cancelledOrders'] = cancelled_count
-                kpis['refundedOrders'] = 0 # Tạm thời để 0 hoặc cần query bảng Revenue để count dòng có refund
+                returningCustomers = result_data['totalCustomers'] - newCustomers
+                
+                result_data['newCustomers'] = newCustomers
+                result_data['returningCustomers'] = returningCustomers if returningCustomers > 0 else 0
+                result_data['cac'] = (result_data['adSpend'] / newCustomers) if newCustomers > 0 else 0
+                result_data['retentionRate'] = (returningCustomers / result_data['totalCustomers']) if result_data['totalCustomers'] > 0 else 0
+                result_data['ltv'] = (result_data['profit'] / result_data['totalCustomers']) if result_data['totalCustomers'] > 0 else 0
+                result_data['cpo'] = (result_data['adSpend'] / result_data['totalOrders']) if result_data['totalOrders'] else 0
+                result_data['roas'] = (result_data['gmv'] / result_data['adSpend']) if result_data['adSpend'] else 0
 
-                # BƯỚC 3: Tính các chỉ số PHÁI SINH (Derived Metrics)
-                
-                # Tài chính
-                kpis['profitMargin'] = (kpis['profit'] / kpis['netRevenue']) if kpis['netRevenue'] else 0
-                kpis['roi'] = (kpis['profit'] / kpis['totalCost']) if kpis['totalCost'] else 0
-                kpis['takeRate'] = ((kpis['totalCost'] - kpis['adSpend'] - 0) / kpis['gmv']) if kpis['gmv'] else 0 # Ước lượng Execution Cost = Total - Ad - COGS(ẩn)
-                
-                # Marketing
-                kpis['cpo'] = (kpis['adSpend'] / kpis['totalOrders']) if kpis['totalOrders'] else 0
-                kpis['roas'] = (kpis['gmv'] / kpis['adSpend']) if kpis['adSpend'] else 0
-                
-                # Vận hành
-                kpis['aov'] = (kpis['gmv'] / kpis['completedOrders']) if kpis['completedOrders'] else 0
-                kpis['cancellationRate'] = (kpis['cancelledOrders'] / kpis['totalOrders']) if kpis['totalOrders'] else 0
-                kpis['completionRate'] = (kpis['completedOrders'] / kpis['totalOrders']) if kpis['totalOrders'] else 0
-
-                # Khách hàng
-                kpis['totalCustomers'] = totalCustomers
-                kpis['newCustomers'] = newCustomers
-                kpis['returningCustomers'] = totalCustomers - newCustomers
-                kpis['cac'] = (kpis['adSpend'] / newCustomers) if newCustomers > 0 else 0
-                kpis['retentionRate'] = (kpis['returningCustomers'] / totalCustomers) if totalCustomers > 0 else 0
-                kpis['ltv'] = (kpis['profit'] / totalCustomers) if totalCustomers > 0 else 0
-                
-                result_data = kpis
 
             # --------------------------------------------------------------
             # --- Nhánh 2: BIỂU ĐỒ (Đã tối ưu bên CRUD) ---
@@ -192,11 +167,18 @@ def recalculate_all_brand_data(brand_id: int):
     print(f"WORKER: Bắt đầu RECALCULATE (DailyStat) cho brand ID {brand_id}.")
     try:
         with get_db_session() as db:
+            # BƯỚC MỚI: Xóa tất cả các bản ghi DailyStat cũ của brand này
+            print(f"WORKER: Đang xóa các bản ghi DailyStat cũ cho brand {brand_id}...")
+            db.query(models.DailyStat).filter(models.DailyStat.brand_id == brand_id).delete(synchronize_session=False)
+            print(f"WORKER: Đã xóa xong DailyStat cũ.")
+
             # 1. Lấy tất cả các ngày có hoạt động
             all_activity_dates = crud.get_all_activity_dates(db, brand_id=brand_id)
             
             if not all_activity_dates:
                 print(f"WORKER: Brand {brand_id} không có dữ liệu.")
+                # Xóa cache lần cuối rồi kết thúc
+                crud._clear_brand_cache(brand_id)
                 return
             
             # 2. Tính toán và lưu vào DailyStat từng ngày

@@ -18,7 +18,7 @@ export const useCountUp = (endValue, duration = 1000) => {
             return;
         }
 
-        let startTime = null;
+        let animationFrameId = null;
         const animationFrame = (timestamp) => {
             if (!startTime) startTime = timestamp;
             const progress = timestamp - startTime;
@@ -29,18 +29,20 @@ export const useCountUp = (endValue, duration = 1000) => {
 
             // Tiếp tục animation nếu chưa hoàn thành
             if (progress < duration) {
-                requestAnimationFrame(animationFrame);
+                animationFrameId = requestAnimationFrame(animationFrame);
             } else {
                 setCount(endValue); // Đảm bảo giá trị cuối cùng luôn chính xác
             }
         };
 
         // Bắt đầu animation
-        requestAnimationFrame(animationFrame);
+        animationFrameId = requestAnimationFrame(animationFrame);
 
         // Cleanup function để tránh memory leak nếu component unmount giữa chừng
         return () => {
-            startTime = null;
+            if (animationFrameId) {
+                cancelAnimationFrame(animationFrameId);
+            }
         };
     }, [endValue, duration]); // Hook sẽ chạy lại mỗi khi endValue thay đổi
 

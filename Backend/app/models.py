@@ -129,6 +129,23 @@ class DailyStat(Base):
     cogs = Column(Float, default=0.0)            # Giá vốn hàng bán
     execution_cost = Column(Float, default=0.0)  # Chi phí thực thi (từ total_fees)
     
+    # Các chỉ số mới được thêm vào
+    roi = Column(Float, default=0.0)
+    profit_margin = Column(Float, default=0.0)
+    take_rate = Column(Float, default=0.0)
+    aov = Column(Float, default=0.0)
+    upt = Column(Float, default=0.0)
+    completion_rate = Column(Float, default=0.0)
+    cancellation_rate = Column(Float, default=0.0)
+    refund_rate = Column(Float, default=0.0)
+    
+    completed_orders = Column(Integer, default=0)
+    cancelled_orders = Column(Integer, default=0)
+    refunded_orders = Column(Integer, default=0)
+    unique_skus_sold = Column(Integer, default=0)
+    total_quantity_sold = Column(Integer, default=0)
+    total_customers = Column(Integer, default=0)
+
     # Đảm bảo mỗi brand chỉ có 1 dòng dữ liệu cho 1 ngày (Chống trùng lặp)
     __table_args__ = (
         UniqueConstraint('brand_id', 'date', name='uq_brand_date_stat'),

@@ -74,6 +74,16 @@ def clone_brand_api(brand_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand để nhân bản.")
     return cloned
 
+@app.post("/brands/{brand_slug}/trigger-recalculation", status_code=status.HTTP_202_ACCEPTED)
+def trigger_recalculation_api(brand: models.Brand = Depends(get_brand_from_slug)):
+    """
+    Kích hoạt task chạy nền để tính toán lại toàn bộ dữ liệu cho brand.
+    Trả về ngay lập tức.
+    """
+    recalculate_all_brand_data.delay(brand.id)
+    return {"message": "Yêu cầu tính toán lại đã được gửi đi. Dữ liệu sẽ được cập nhật trong nền."}
+
+
 # ==============================================================================
 # === 2. ENDPOINTS XỬ LÝ DỮ LIỆU (DATA PROCESSING) ===
 # ==============================================================================

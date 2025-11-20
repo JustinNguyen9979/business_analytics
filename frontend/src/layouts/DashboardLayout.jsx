@@ -27,11 +27,14 @@ import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 // --- Components & Services ---
 import SingleImportDialog from '../components/import/SingleImportDialog';
 import DeleteDataDialog from '../components/settings/DeleteDataDialog';
-import { recalculateBrandDataAndWait, uploadStandardFile, getAllBrands } from '../services/api';
+import { recalculateBrandDataAndWait, getAllBrands } from '../services/api';
+import { clearAllApplicationCaches } from '../utils/cacheManager';
 import { useLayout } from '../context/LayoutContext';
 import { useNotification } from '../context/NotificationContext';
 // import { slugify } from '../utils/slugify'; // Không cần slugify ở đây nữa vì backend đã trả về slug
 import { BrandProvider, useBrand } from '../context/BrandContext';
+
+import { memoryCache } from '../cache/memoryCache';
 
 // --- Styled Components ---
 const drawerWidth = 240;
@@ -115,16 +118,30 @@ function LayoutWithBrandContext() {
 
     const handleRecalculate = async () => {
         if (!brandIdentifier || isRecalculating) return;
+
         setIsRecalculating(true);
+        showNotification("Bắt đầu tính toán lại toàn bộ dữ liệu. Quá trình này có thể mất vài phút...", "info");
+
         try {
-            await recalculateBrandDataAndWait(brandIdentifier); // Dùng brandIdentifier (slug)
-            showNotification("Dữ liệu đã được làm mới thành công!", "success");
-            navigate(0); // Refresh trang để tải lại dữ liệu
+            await recalculateBrandDataAndWait(brandIdentifier); // Dùng hàm chờ
+            showNotification("Tính toán lại phía server thành công! Đang xóa cache phía client...", "success");
+
+            // Xóa TOÀN BỘ cache của ứng dụng
+            await clearAllApplicationCaches();
+            
+            showNotification("Xóa cache thành công! Đang tải lại trang...", "success");
+            
+            // Tải lại trang để đảm bảo tất cả component đều nhận dữ liệu mới
+            setTimeout(() => {
+                navigate(0); 
+            }, 1000); // Thêm một chút delay để người dùng đọc được thông báo
+
         } catch (error) {
-            const errorMessage = error.response?.data?.detail || "Lỗi khi yêu cầu tính toán lại.";
+            const errorMessage = error.response?.data?.detail || "Lỗi khi tính toán lại dữ liệu.";
             showNotification(errorMessage, 'error');
-            setIsRecalculating(false);
+            setIsRecalculating(false); // Chỉ tắt loading khi có lỗi, nếu thành công thì trang sẽ reload
         }
+        // Không cần khối finally nữa vì nếu thành công, trang sẽ được tải lại
     };
 
     const handleUploadComplete = async () => {

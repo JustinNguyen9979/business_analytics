@@ -6,6 +6,8 @@
  */
 const cache = new Map();
 
+const MAX_CACHE_SIZE = 5; // Giới hạn số lượng mục trong cache
+
 /**
  * Tạo ra một cache key nhất quán từ các tham số request.
  * @param {string} requestType - Loại dữ liệu (vd: 'kpi_summary').
@@ -39,6 +41,12 @@ export const memoryCache = {
    * @param {*} value - Giá trị cần lưu.
    */
   set(key, value) {
+    // Nếu cache đã đầy, xóa mục cũ nhất (theo thứ tự thêm vào của Map)
+    if (cache.size >= MAX_CACHE_SIZE) {
+      const oldestKey = cache.keys().next().value;
+      cache.delete(oldestKey);
+      console.log(`Cache full. Evicted oldest key: ${oldestKey}`);
+    }
     cache.set(key, value);
   },
 

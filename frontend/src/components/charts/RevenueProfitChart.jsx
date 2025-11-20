@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Plot from 'react-plotly.js';
+import Plotly from 'plotly.js/dist/plotly-cartesian';
 import { useTheme } from '@mui/material/styles';
 import { Paper, Typography, Box } from '@mui/material';
 import dayjs from 'dayjs';
@@ -13,6 +14,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
     const theme = useTheme();
     const [animatedData, setAnimatedData] = useState([]);
     const animationFrameId = useRef(null);
+    const chartRef = useRef(null);
 
     useEffect(() => {
         // Hủy animation cũ nếu có
@@ -112,6 +114,10 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             if (animationFrameId.current) {
                 cancelAnimationFrame(animationFrameId.current);
             }
+            if (chartRef.current) {
+                Plotly.purge(chartRef.current);
+                // console.log("Plotly instance purged.");
+            }
         };
 
     }, [data, comparisonData, theme]);
@@ -208,7 +214,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
     }
 
     return (
-        <Box>
+        <Box ref={chartRef}>
             <Box sx={{ height: '450px' }}>
                 <Plot
                     data={animatedData}
