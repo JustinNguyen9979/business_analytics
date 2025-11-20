@@ -55,9 +55,9 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                     func.sum(models.DailyStat.total_orders).label('totalOrders'),
                     func.sum(models.DailyStat.cogs).label('cogs'),
                     func.sum(models.DailyStat.execution_cost).label('executionCost'),
-                    func.sum(models.DailyStat.roi).label('roi'),
-                    func.sum(models.DailyStat.profit_margin).label('profitMargin'),
-                    func.sum(models.DailyStat.take_rate).label('takeRate'),
+                    # func.sum(models.DailyStat.roi).label('roi'),
+                    # func.sum(models.DailyStat.profit_margin).label('profitMargin'),
+                    # func.sum(models.DailyStat.take_rate).label('takeRate'),
                     func.sum(models.DailyStat.aov).label('aov'),
                     func.sum(models.DailyStat.upt).label('upt'),
                     func.sum(models.DailyStat.completion_rate).label('completionRate'),
@@ -75,17 +75,44 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                 ).first()
 
                 # Chuyển kết quả từ SQLAlchemy Row thành dictionary
-                if summary_query and summary_query.gmv is not None:
-                    result_data = {key: value or 0 for key, value in summary_query._mapping.items()}
+                if summary_query:
+                    # Chuyển Row thành Dict và ép kiểu về số (tránh None)
+                    d = {key: (value or 0) for key, value in summary_query._mapping.items()}
                 else:
-                    # Nếu không có dữ liệu, trả về dict chứa toàn số 0
-                    result_data = {
+                    d = {
                         'netRevenue': 0, 'gmv': 0, 'profit': 0, 'totalCost': 0, 'adSpend': 0,
-                        'totalOrders': 0, 'cogs': 0, 'executionCost': 0, 'roi': 0, 'profitMargin': 0,
-                        'takeRate': 0, 'aov': 0, 'upt': 0, 'completionRate': 0, 'cancellationRate': 0,
-                        'refundRate': 0, 'completedOrders': 0, 'cancelledOrders': 0, 'refundedOrders': 0,
+                        'totalOrders': 0, 'cogs': 0, 'executionCost': 0, 
+                        'completedOrders': 0, 'cancelledOrders': 0, 'refundedOrders': 0,
                         'uniqueSkusSold': 0, 'totalQuantitySold': 0, 'totalCustomers': 0
                     }
+
+                # BƯỚC 3: TÍNH TOÁN LẠI CÁC TỶ LỆ (%) DỰA TRÊN TỔNG
+                # ROI = Lợi nhuận / Tổng chi phí
+                d['roi'] = (d['profit'] / d['totalCost']) if d['totalCost'] > 0 else 0
+                
+                # Profit Margin = Lợi nhuận / Doanh thu ròng
+                d['profitMargin'] = (d['profit'] / d['netRevenue']) if d['netRevenue'] != 0 else 0
+                
+                # Take Rate = Phí thực thi / GMV
+                d['takeRate'] = (d['executionCost'] / d['gmv']) if d['gmv'] > 0 else 0
+                
+                # AOV = GMV / Đơn thành công
+                d['aov'] = (d['gmv'] / d['completedOrders']) if d['completedOrders'] > 0 else 0
+                
+                # UPT = Tổng số lượng bán / Đơn thành công
+                d['upt'] = (d['totalQuantitySold'] / d['completedOrders']) if d['completedOrders'] > 0 else 0
+                
+                # Tỷ lệ hoàn thành = Đơn thành công / Tổng đơn
+                d['completionRate'] = (d['completedOrders'] / d['totalOrders']) if d['totalOrders'] > 0 else 0
+                
+                # Tỷ lệ hủy = Đơn hủy / Tổng đơn
+                d['cancellationRate'] = (d['cancelledOrders'] / d['totalOrders']) if d['totalOrders'] > 0 else 0
+                
+                # Tỷ lệ hoàn = Đơn hoàn / Tổng đơn
+                d['refundRate'] = (d['refundedOrders'] / d['totalOrders']) if d['totalOrders'] > 0 else 0
+
+                # Gán vào result_data
+                result_data = d
                 
                 # CÁC CHỈ SỐ MỚI (TÍNH TOÁN NHANH) VẪN GIỮ LẠI
                 # Đếm khách hàng mới (New Customers)

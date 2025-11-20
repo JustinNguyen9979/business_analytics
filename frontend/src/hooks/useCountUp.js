@@ -18,6 +18,7 @@ export const useCountUp = (endValue, duration = 1000) => {
             return;
         }
 
+        let startTime = null;
         let animationFrameId = null;
         const animationFrame = (timestamp) => {
             if (!startTime) startTime = timestamp;

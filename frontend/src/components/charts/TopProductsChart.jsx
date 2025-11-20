@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Plot from 'react-plotly.js';
 import { useTheme } from '@mui/material/styles';
 import { Box } from '@mui/material';
-// <<< THAY ĐỔI 1: Import hàm animation tái sử dụng >>>
+import Plotly from 'plotly.js/dist/plotly-cartesian';
 import { startAnimation } from '../../utils/animationUtils';
 
 function TopProductsChart({ data }) {
     const theme = useTheme();
+    const chartContainerRef = useRef(null);
 
     // <<< THAY ĐỔI 2: State chỉ cần lưu mảng giá trị X đang được animate >>>
     const [animatedXValues, setAnimatedXValues] = useState([]);
@@ -41,9 +42,16 @@ function TopProductsChart({ data }) {
         });
 
         // Trả về hàm cleanup để hủy animation khi cần
-        return cleanup;
+        return () => {
+            cleanup(); // Dừng animation
+            if (chartContainerRef.current) {
+                try {
+                    Plotly.purge(chartContainerRef.current); // Xóa WebGL
+                } catch(e) {}
+            }
+        };
 
-    }, [data]); // Chỉ phụ thuộc vào `data`
+    }, [data]);
 
     // --- TOÀN BỘ PHẦN TÍNH TOÁN LAYOUT VÀ RENDER GIỮ NGUYÊN ---
     // Đoạn code này không thay đổi vì nó chỉ định dạng và sắp xếp giao diện
@@ -97,8 +105,9 @@ function TopProductsChart({ data }) {
     };
 
     return (
-        <Box sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
+        <Box ref={chartContainerRef} sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
             <Plot
+                key={data ? data.length : 'empty'}
                 data={[chartTrace]} // <<< Truyền trace đã được cập nhật
                 layout={layout}
                 useResizeHandler={true}

@@ -1,6 +1,6 @@
 // FILE: frontend/src/services/api.js
 import axios from 'axios';
-import { memoryCache, generateCacheKey } from '../cache/memoryCache';
+
 
 // Tạo một instance của axios với cấu hình sẵn
 const apiClient = axios.create({
@@ -180,14 +180,6 @@ export const fetchAsyncData = async (requestType, brandId, dateRange, params = {
             throw new axios.Cancel('Request was aborted.');
         }
     };
-
-    const cacheKey = generateCacheKey(requestType, brandId, dateRange);
-    if (!cacheKey) return null;
-    
-    const cachedData = memoryCache.get(cacheKey);
-    if (cachedData) {
-        return Promise.resolve(cachedData);
-    }
     
     throwIfAborted(); // Check before first request
 
@@ -203,7 +195,6 @@ export const fetchAsyncData = async (requestType, brandId, dateRange, params = {
         
         if (initialResponse.status === 'SUCCESS') {
             const resultData = initialResponse.data;
-            memoryCache.set(cacheKey, resultData);
             return resultData;
         }
 
@@ -231,7 +222,6 @@ export const fetchAsyncData = async (requestType, brandId, dateRange, params = {
                         if (statusResponse.status === 'SUCCESS') {
                             cleanup();
                             const resultData = statusResponse.data;
-                            memoryCache.set(cacheKey, resultData);
                             resolve(resultData);
                         } else if (statusResponse.status === 'FAILED') {
                             cleanup();

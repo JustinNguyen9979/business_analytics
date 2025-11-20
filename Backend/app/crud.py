@@ -61,9 +61,10 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
     all_orders_map.update({o.order_code: o for o in orders_created_today})
     final_orders_list = list(all_orders_map.values())
 
-    # 2. Gọi "Đầu bếp" tính toán, truyền vào mẫu số đúng
-    total_orders_today = len(orders_created_today)
-    kpis = kpi_calculator.calculate_daily_kpis(final_orders_list, revenues, ads, total_orders_today)
+    # 2. Gọi "Đầu bếp" tính toán, truyền vào TẬP HỢP CÁC MÃ ĐƠN TẠO HÔM NAY
+    # Đây là "nguồn chân lý" cho các chỉ số vận hành trong ngày
+    created_today_codes = {o.order_code for o in orders_created_today}
+    kpis = kpi_calculator.calculate_daily_kpis(final_orders_list, revenues, ads, created_today_codes)
 
     # 3. Tìm hoặc tạo mới bản ghi DailyStat
     stat_entry = db.query(models.DailyStat).filter(

@@ -14,7 +14,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
     const theme = useTheme();
     const [animatedData, setAnimatedData] = useState([]);
     const animationFrameId = useRef(null);
-    const chartRef = useRef(null);
+    const chartContainerRef = useRef(null);
 
     useEffect(() => {
         // Hủy animation cũ nếu có
@@ -114,10 +114,13 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             if (animationFrameId.current) {
                 cancelAnimationFrame(animationFrameId.current);
             }
-            if (chartRef.current) {
-                Plotly.purge(chartRef.current);
-                // console.log("Plotly instance purged.");
+            // Purge Plotly WebGL context
+            if (chartContainerRef.current) {
+                try {
+                     Plotly.purge(chartContainerRef.current);
+                } catch(e) {}
             }
+            setAnimatedData([]); // Clear state
         };
 
     }, [data, comparisonData, theme]);
@@ -214,9 +217,10 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
     }
 
     return (
-        <Box ref={chartRef}>
+        <Box ref={chartContainerRef}>
             <Box sx={{ height: '450px' }}>
                 <Plot
+                    key={chartRevision} 
                     data={animatedData}
                     layout={layout}
                     useResizeHandler={true}

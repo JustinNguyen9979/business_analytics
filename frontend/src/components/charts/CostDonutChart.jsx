@@ -1,11 +1,12 @@
 // FILE: frontend/src/components/charts/CostDonutChart.jsx (PHIÊN BẢN CUỐI CÙNG - SỬA LỖI LEADER LINE)
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Plot from 'react-plotly.js';
 import { useTheme } from '@mui/material/styles';
 import { Box } from '@mui/material';
 import { formatCurrency } from '../../utils/formatters';
 import { useCountUp } from '../../hooks/useCountUp';
+import Plotly from 'plotly.js/dist/plotly-cartesian';
 
 const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
@@ -16,6 +17,8 @@ function CostDonutChart({ cogs = 0, executionCost = 0, adSpend = 0 }) {
     const animatedTotalCost = useCountUp(totalCost, 800);
     const [chartData, setChartData] = useState([]);
     const realColors = [theme.palette.secondary.main, '#17a2b8', '#ffc107'];
+
+    const chartContainerRef = useRef(null); 
 
     useEffect(() => {
         const labels = ['Giá vốn (COGS)', 'Phí thực thi', 'Chi phí Ads'];
@@ -86,7 +89,21 @@ function CostDonutChart({ cogs = 0, executionCost = 0, adSpend = 0 }) {
         };
 
         animationFrameId = requestAnimationFrame(animate);
-        return () => cancelAnimationFrame(animationFrameId);
+        return () => {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            
+            // Tìm phần tử con (nơi Plotly vẽ) và Purge nó
+            if (chartContainerRef.current) {
+                // Plotly thường vẽ vào div con đầu tiên hoặc chính nó
+                try {
+                    Plotly.purge(chartContainerRef.current);
+                } catch (e) {
+                    // Bỏ qua lỗi nếu Plotly chưa kịp khởi tạo
+                }
+            }
+            // Giải phóng mảng dữ liệu
+            setChartData([]); 
+        };
 
     }, [cogs, executionCost, adSpend, theme]);
 
@@ -109,8 +126,9 @@ function CostDonutChart({ cogs = 0, executionCost = 0, adSpend = 0 }) {
     };
 
     return (
-        <Box sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
+        <Box ref={chartContainerRef} sx={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
             <Plot
+                key={Date.now()}
                 data={chartData}
                 layout={layout}
                 useResizeHandler={true}

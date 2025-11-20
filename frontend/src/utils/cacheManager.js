@@ -1,5 +1,5 @@
 // frontend/src/utils/cacheManager.js
-import { memoryCache } from '../cache/memoryCache';
+
 
 /**
  * Xóa TOÀN BỘ cache của ứng dụng, bao gồm memory, IndexedDB và localStorage.
@@ -9,13 +9,7 @@ import { memoryCache } from '../cache/memoryCache';
 export const clearAllApplicationCaches = async () => {
     console.log("Bắt đầu xóa toàn bộ cache ứng dụng...");
 
-    // 1. Xóa in-memory cache
-    try {
-        memoryCache.clear();
-        console.log("In-memory cache đã được xóa.");
-    } catch (error) {
-        console.error("Lỗi khi xóa in-memory cache:", error);
-    }
+
 
     // 2. Xóa IndexedDB database
     try {

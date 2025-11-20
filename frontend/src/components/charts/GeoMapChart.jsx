@@ -4,11 +4,7 @@ import React, { memo, useMemo, useEffect, useState } from 'react';
 import { ComposableMap, Geographies, Geography, Marker } from '@vnedyalk0v/react19-simple-maps';
 import { Box, Grid, Stack, Typography, CircularProgress } from '@mui/material';
 import { scaleLinear } from 'd3-scale';
-import { Tooltip } from 'react-tooltip'; // << FIX: Thêm import
 
-// import geoShapeData from '../../assets/vietnam-shape.json';
-
-import { get, set } from '../../utils/db';
 
 function GeoMapChartComponent({ data }) {
     // 1. Hook lấy dữ liệu bản đồ với cơ chế cache IndexedDB
@@ -19,19 +15,10 @@ function GeoMapChartComponent({ data }) {
         const loadGeography = async () => {
             setIsLoadingGeo(true);
             try {
-                // Thử lấy từ IndexedDB trước
-                const cachedGeo = await get('vietnam-shape');
-                if (cachedGeo) {
-                    setGeoShapeData(cachedGeo);
-                } else {
-                    // Nếu không có, tải từ mạng
-                    const response = await fetch('/vietnam-shape.json');
-                    const fetchedGeo = await response.json();
-                    
-                    // Lưu vào IndexedDB để dùng cho lần sau
-                    await set('vietnam-shape', fetchedGeo);
-                    setGeoShapeData(fetchedGeo);
-                }
+                const response = await fetch('/vietnam-shape.json');
+                const fetchedGeo = await response.json();
+                setGeoShapeData(fetchedGeo);
+                
             } catch (error) {
                 console.error("Error loading geography data:", error);
             } finally {
@@ -105,8 +92,6 @@ function GeoMapChartComponent({ data }) {
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            {/* << FIX: Thêm component Tooltip để nó hoạt động */}
-            <Tooltip id="map-tooltip" style={{ backgroundColor: 'rgba(5, 10, 20, 0.9)', border: '1px solid rgba(0, 229, 255, 0.3)', backdropFilter: 'blur(4px)' }}/>
             <Box sx={{ flexGrow: 1, position: 'relative' }}>
                 <ComposableMap
                     projection="geoMercator"

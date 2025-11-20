@@ -34,7 +34,7 @@ import { useNotification } from '../context/NotificationContext';
 // import { slugify } from '../utils/slugify'; // Không cần slugify ở đây nữa vì backend đã trả về slug
 import { BrandProvider, useBrand } from '../context/BrandContext';
 
-import { memoryCache } from '../cache/memoryCache';
+
 
 // --- Styled Components ---
 const drawerWidth = 240;
