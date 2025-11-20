@@ -6,7 +6,7 @@
  */
 const cache = new Map();
 
-const MAX_CACHE_SIZE = 5; // Giới hạn số lượng mục trong cache
+const MAX_CACHE_SIZE = 2; // Giới hạn số lượng mục trong cache
 
 /**
  * Tạo ra một cache key nhất quán từ các tham số request.
