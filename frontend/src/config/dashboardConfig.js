@@ -43,7 +43,7 @@ export const kpiGroups = [
                 { key: 'totalOrders', title: 'TỔNG ĐƠN', format: 'number' },
                 { key: 'completedOrders', title: 'ĐƠN CHỐT', format: 'number' },
                 { key: 'cancelledOrders', title: 'ĐƠN HỦY', format: 'number', direction: 'down' },
-                { key: 'refundedOrders', title: 'HOÀN TIỀN', format: 'number', direction: 'down' },
+                { key: 'refundedOrders', title: 'ĐƠN HOÀN TIỀN', format: 'number', direction: 'down' },
                 { key: 'aov', title: 'AOV', format: 'currency', tooltipText: 'Average Order Value - Giá trị trung bình của một đơn hàng.' },
                 { key: 'upt', title: 'UPT', format: 'number', tooltipText: 'Units Per Transaction - Số sản phẩm trung bình trên một đơn hàng.' },
                 { key: 'uniqueSkusSold', title: 'SỐ SKU ĐÃ BÁN', format: 'number', tooltipText: 'Số loại sản phẩm khác nhau đã được bán.' },

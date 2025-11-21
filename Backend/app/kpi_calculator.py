@@ -21,23 +21,20 @@ def _calculate_core_kpis(
     all_revenue_codes = {r.order_code for r in revenues} # Đơn có hoạt động tài chính hôm nay
 
     for r in revenues:
-        if r.source == 'tiktok' and r.refund < 0:
-            if r.net_revenue == 0:
-                revenue_cancelled_codes.add(r.order_code)
-            # else: # Tạm thời bỏ qua đơn hoàn tiền theo chỉ đạo
-            #     revenue_refunded_codes.add(r.order_code)
-        elif r.source == 'shopee' and r.refund != 0:
-            # Tạm thời bỏ qua đơn hoàn tiền
-            # revenue_refunded_codes.add(r.order_code)
+        if r.source == 'tiktok' and r.refund < 0 and r.net_revenue == 0:
+            revenue_cancelled_codes.add(r.order_code)
+        elif r.refund < 0 and r.net_revenue != 0:
+            revenue_refunded_codes.add(r.order_code)
+        else:
             pass
-
+    
+    # Tạo một tập hợp chứa mã của các đơn hàng có trạng thái là "hủy" dựa trên danh sách `orders`.
     status_cancelled_codes = {
         o.order_code for o in orders
         if o.status and o.status.lower().strip() in CANCELLED_STATUSES
     }
 
     globally_cancelled_codes = status_cancelled_codes.union(revenue_cancelled_codes)
-    # globally_refunded_codes = revenue_refunded_codes # Tạm bỏ qua
     
     # === KHỐI 2: TÍNH TOÁN CÁC CHỈ SỐ TÀI CHÍNH (DỰA TRÊN TRANSACTION_DATE) ===
     # *** Logic này được giữ nguyên như ban đầu để đảm bảo tính đúng đắn của các chỉ số tài chính ***
@@ -51,66 +48,106 @@ def _calculate_core_kpis(
     gmv = sum(r.gmv for r in valid_revenues)
     executionCost = abs(sum(r.total_fees for r in valid_revenues))
 
+    # Tạo một dictionary (`cogs_map`) để dễ dàng tra cứu Giá vốn hàng bán (COGS) theo mã đơn hàng.
     cogs_map = {o.order_code: o.cogs for o in orders if o.cogs is not None}
+
     # COGS cho các chỉ số tài chính phải được tính trên các đơn hoàn chỉnh về mặt tài chính
     cogs_for_finance = sum(cogs_map.get(code, 0) for code in financial_completed_codes)
     
+    # `adSpend`: Tổng chi phí quảng cáo.
     adSpend = sum(a.expense for a in ads)
+
+    # `totalCost`: Tổng chi phí = COGS + Chi phí thực hiện + Chi phí quảng cáo.
     totalCost = cogs_for_finance + executionCost + adSpend
+
+    # `profit`: Lợi nhuận = GMV - Tổng chi phí.
     profit = gmv - totalCost
+
+    # `roi`: Tỷ suất lợi nhuận trên đầu tư (Return on Investment).
     roi = (profit / totalCost) if totalCost > 0 else 0
+
+    # `profitMargin`: Tỷ suất lợi nhuận gộp.
     profitMargin = (profit / netRevenue) if netRevenue != 0 else 0
+
+    # `takeRate`: Tỷ lệ phí (thường là phí sàn).
     takeRate = (executionCost / gmv) if gmv > 0 else 0
     
-    # AOV và các chỉ số tài chính khác được tính dựa trên tập hợp đơn hàng tài chính
+    # Đếm số lượng đơn hàng hoàn chỉnh về mặt tài chính.
     financial_completed_count = len(financial_completed_codes)
+
+    # `aov`: Giá trị đơn hàng trung bình (Average Order Value).
     aov = (gmv / financial_completed_count) if financial_completed_count > 0 else 0
     
+    # Tạo một dictionary (`orders_map`) để tra cứu thông tin chi tiết của đơn hàng theo mã.
     orders_map = {o.order_code: o for o in orders}
-    totalQuantitySold_finance = sum(orders_map.get(code, models.Order(total_quantity=0)).total_quantity for code in financial_completed_codes)
-    
-    unique_skus_sold_set_finance = set()
-    for code in financial_completed_codes:
-        order = orders_map.get(code)
-        if order and order.details and isinstance(order.details.get('items'), list):
-            for item in order.details['items']:
-                if item.get('sku'):
-                    unique_skus_sold_set_finance.add(item['sku'])
-    uniqueSkusSold = len(unique_skus_sold_set_finance)
-
-    upt = (totalQuantitySold_finance / financial_completed_count) if financial_completed_count > 0 else 0
 
     # === KHỐI 3: TÍNH TOÁN CÁC CHỈ SỐ VẬN HÀNH (DỰA TRÊN ORDER_DATE) ===
-    # *** Logic này được sửa lại theo đúng yêu cầu của anh ***
 
+    # `totalOrders_op`: Tổng số đơn hàng vận hành, được tính dựa trên số lượng mã đơn hàng được tạo trong ngày.
     totalOrders_op = len(creation_date_order_codes)
+
+    # Tìm các đơn hàng vừa được tạo trong ngày, vừa bị hủy.
     cancelled_today_codes = creation_date_order_codes.intersection(globally_cancelled_codes)
+
+    # Đếm số lượng đơn hàng bị hủy trong ngày.
     cancelledOrders_op = len(cancelled_today_codes)
     
-    # Tạm thời chưa tính đơn hoàn
-    refundedOrders_op = 0
+    # Đếm đơn hoàn
+    refunded_transactions_count = len(revenue_refunded_codes)
     
-    # Công thức tính Đơn chốt theo đúng yêu cầu
-    completedOrders_op = totalOrders_op - cancelledOrders_op - refundedOrders_op
+    # Công thức tính Đơn chốt
+    completedOrders_op = totalOrders_op - cancelledOrders_op
+
+    completed_today_codes = creation_date_order_codes - cancelled_today_codes
+
+    totalQuantitySold_op = 0
+    unique_skus_sold_set = set()
+
+    for code in completed_today_codes:
+        order = orders_map.get(code)
+        if order:
+            # Cộng dồn số lượng
+            totalQuantitySold_op += (order.total_quantity or 0)
+            
+            # Đếm SKU
+            if order.details and isinstance(order.details.get('items'), list):
+                for item in order.details['items']:
+                    if item.get('sku'):
+                        unique_skus_sold_set.add(item['sku'])
+
+    uniqueSkusSold_op = len(unique_skus_sold_set)
+
+    total_financial_transaction_orders = len(financial_completed_codes) + refunded_transactions_count
     
-    completionRate = (completedOrders_op / totalOrders_op) if totalOrders_op > 0 else 0
-    cancellationRate = (cancelledOrders_op / totalOrders_op) if totalOrders_op > 0 else 0
-    refundRate = (refundedOrders_op / totalOrders_op) if totalOrders_op > 0 else 0
+    completionRate_op = (completedOrders_op / totalOrders_op) if totalOrders_op > 0 else 0
+    cancellationRate_op = (cancelledOrders_op / totalOrders_op) if totalOrders_op > 0 else 0
+    refundRate_op = (refunded_transactions_count / total_financial_transaction_orders) if total_financial_transaction_orders > 0 else 0
+    upt = (totalQuantitySold_op / completedOrders_op) if completedOrders_op > 0 else 0
 
     # === KHỐI 4: TỔNG HỢP KẾT QUẢ ===
-    # Trả về các chỉ số tài chính từ Khối 2 và các chỉ số vận hành từ Khối 3
     return {
-        "gmv": gmv, "netRevenue": netRevenue, "cogs": cogs_for_finance, "executionCost": executionCost,
-        "adSpend": adSpend, "totalCost": totalCost, "profit": profit, "roi": roi, 
-        "profitMargin": profitMargin, "takeRate": takeRate, "aov": aov, "upt": upt, 
-        "uniqueSkusSold": uniqueSkusSold, "totalQuantitySold": totalQuantitySold_finance,
+        "gmv": gmv, 
+        "netRevenue": netRevenue, 
+        "cogs": cogs_for_finance, 
+        "executionCost": executionCost,
+        "adSpend": adSpend, 
+        "totalCost": totalCost, 
+        "profit": profit, 
+        "roi": roi, 
+        "profitMargin": profitMargin, 
+        "takeRate": takeRate, 
+        "aov": aov, 
+        "upt": upt, 
 
+        "uniqueSkusSold": uniqueSkusSold_op,
+        "totalQuantitySold": totalQuantitySold_op,
         "totalOrders": totalOrders_op, 
         "completedOrders": completedOrders_op, 
         "cancelledOrders": cancelledOrders_op,
-        "refundedOrders": refundedOrders_op, 
-        
-        "completionRate": completionRate, "cancellationRate": cancellationRate, "refundRate": refundRate
+        "refundedOrders": refunded_transactions_count, 
+        "completionRate": completionRate_op, 
+        "cancellationRate": cancellationRate_op, 
+        "refundRate": refundRate_op,
     }
 
 # ==============================================================================
