@@ -171,7 +171,7 @@ function LayoutWithBrandContext() {
         <Box sx={{ display: 'flex' }}>
             <CssBaseline />
 
-            <AppBar position="fixed" open={isSidebarOpen}>
+            {/* <AppBar position="fixed" open={isSidebarOpen}>
                 <Toolbar>
                     <IconButton color="inherit" aria-label="open drawer" onClick={() => setIsSidebarOpen(!isSidebarOpen)} edge="start" sx={{ marginRight: 5, ...(isSidebarOpen && { display: 'none' }) }}>
                         <MenuIcon />
@@ -180,7 +180,7 @@ function LayoutWithBrandContext() {
                         Dashboard: {brandName}
                     </Typography>
                 </Toolbar>
-            </AppBar>
+            </AppBar> */}
 
             <Drawer variant="permanent" open={isSidebarOpen}>
                 <DrawerHeader>
