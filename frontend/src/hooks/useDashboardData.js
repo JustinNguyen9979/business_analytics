@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { fetchAsyncData } from '../../services/api';
+import { fetchAsyncData } from '../services/api';
 import dayjs from 'dayjs';
-import { processChartData } from '../../utils/chartDataProcessor';
+import { processChartData } from '../utils/chartDataProcessor';
 
 /**
  * TÍNH TOÁN KHOẢNG THỜI GIAN SO SÁNH THÔNG MINH - ĐÃ SỬA LỖI

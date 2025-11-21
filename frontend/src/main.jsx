@@ -6,6 +6,10 @@ import App from './App.jsx';
 import { BrowserRouter } from 'react-router-dom';
 import { LocalizationProvider } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import dayjs from 'dayjs';
+import quarterOfYear from 'dayjs/plugin/quarterOfYear'; 
+
+dayjs.extend(quarterOfYear);
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   // <React.StrictMode>

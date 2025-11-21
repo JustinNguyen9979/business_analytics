@@ -6,18 +6,14 @@ import { useSearchParams } from 'react-router-dom';
 import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, Stack, Skeleton } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import dayjs from 'dayjs';
-import { useDashboardData } from '../hooks/dashboard/useDashboardData';
+import { useDashboardData } from '../hooks/useDashboardData';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
-import ChartTimeFilter from '../components/common/ChartTimeFilter';
 import { StatItem } from '../components/dashboard/StatItem';
 import { kpiGroups } from '../config/dashboardConfig';
-// import RevenueProfitChart from '../components/charts/RevenueProfitChart';
-// import TopProductsChart from '../components/charts/TopProductsChart';
-// import CostDonutChart from '../components/charts/CostDonutChart';
-// import GeoMapChart from '../components/charts/GeoMapChart';
 import ChartPlaceholder from '../components/common/ChartPlaceholder';
 import { useLayout } from '../context/LayoutContext';
 import { useBrand } from '../context/BrandContext';
+import { useDateFilter } from '../hooks/useDateFilter';
 
 const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
 const CostDonutChart = lazy(() => import('../components/charts/CostDonutChart'));
@@ -36,38 +32,30 @@ const ChartSkeleton = () => (
 function DashboardPage() {
     const theme = useTheme();
     const { id: brandId, name: brandName } = useBrand();
-    const [searchParams, setSearchParams] = useSearchParams();
     const { isSidebarOpen } = useLayout();
 
-    const initialMonthlyFilter = {
-        range: [dayjs().startOf('month'), dayjs().endOf('day')], type: 'month'
-    }
-
-    const [kpiFilter, setKpiFilter] = useState(() => {
-        const start = searchParams.get('start_kpi');
-        const end = searchParams.get('end_kpi');
-        if (start && end) {
-            return {range: [dayjs(start), dayjs(end)], type: 'custom'};
-        } 
-        return initialMonthlyFilter;
+    // Gọi hook cho từng bộ lọc
+    const kpiFilterControl = useDateFilter({
+        defaultType: 'this_month',
+        useUrl: true,
+        urlPrefix: 'kpi_'
     });
 
-    const [lineChartFilter, setLineChartFilter] = useState(initialMonthlyFilter);
-    const [donutFilter, setDonutFilter] = useState(initialMonthlyFilter);
-    const [topProductsFilter, setTopProductsFilter] = useState(initialMonthlyFilter);
-    const [mapFilter, setMapFilter] = useState(initialMonthlyFilter);
+    const lineChartFilterControl = useDateFilter({ defaultType: 'this_month' });
+    const donutFilterControl = useDateFilter({ defaultType: 'this_month' });
+    const topProductsFilterControl = useDateFilter({ defaultType: 'this_month' });
+    const mapFilterControl = useDateFilter({ defaultType: 'this_month' });
 
     const dashboardState = useDashboardData(brandId, {
-        kpi: kpiFilter,
-        lineChart: lineChartFilter,
-        donut: donutFilter,
-        topProducts: topProductsFilter,
-        map: mapFilter,
+        kpi: kpiFilterControl.filter,
+        lineChart: lineChartFilterControl.filter,
+        donut: donutFilterControl.filter,
+        topProducts: topProductsFilterControl.filter,
+        map: mapFilterControl.filter,
     });
     const { kpi, lineChart, donut, topProducts, map } = dashboardState;
 
     // --- STATE QUẢN LÝ UI ---
-    const [kpiAnchorEl, setKpiAnchorEl] = useState(null);
     const [chartRevision, setChartRevision] = useState(0);
 
     useEffect(() => {
@@ -75,22 +63,8 @@ function DashboardPage() {
         return () => clearTimeout(timer);
     }, [isSidebarOpen]);
 
-    // --- CÁC HÀM HANDLER CHO BỘ LỌC KPI ---
-    const handleOpenKpiFilter = (event) => setKpiAnchorEl(event.currentTarget);
-    const handleCloseKpiFilter = () => setKpiAnchorEl(null);
-    const handleApplyKpiFilter = useCallback((newRange, filterType = 'custom') => {
-        setKpiFilter({ range: newRange, type: filterType });
-        setSearchParams({ start_kpi: newRange[0].format('YYYY-MM-DD'), end_kpi: newRange[1].format('YYYY-MM-DD') });
-        handleCloseKpiFilter();
-    }, [setSearchParams]);
-
-    const handleLineChartFilterChange = useCallback((range, type) => setLineChartFilter({ range, type }), []);
-    const handleDonutFilterChange = useCallback((range, type) => setDonutFilter({ range, type }), []);
-    const handleTopProductsFilterChange = useCallback((range, type) => setTopProductsFilter({ range, type }), []);
-    const handleMapFilterChange = useCallback((range, type) => setMapFilter({ range, type }), []);
-
     const anyError = Object.values(dashboardState).find(s => s.error);
-    if (anyError) return <Alert severity="error" sx={{ m: 4 }}>{anyError.error}</Alert>;
+
 
     return (
         <Box sx={{ px: 4 }} >
@@ -102,14 +76,7 @@ function DashboardPage() {
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
                     <Typography variant="h6" sx={{ fontWeight: 600 }} noWrap>Chỉ số Hiệu suất Tổng thể</Typography>
                     
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Typography variant="body1" color="text.secondary">
-                           {`${kpiFilter.range[0].format('DD/MM/YYYY')} - ${kpiFilter.range[1].format('DD/MM/YYYY')}`}
-                        </Typography>
-                        <Button variant="outlined" onClick={handleOpenKpiFilter} startIcon={<CalendarMonthIcon />}>
-                            Bộ lọc
-                        </Button>
-                    </Box>
+                    <Button variant="outlined" startIcon={<CalendarMonthIcon />} {...kpiFilterControl.buttonProps} />
                 </Box>
                 
                 <Divider sx={{ mb: 3 }} />
@@ -177,7 +144,10 @@ function DashboardPage() {
             <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4 }}>
                 <Box variant="loaderContainer" sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 3, pt: 3 }}>
                     <Typography variant="h6" noWrap>Biểu đồ Doanh thu ròng & Lợi nhuận</Typography>
-                    <ChartTimeFilter value={lineChartFilter} onChange={handleLineChartFilterChange} />
+                    <Box>
+                        <Button variant="outlined" size="small" {...lineChartFilterControl.buttonProps} />
+                        <DateRangeFilterMenu {...lineChartFilterControl.menuProps} />
+                    </Box>
                 </Box>
                 
                 <Box sx={{ pb: 3, pt: 1, height: 450, position: 'relative' }}>
@@ -216,7 +186,10 @@ function DashboardPage() {
                         <Paper variant="glass" elevation={0} sx={{ p: 1, display: 'flex', flexDirection: 'column' }}>
                             <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                                 <Typography variant="h6" noWrap>Phân bổ Chi phí</Typography>
-                                <ChartTimeFilter value={donutFilter} onChange={handleDonutFilterChange} />
+                                <Box>
+                                    <Button variant="outlined" size="small" {...donutFilterControl.buttonProps} />
+                                    <DateRangeFilterMenu {...donutFilterControl.menuProps} />
+                                </Box>
                             </Box>
                             <Box sx={{ flexGrow: 1, minHeight: 400, position: 'relative' }}>
                                 {donut.loading ? (
@@ -233,7 +206,10 @@ function DashboardPage() {
                         <Paper variant="glass" elevation={0} sx={{ p: 1, display: 'flex', flexDirection: 'column' }}>
                             <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                                 <Typography variant="h6" noWrap>Top SKU bán chạy</Typography>
-                                <ChartTimeFilter value={topProductsFilter} onChange={handleTopProductsFilterChange} />
+                                <Box>
+                                    <Button variant="outlined" size="small" {...topProductsFilterControl.buttonProps} />
+                                    <DateRangeFilterMenu {...topProductsFilterControl.menuProps} />
+                                </Box>
                             </Box>
                             <Box sx={{ flexGrow: 1, minHeight: 600, position: 'relative' }}>
                                 {topProducts.loading ? (
@@ -270,7 +246,10 @@ function DashboardPage() {
                     >
                         <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                             <Typography variant="h6" noWrap>Phân bổ Khách hàng</Typography>
-                            <ChartTimeFilter value={mapFilter} onChange={handleMapFilterChange} />
+                            <Box>
+                                <Button variant="outlined" size="small" {...mapFilterControl.buttonProps} />
+                                <DateRangeFilterMenu {...mapFilterControl.menuProps} />
+                            </Box>
                         </Box>
                         <Box sx={{ flexGrow: 1, minHeight: { xs: 500, lg: 'auto' }, position: 'relative' }}>
                             {map.loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
@@ -282,13 +261,7 @@ function DashboardPage() {
             </Box>
             
             
-            <DateRangeFilterMenu
-                open={Boolean(kpiAnchorEl)}
-                anchorEl={kpiAnchorEl}
-                onClose={handleCloseKpiFilter}
-                initialDateRange={kpiFilter.range} 
-                onApply={handleApplyKpiFilter}
-            />
+            <DateRangeFilterMenu {...kpiFilterControl.menuProps} />
         </Box>
     );
 }

@@ -39,6 +39,14 @@ const [DatePicker1, DatePicker2] = [
 function DateRangeFilterMenu({ open, anchorEl, onClose, initialDateRange, onApply }) {
     const [tempDateRange, setTempDateRange] = useState(initialDateRange || [dayjs().startOf('month'), dayjs().endOf('month')]);
 
+    const handleQuarterClick = (quarter) => {
+        const year = tempDateRange[0].year();
+        const startDate = dayjs().year(year).quarter(quarter).startOf('quarter');
+        const endDate = dayjs().year(year).quarter(quarter).endOf('quarter');
+
+        onApply([ startDate, endDate], `Quý ${quarter}_${year}`);
+    }
+
 
     // Effect để reset lại lựa chọn tạm thời mỗi khi Menu được mở
     useEffect(() => {
@@ -113,9 +121,21 @@ function DateRangeFilterMenu({ open, anchorEl, onClose, initialDateRange, onAppl
                         })}
                     </Box>
                     <Divider />
-                    <Box sx={{ p: 1, display: 'flex', justifyContent: 'flex-end', gap: 1 }}>
-                        <Button onClick={onClose}>Hủy</Button>
-                        <Button variant="contained" onClick={handleApplyCustomDate}>Áp dụng</Button>
+                    <Box sx={{ p: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                            {
+                                [ 'Quý 1', 'Quý 2', 'Quý 3', 'Quý 4'].map((quarter, index) => (
+                                    <Button key={quarter} size='small' onClick={() => handleQuarterClick(index + 1)}>
+                                        {quarter}
+                                    </Button>
+                                ))
+                            }
+                        </Box>
+
+                        <Box sx={{ display: 'flex', gap: 2 }}>
+                            <Button onClick={onClose}>Hủy</Button>
+                            <Button variant="contained" onClick={handleApplyCustomDate}>Áp dụng</Button>
+                        </Box>
                     </Box>
                 </Box>
             </Box>
