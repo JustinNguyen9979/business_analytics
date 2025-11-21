@@ -47,10 +47,10 @@ function DashboardPage() {
         return { range: initialRange, type: 'custom' }; 
     });
 
-    const [lineChartFilter, setLineChartFilter] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
-    const [donutFilter, setDonutFilter] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
-    const [topProductsFilter, setTopProductsFilter] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
-    const [mapFilter, setMapFilter] = useState({ range: [dayjs().startOf('year'), dayjs().endOf('year')], type: 'year' });
+    const [lineChartFilter, setLineChartFilter] = useState({ range: [dayjs().startOf('month'), dayjs().endOf('day')], type: 'month' });
+    const [donutFilter, setDonutFilter] = useState({ range: [dayjs().startOf('month'), dayjs().endOf('day')], type: 'month' });
+    const [topProductsFilter, setTopProductsFilter] = useState({ range: [dayjs().startOf('month'), dayjs().endOf('day')], type: 'month' });
+    const [mapFilter, setMapFilter] = useState({ range: [dayjs().startOf('month'), dayjs().endOf('day')], type: 'month' });
 
     const dashboardState = useDashboardData(brandId, {
         kpi: kpiFilter,
