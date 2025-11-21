@@ -39,18 +39,23 @@ function DashboardPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const { isSidebarOpen } = useLayout();
 
+    const initialMonthlyFilter = {
+        range: [dayjs().startOf('month'), dayjs().endOf('day')], type: 'month'
+    }
+
     const [kpiFilter, setKpiFilter] = useState(() => {
         const start = searchParams.get('start_kpi');
         const end = searchParams.get('end_kpi');
-        const initialRange = [start ? dayjs(start) : dayjs().subtract(27, 'days').startOf('day'), end ? dayjs(end) : dayjs().endOf('day')];
-        // Mặc định ban đầu, ta coi nó là loại 'custom' hoặc 'day'
-        return { range: initialRange, type: 'custom' }; 
+        if (start && end) {
+            return {range: [dayjs(start), dayjs(end)], type: 'custom'};
+        } 
+        return initialMonthlyFilter;
     });
 
-    const [lineChartFilter, setLineChartFilter] = useState({ range: [dayjs().startOf('month'), dayjs().endOf('day')], type: 'month' });
-    const [donutFilter, setDonutFilter] = useState({ range: [dayjs().startOf('month'), dayjs().endOf('day')], type: 'month' });
-    const [topProductsFilter, setTopProductsFilter] = useState({ range: [dayjs().startOf('month'), dayjs().endOf('day')], type: 'month' });
-    const [mapFilter, setMapFilter] = useState({ range: [dayjs().startOf('month'), dayjs().endOf('day')], type: 'month' });
+    const [lineChartFilter, setLineChartFilter] = useState(initialMonthlyFilter);
+    const [donutFilter, setDonutFilter] = useState(initialMonthlyFilter);
+    const [topProductsFilter, setTopProductsFilter] = useState(initialMonthlyFilter);
+    const [mapFilter, setMapFilter] = useState(initialMonthlyFilter);
 
     const dashboardState = useDashboardData(brandId, {
         kpi: kpiFilter,
