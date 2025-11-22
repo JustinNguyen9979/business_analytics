@@ -10,7 +10,8 @@ import {
     Box,
     Typography,
     Skeleton,
-    Alert
+    Alert,
+    TablePagination
 } from '@mui/material';
 import { formatCurrency, formatPercentage } from '../../utils/formatters';
 
@@ -46,16 +47,31 @@ const TableSkeleton = () => (
 
 
 const FinanceTable = ({ data, loading, error }) => {
+    const [page, setPage] = useState(0);
+    const [rowsPerPage, setRowsPerPage] = useState(10); // Mặc định hiển thị tối đa 10 dòng
+
+    const handleChangePage = (event, newPage) => {
+        setPage(newPage);
+    };
+
+    const handleChangeRowsPerPage = (event) => {
+        setRowsPerPage(+event.target.value);
+        setPage(0);
+    };
+
     if (error) {
         return <Alert severity="error">Lỗi tải dữ liệu: {error}</Alert>;
     }
 
     const tableData = data || [];
 
+    const displayedRows = tableData.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage);
+
     return (
         <Paper variant="glass" sx={{ width: '100%', overflow: 'hidden', p: 2 }}>
-            <TableContainer sx={{ maxHeight: 600 }}>
-                <Table stickyHeader aria-label="sticky table">
+            {/* BỎ maxHeight CỐ ĐỊNH ĐỂ TABLE TỰ CO GIÃN THEO NỘI DUNG */}
+            <TableContainer>
+                <Table stickyHeader aria-label="finance table">
                     <TableHead>
                         <TableRow>
                             {columns.map((column) => (
@@ -65,7 +81,7 @@ const FinanceTable = ({ data, loading, error }) => {
                                     sx={{ 
                                         minWidth: column.minWidth, 
                                         fontWeight: 'bold',
-                                        backgroundColor: 'transparent' // Cho header trong suốt
+                                        backgroundColor: 'transparent' 
                                     }}
                                 >
                                     {column.label}
@@ -85,7 +101,8 @@ const FinanceTable = ({ data, loading, error }) => {
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            tableData.map((row, index) => {
+                            // CHỈ RENDER CÁC DÒNG ĐÃ CẮT (displayedRows)
+                            displayedRows.map((row, index) => {
                                 const isTotalRow = row.platform === 'Tổng cộng';
                                 return (
                                     <TableRow 
@@ -94,7 +111,6 @@ const FinanceTable = ({ data, loading, error }) => {
                                         tabIndex={-1} 
                                         key={row.platform + index}
                                         sx={{
-                                            // Làm nổi bật hàng Tổng cộng
                                             backgroundColor: isTotalRow ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
                                         }}
                                     >
@@ -104,9 +120,7 @@ const FinanceTable = ({ data, loading, error }) => {
                                                 <TableCell 
                                                     key={column.id} 
                                                     align={column.align}
-                                                    sx={{
-                                                        fontWeight: isTotalRow ? 'bold' : 'normal',
-                                                    }}
+                                                    sx={{ fontWeight: isTotalRow ? 'bold' : 'normal' }}
                                                 >
                                                     {column.format(value)}
                                                 </TableCell>
@@ -119,6 +133,29 @@ const FinanceTable = ({ data, loading, error }) => {
                     </TableBody>
                 </Table>
             </TableContainer>
+
+            {/* THANH PHÂN TRANG - CHỈ HIỆN KHI CÓ DỮ LIỆU VÀ KHÔNG ĐANG LOADING */}
+            {!loading && tableData.length > 0 && (
+                <TablePagination
+                    rowsPerPageOptions={[5, 10, 25]} // Cho phép user chọn xem 5, 10 hoặc 25 dòng
+                    component="div"
+                    count={tableData.length}
+                    rowsPerPage={rowsPerPage}
+                    page={page}
+                    onPageChange={handleChangePage}
+                    onRowsPerPageChange={handleChangeRowsPerPage}
+                    labelRowsPerPage="Số dòng:"
+                    labelDisplayedRows={({ from, to, count }) => 
+                        `${from}–${to} trong số ${count !== -1 ? count : `hơn ${to}`}`
+                    }
+                    sx={{
+                        borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                        '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
+                            marginBottom: 0, // Fix lỗi layout nhỏ của MUI
+                        }
+                    }}
+                />
+            )}
         </Paper>
     );
 };
