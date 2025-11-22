@@ -6,20 +6,49 @@ import { useTheme } from '@mui/material/styles';
 import { Box, Typography, Paper } from '@mui/material';
 import { formatCurrency, formatPercentage } from '../../utils/formatters';
 
-function SourceDistributionChart({ data, dataKey, title, format, height = 250 }) {
+
+// BỘ MÀU CUSTOM THEO YÊU CẦU CỦA ANH (mở rộng lên 30 màu)
+const BASE_COLORS = [
+    // "#D2042D", // Đỏ đậm
+    // "#F0E36B", // Vàng chanh
+    // "#B0A6DF", // Tím sáng (dùng thay cho #5C3E4E để hợp với nền tối)
+    // "#A7C957", // Xanh lá cây
+    // "#E8D1C5", // Be hồng nhạt
+    // "#A47858", // Nâu đất
+    // "#009B77", // Xanh lá cây teal
+    // "#A89F9D", // Xám bạc
+    // "#17A2B8", // Xanh dương nhạt
+    // "#F7CAC9"  // Hồng pastel
+    "#EA80FC", "#09FBD3", 
+    "#FFAB40", "#FF2600", 
+    "#48FF6A", "#FFFD82", 
+    "#3F00FF", "#0AEBFF", 
+    "#00CFA7", "#D72660", 
+    "#B1FAFF", "#8475FF", 
+    "#F8A8FF", "#FF5F00", 
+    "#8C56FF", "#FFD700", 
+    "#5F4B8B", "#5D737E",   
+    "#EDE574", "#001EFF"
+];
+
+const COLORS = [];
+for (let i = 0; i < 30; i++) {
+    COLORS.push(BASE_COLORS[i % BASE_COLORS.length]);
+}
+
+
+function SourceDistributionChart({ data, dataKey, title, format }) {
     const theme = useTheme();
 
-    // Lọc bỏ dòng 'Tổng cộng' và sắp xếp giảm dần để biểu đồ đẹp hơn
+    // Dữ liệu đã được sắp xếp từ component cha, không cần sắp xếp lại ở đây.
     const chartData = useMemo(() => {
         if (!data) return [];
-        return data
-            .filter(item => item.platform !== 'Tổng cộng')
-            .sort((a, b) => (b[dataKey] || 0) - (a[dataKey] || 0));
-    }, [data, dataKey]);
+        return data.filter(item => item.platform !== 'Tổng cộng');
+    }, [data]);
 
     if (!chartData || chartData.length === 0) {
         return (
-            <Paper variant="glass" sx={{ height: height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Paper variant="glass" sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography variant="caption" color="text.secondary">Chưa có dữ liệu</Typography>
             </Paper>
         );
@@ -27,16 +56,6 @@ function SourceDistributionChart({ data, dataKey, title, format, height = 250 })
 
     const labels = chartData.map(d => d.platform);
     const values = chartData.map(d => d[dataKey] || 0);
-    
-    // Màu sắc cho các Sàn (Shopee: Cam, TikTok: Đen/Trắng, v.v..)
-    // Hoặc dùng màu mặc định của Theme
-    const colors = [
-        theme.palette.primary.main, 
-        theme.palette.secondary.main, 
-        theme.palette.success.main, 
-        theme.palette.warning.main,
-        theme.palette.error.main
-    ];
 
     const baseLayout = {
         paper_bgcolor: 'transparent',
@@ -61,15 +80,14 @@ function SourceDistributionChart({ data, dataKey, title, format, height = 250 })
             hoverinfo: 'label+value+percent',
             hovertemplate: `<b>%{label}</b><br>%{value:,.0f} đ<br>(%{percent})<extra></extra>`,
             marker: { 
-                colors: colors, 
+                colors: labels.map((_, index) => COLORS[index % COLORS.length]),
                 line: { color: theme.palette.background.paper, width: 2 } 
             },
-            sort: false
+            sort: false // Rất quan trọng: không để Plotly tự sắp xếp lại
         }];
 
         layout = {
             ...baseLayout,
-            // Margin đáy lớn (60-80px) để chứa Legend
             margin: { t: 0, b: 5, l: 0, r: 0 }, 
             showlegend: true,
             legend: {
@@ -78,7 +96,7 @@ function SourceDistributionChart({ data, dataKey, title, format, height = 250 })
                 y: -0.2, 
                 xanchor: 'center',
                 x: 0.5,
-                font: { color: theme.palette.text.secondary, size: 11 },
+                font: { color: theme.palette.text.secondary, size: 13 },
                 itemwidth: 30,
             }
         };
@@ -89,36 +107,24 @@ function SourceDistributionChart({ data, dataKey, title, format, height = 250 })
         const maxValue = Math.max(...values, 0);
 
         let dynamicDtick;
-        if (maxValue <= 1.5) {
-            dynamicDtick = 0.2; // Nếu Max <= 150%: Chia mỗi 20% (0, 20%, 40%...)
-        } else if (maxValue <= 4.0) {
-            dynamicDtick = 0.5; // Nếu Max <= 400%: Chia mỗi 50% (0, 50%, 100%...)
-        } else if (maxValue <= 10.0) {
-            dynamicDtick = 1.0; // Nếu Max <= 1000%: Chia mỗi 100% (0, 100%, 200%...)
-        } else {
-            // Nếu siêu lớn (> 1000%): Chia trục thành khoảng 5 phần bằng nhau
-            // Math.ceil để làm tròn lên số nguyên gần nhất
-            dynamicDtick = Math.ceil(maxValue / 5); 
-        }
+        if (maxValue <= 1.5) dynamicDtick = 0.2;
+        else if (maxValue <= 4.0) dynamicDtick = 0.5;
+        else if (maxValue <= 10.0) dynamicDtick = 1.0;
+        else dynamicDtick = Math.ceil(maxValue / 5);
         
         const coloredLabels = labels.map((label, index) => {
-            const color = colors[index % colors.length];
-            // Thêm font-weight: bold để chữ màu trông rõ nét hơn trên nền tối
+            const color = COLORS[index % COLORS.length];
             return `<span style="color: ${color}; font-weight: bold;">${label}</span>`;
         });
 
         const annotations = labels.map((label, index) => ({
-            x: coloredLabels[index],              // Vị trí trục X (Tên sàn)
-            y: values[index],      // Vị trí trục Y (Giá trị % cột)
-            text: formatPercentage(values[index]), // Nội dung chữ
+            x: coloredLabels[index],
+            y: values[index],
+            text: formatPercentage(values[index]),
             xanchor: 'center',
-            yanchor: 'bottom',     // Neo vào đáy chữ (để chữ nằm trên điểm y)
-            showarrow: false,      // Không hiện mũi tên
-            
-            // === TĂNG KHOẢNG CÁCH TẠI ĐÂY ===
-            yshift: 5, // Đẩy chữ lên cao 10px so với đỉnh cột
-            // ================================
-            
+            yanchor: 'bottom',
+            showarrow: false,
+            yshift: 5,
             font: { 
                 color: theme.palette.text.primary, 
                 size: values.length > 4 ? 10 : 12,
@@ -130,7 +136,6 @@ function SourceDistributionChart({ data, dataKey, title, format, height = 250 })
             x: coloredLabels,
             y: values,
             type: 'bar',
-            // Set màu chữ trắng để nổi bật trên nền cột xanh
             textfont: { 
                 color: theme.palette.text.primary, 
                 size: values.length > 4 ? 10 : 13 
@@ -138,16 +143,15 @@ function SourceDistributionChart({ data, dataKey, title, format, height = 250 })
             cliponaxis: false,
             hoverinfo: 'x+y',
             hovertemplate: `%{y:.2%}<extra></extra>`,
-            marker: { color: values.map((_, index) => colors[index % colors.length]), }, 
+            marker: { color: labels.map((_, index) => COLORS[index % COLORS.length]) },
             width: values.length > 3 ? 0.6 : 0.4, 
         }];
         
         layout = { 
             ...baseLayout,
-            // Margin đáy nhỏ (30px), Margin trái lớn (40px) để hiện số trục Y
             margin: { t: 5, b: 30, l: 40, r: values.length > 4 ? 5 : 10 }, 
             annotations: annotations,
-            showlegend: false, // Tắt chú thích -> Không bị khoảng trống thừa
+            showlegend: false,
             xaxis: { 
                 showgrid: false, 
                 tickfont: { color: theme.palette.text.primary, size: 13 },
@@ -161,7 +165,6 @@ function SourceDistributionChart({ data, dataKey, title, format, height = 250 })
                 showgrid: true, 
                 gridcolor: theme.palette.divider, 
                 tickfont: { size: 13 },
-                // Thêm padding cho trục Y để cột không chạm nóc
                 zeroline: false,
                 range: [0, maxValue * 1.2],
                 dtick: dynamicDtick,

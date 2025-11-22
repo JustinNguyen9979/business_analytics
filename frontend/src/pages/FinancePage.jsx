@@ -1,13 +1,13 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Box, Typography, Paper, Button, Grid, Skeleton } from '@mui/material';
-import { 
+import { Box, Typography, Paper, Button, Skeleton } from '@mui/material';
+import {
     CalendarToday as CalendarTodayIcon,
     MonetizationOn as MonetizationOnIcon,
     TrendingUp as TrendingUpIcon,
     AccountBalanceWallet as AccountBalanceWalletIcon,
     StackedLineChart as StackedLineChartIcon,
-    AttachMoney as AttachMoneyIcon // Icon cho Tổng chi phí
+    AttachMoney as AttachMoneyIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 
@@ -58,9 +58,11 @@ function FinancePage() {
     // Tách dữ liệu tổng và chi tiết
     const summaryData = currentData?.find(item => item.platform === 'Tổng cộng') || {};
     const prevSummaryData = previousData?.find(item => item.platform === 'Tổng cộng') || {};
+    
+    // Sắp xếp dữ liệu theo GMV giảm dần. Đây sẽ là thứ tự chuẩn cho tất cả các chart.
     const platformData = currentData
         ?.filter(item => item.platform !== 'Tổng cộng')
-        .sort((a, b) => (b.netRevenue || 0) - (a.netRevenue || 0)) || [];
+        .sort((a, b) => (b.gmv || 0) - (a.gmv || 0)) || [];
 
     const cardConfigs = [
         { key: 'profit', title: 'Tổng Lợi nhuận', icon: <MonetizationOnIcon />, color: 'success.main' },
@@ -133,29 +135,26 @@ function FinancePage() {
             {/* --- PHẦN 2: CHART PHÂN BỔ (HÀNG DƯỚI - MỚI THÊM) --- */}
             <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
                 {(() => {
-                    // 1. TÍNH TOÁN CHIỀU CAO ĐỘNG
-                    // Nếu có dữ liệu -> 400px, Ngược lại (Loading hoặc Rỗng) -> 250px
-                    const hasData = platformData && platformData.length > 0;
-                    const dynamicHeight = hasData ? 400 : 250;
+                    const isExpanded = platformData.length > 5;
+                    const chartBoxSx = isExpanded
+                        ? { width: 'calc(33.333% - 16px)' } // ~3 cột mỗi hàng
+                        : { flex: '1 1 300px' };             // Co giãn linh hoạt
 
                     if (loading) {
                         return Array.from(new Array(5)).map((_, index) => (
-                            // Áp dụng chiều cao 250px cho Skeleton lúc đang tải
-                            <Box key={index} sx={{ flex: 1, minWidth: '200px', height: 250 }}>
-                                 <Skeleton variant="rectangular" width="100%" height="100%" sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.05)' }} />
+                            <Box key={index} sx={chartBoxSx}>
+                                 <Skeleton variant="rectangular" width="100%" height="250px" sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.05)' }} />
                             </Box>
                         ));
                     }
 
                     return cardConfigs.map(config => (
-                        // Áp dụng chiều cao động vào Box chứa
-                        <Box key={config.key} sx={{ flex: 1, minWidth: '200px', height: dynamicHeight }}>
+                        <Box key={config.key} sx={chartBoxSx}>
                             <SourceDistributionChart
                                 data={platformData}
                                 dataKey={config.key}
                                 title={config.title}
                                 format={config.format || 'currency'}
-                                height={dynamicHeight} 
                             />
                         </Box>
                     ));
