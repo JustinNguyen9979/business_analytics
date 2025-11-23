@@ -183,13 +183,45 @@ function LayoutWithBrandContext() {
 
             <Drawer variant="permanent" open={isSidebarOpen}>
                 <DrawerHeader>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mr: 'auto', pl: 1, opacity: isSidebarOpen ? 1 : 0, transition: 'opacity 0.2s' }}>
-                        <QueryStatsIcon sx={{ color: 'primary.main', mr: 1.5, fontSize: 30 }} />
-                        <Typography variant="h6" noWrap>Analytics</Typography>
-                    </Box>
-                    <IconButton onClick={() => setIsSidebarOpen(!isSidebarOpen)} sx={{ opacity: isSidebarOpen ? 1 : 0, color: 'inherit' }}>
-                        <ChevronLeftIcon />
-                    </IconButton>
+                    {isSidebarOpen ? (
+                        // --- TRẠNG THÁI MỞ RỘNG ---
+                        <>
+                            <Box
+                                component={RouterLink}
+                                to={`/dashboard/${brandIdentifier}`}
+                                sx={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    pl: 1,
+                                    textDecoration: 'none',
+                                    color: 'inherit',
+                                    flexGrow: 1, // Cho phép box này chiếm không gian
+                                }}
+                            >
+                                <QueryStatsIcon sx={{ color: 'primary.main', mr: 1.5, fontSize: 30 }} />
+                                <Typography variant="h6" noWrap>Analytics</Typography>
+                            </Box>
+                            <IconButton onClick={() => setIsSidebarOpen(false)}>
+                                <ChevronLeftIcon />
+                            </IconButton>
+                        </>
+                    ) : (
+                        // --- TRẠNG THÁI THU GỌN ---
+                        <IconButton
+                            component={RouterLink}
+                            to={`/dashboard/${brandIdentifier}`}
+                            onClick={() => setIsSidebarOpen(true)}
+                            sx={{
+                                width: '100%',
+                                height: '100%',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                            }}
+                        >
+                            <QueryStatsIcon sx={{ color: 'primary.main', fontSize: 30 }} />
+                        </IconButton>
+                    )}
                 </DrawerHeader>
                 <Divider />
                 <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>

@@ -32,9 +32,9 @@ const getPreviousPeriod = (startDate, endDate, filterType = 'custom') => {
             prevMonthEndDate = prevMonthStartDate.clone().endOf('month');
         }
         
-        console.log('Kỳ hiện tại (cùng kỳ):', startDate.format('YYYY-MM-DD'), '-', endDate.format('YYYY-MM-DD'));
-        console.log('Kỳ so sánh (cùng kỳ):', prevMonthStartDate.format('YYYY-MM-DD'), '-', prevMonthEndDate.format('YYYY-MM-DD'));
-        console.log('Loại bộ lọc:', filterType);
+        // console.log('Kỳ hiện tại (cùng kỳ):', startDate.format('YYYY-MM-DD'), '-', endDate.format('YYYY-MM-DD'));
+        // console.log('Kỳ so sánh (cùng kỳ):', prevMonthStartDate.format('YYYY-MM-DD'), '-', prevMonthEndDate.format('YYYY-MM-DD'));
+        // console.log('Loại bộ lọc:', filterType);
 
         return [prevMonthStartDate, prevMonthEndDate];
     }
@@ -45,9 +45,9 @@ const getPreviousPeriod = (startDate, endDate, filterType = 'custom') => {
         const prevStartDate = startDate.clone().subtract(durationInMonths, 'month');
         const prevEndDate = startDate.clone().subtract(1, 'day');
         
-        console.log('Kỳ hiện tại (toàn kỳ):', startDate.format('YYYY-MM-DD'), '-', endDate.format('YYYY-MM-DD'));
-        console.log('Kỳ so sánh (toàn kỳ):', prevStartDate.startOf('month').format('YYYY-MM-DD'), '-', prevEndDate.endOf('day').format('YYYY-MM-DD'));
-        console.log('Loại bộ lọc:', filterType);
+        // console.log('Kỳ hiện tại (toàn kỳ):', startDate.format('YYYY-MM-DD'), '-', endDate.format('YYYY-MM-DD'));
+        // console.log('Kỳ so sánh (toàn kỳ):', prevStartDate.startOf('month').format('YYYY-MM-DD'), '-', prevEndDate.endOf('day').format('YYYY-MM-DD'));
+        // console.log('Loại bộ lọc:', filterType);
 
         return [prevStartDate.startOf('month'), prevEndDate.endOf('day')];
     }
@@ -68,9 +68,9 @@ const getPreviousPeriod = (startDate, endDate, filterType = 'custom') => {
         prevStartDate = prevEndDate.clone().subtract(durationInDays - 1, 'day');
     }
 
-    console.log('Kỳ hiện tại (ngày tùy chỉnh):', startDate.format('YYYY-MM-DD'), '-', endDate.format('YYYY-MM-DD'));
-    console.log('Kỳ so sánh (ngày tùy chỉnh):', prevStartDate.format('YYYY-MM-DD'), '-', prevEndDate.format('YYYY-MM-DD'));
-    console.log('Loại bộ lọc:', filterType);
+    // console.log('Kỳ hiện tại (ngày tùy chỉnh):', startDate.format('YYYY-MM-DD'), '-', endDate.format('YYYY-MM-DD'));
+    // console.log('Kỳ so sánh (ngày tùy chỉnh):', prevStartDate.format('YYYY-MM-DD'), '-', prevEndDate.format('YYYY-MM-DD'));
+    // console.log('Loại bộ lọc:', filterType);
 
     return [prevStartDate.startOf('day'), prevEndDate.endOf('day')];
 };
