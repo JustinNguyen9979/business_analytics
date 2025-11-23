@@ -90,15 +90,15 @@ function SourceDistributionChart({ data, dataKey, title, format }) {
             ...baseLayout,
             margin: { t: 0, b: 5, l: 0, r: 0 }, 
             showlegend: true,
-            legend: {
-                orientation: 'h',
-                yanchor: 'top',
-                y: -0.2, 
-                xanchor: 'center',
-                x: 0.5,
-                font: { color: theme.palette.text.secondary, size: 13 },
-                itemwidth: 30,
-            }
+                        legend: {
+                            orientation: 'h',
+                            yanchor: 'top',
+                            y: -0.15, // Giữ vị trí y đã điều chỉnh
+                            xanchor: 'center', // Căn giữa
+                            x: 0.5,       // Đặt ở giữa
+                            font: { color: theme.palette.text.secondary, size: 13 },
+                            itemwidth: 40, // Giữ độ rộng của mỗi item
+                        }
         };
     } 
 

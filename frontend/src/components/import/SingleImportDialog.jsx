@@ -37,6 +37,7 @@ function SingleImportDialog({ open, onClose, onUploadComplete, brandSlug }) {
     const [progressText, setProgressText] = useState('');
     const [customSource, setCustomSource] = useState('');
     const [customSourceError, setCustomSourceError] = useState('');
+    const [isSelectOpen, setIsSelectOpen] = useState(false); // State để kiểm soát Select
     const intervalRef = useRef(null);
 
     useEffect(() => {
@@ -49,6 +50,7 @@ function SingleImportDialog({ open, onClose, onUploadComplete, brandSlug }) {
             setProgressText('');
             setCustomSource('');
             setCustomSourceError('');
+            setIsSelectOpen(false); // Reset trạng thái Select
             if (intervalRef.current) {
                 clearInterval(intervalRef.current);
             }
@@ -89,6 +91,7 @@ function SingleImportDialog({ open, onClose, onUploadComplete, brandSlug }) {
         setSelectedPlatform(newPlatformKey);
         setCustomSource('');
         setCustomSourceError('');
+        setIsSelectOpen(false); // Đóng Select sau khi thêm thành công
     };
 
     const handleUpload = async () => {
@@ -139,7 +142,15 @@ function SingleImportDialog({ open, onClose, onUploadComplete, brandSlug }) {
     };
     
     return (
-        <Dialog open={open} onClose={() => !isWorking && onClose()} maxWidth="sm" fullWidth>
+        <Dialog open={open} onClose={() => !isWorking && onClose()} maxWidth="sm" fullWidth
+            onKeyDown={(e) => {
+                // Chỉ kích hoạt handleUpload khi Enter được nhấn và tất cả các điều kiện để upload đều hợp lệ
+                if (e.key === 'Enter' && selectedFile && selectedPlatform && !isWorking) {
+                    e.preventDefault(); // Ngăn hành vi mặc định của Enter
+                    handleUpload();
+                }
+            }}
+        >
             <DialogTitle>
                 Import Dữ liệu
                 <IconButton onClick={() => !isWorking && onClose()} sx={{ position: 'absolute', right: 16, top: 16, color: 'text.secondary' }} disabled={isWorking}>
@@ -151,7 +162,17 @@ function SingleImportDialog({ open, onClose, onUploadComplete, brandSlug }) {
                 <Box sx={{ mt: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <FormControl fullWidth disabled={isWorking}>
                         <InputLabel>Chọn Sàn Hoặc Thêm Mới</InputLabel>
-                        <Select value={selectedPlatform} label="Chọn Sàn Hoặc Thêm Mới" onChange={(e) => setSelectedPlatform(e.target.value)}>
+                        <Select 
+                            open={isSelectOpen} 
+                            onOpen={() => setIsSelectOpen(true)} 
+                            onClose={() => setIsSelectOpen(false)}
+                            value={selectedPlatform} 
+                            label="Chọn Sàn Hoặc Thêm Mới" 
+                            onChange={(e) => {
+                                setSelectedPlatform(e.target.value);
+                                setIsSelectOpen(false); // Đóng lại khi chọn item có sẵn
+                            }}
+                        >
                             {platforms.map((platform) => (
                                 <MenuItem 
                                     key={platform.key} 

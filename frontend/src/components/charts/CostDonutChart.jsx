@@ -12,7 +12,7 @@ const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3
 
 function CostDonutChart({ cogs = 0, executionCost = 0, adSpend = 0 }) {
     const theme = useTheme();
-    adSpend = adSpend > 0 ? adSpend : 11100000;
+    adSpend = adSpend > 0 ? adSpend : 0;
     const totalCost = cogs + executionCost + adSpend;
     const animatedTotalCost = useCountUp(totalCost, 800);
     const [chartData, setChartData] = useState([]);
