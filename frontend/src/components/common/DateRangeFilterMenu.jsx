@@ -40,9 +40,13 @@ function DateRangeFilterMenu({ open, anchorEl, onClose, initialDateRange, onAppl
     const [tempDateRange, setTempDateRange] = useState(initialDateRange || [dayjs().startOf('month'), dayjs().endOf('month')]);
 
     const handleQuarterClick = (quarter) => {
-        const year = tempDateRange[0].year();
+        const year = (initialDateRange ? initialDateRange[0] : dayjs()).year();
         const startDate = dayjs().year(year).quarter(quarter).startOf('quarter');
         const endDate = dayjs().year(year).quarter(quarter).endOf('quarter');
+
+        console.log(`[DEBUG] Year: ${year}, Quarter: ${quarter}`);
+        console.log(`[DEBUG] StartDate (before apply): ${startDate.format('YYYY-MM-DD')}`);
+        console.log(`[DEBUG] EndDate (before apply): ${endDate.format('YYYY-MM-DD')}`);
 
         onApply([ startDate, endDate], `Quý ${quarter}_${year}`);
     }

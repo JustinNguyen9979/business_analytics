@@ -15,28 +15,63 @@ import { processChartData } from '../utils/chartDataProcessor';
 const getPreviousPeriod = (startDate, endDate, filterType = 'custom') => {
     if (!startDate || !endDate) return [null, null];
 
-    // === PHẦN SỬA ĐỔI BẮT ĐẦU ===
-    // Logic 1: Dành cho các bộ lọc có đơn vị lịch rõ ràng
-    if (['this_year', 'year', 'quarter', 'month', 'this_month'].includes(filterType)) {
-        // 1. Tính khoảng thời gian của kỳ hiện tại (tính bằng tháng)
-        // Ví dụ: T4 -> T6 là 3 tháng. endDate.diff(startDate, 'month') = 2. Do đó cần +1
-        const durationInMonths = endDate.diff(startDate, 'month') + 1;
+    // --- LOGIC MỚI ---
 
-        // 2. Ngày bắt đầu của kỳ trước = Ngày bắt đầu kỳ này trừ đi khoảng thời gian
+    // 1. Xử lý trường hợp "Tháng hiện tại" (this_month)
+    // So sánh "cùng kỳ" ngày-đối-ngày. Ví dụ: 1-23/11 so với 1-23/10
+    if (filterType === 'this_month') {
+        const dayOfMonth = endDate.date(); // Lấy ngày trong tháng của ngày kết thúc (ví dụ: 23)
+        const prevMonthStartDate = startDate.clone().subtract(1, 'month');
+        
+        // Tính ngày kết thúc của kỳ so sánh
+        let prevMonthEndDate = prevMonthStartDate.clone().date(dayOfMonth);
+
+        // Xử lý trường hợp tháng trước không có ngày tương ứng (ví dụ: so sánh 31/3 với tháng 2)
+        // dayjs sẽ tự động chuyển sang tháng sau, nên ta cần clamp nó về cuối tháng trước.
+        if (prevMonthEndDate.month() !== prevMonthStartDate.month()) {
+            prevMonthEndDate = prevMonthStartDate.clone().endOf('month');
+        }
+        
+        console.log('Kỳ hiện tại (cùng kỳ):', startDate.format('YYYY-MM-DD'), '-', endDate.format('YYYY-MM-DD'));
+        console.log('Kỳ so sánh (cùng kỳ):', prevMonthStartDate.format('YYYY-MM-DD'), '-', prevMonthEndDate.format('YYYY-MM-DD'));
+        console.log('Loại bộ lọc:', filterType);
+
+        return [prevMonthStartDate, prevMonthEndDate];
+    }
+
+    // 2. Xử lý các bộ lọc có khoảng thời gian cố định theo lịch (nguyên tháng, quý, năm)
+    if (['this_year', 'last_month', 'year', 'quarter', 'month'].includes(filterType) || (typeof filterType === 'string' && filterType.startsWith('Quý'))) {
+        const durationInMonths = endDate.diff(startDate, 'month') + 1; // +1 để bao gồm cả tháng cuối
         const prevStartDate = startDate.clone().subtract(durationInMonths, 'month');
-
-        // 3. Ngày kết thúc của kỳ trước = Ngày bắt đầu kỳ này trừ đi 1 ngày
         const prevEndDate = startDate.clone().subtract(1, 'day');
+        
+        console.log('Kỳ hiện tại (toàn kỳ):', startDate.format('YYYY-MM-DD'), '-', endDate.format('YYYY-MM-DD'));
+        console.log('Kỳ so sánh (toàn kỳ):', prevStartDate.startOf('month').format('YYYY-MM-DD'), '-', prevEndDate.endOf('day').format('YYYY-MM-DD'));
+        console.log('Loại bộ lọc:', filterType);
 
         return [prevStartDate.startOf('month'), prevEndDate.endOf('day')];
     }
-    // === PHẦN SỬA ĐỔI KẾT THÚC ===
+    
+    // Logic 3: Dành cho các khoảng ngày tùy chỉnh (ví dụ: 7 ngày qua, 28 ngày qua)
+    const durationInDays = endDate.diff(startDate, 'day') + 1;
+    let prevEndDate = startDate.clone().subtract(1, 'day');
+    let prevStartDate;
 
-    // Logic 2: Dành cho các bộ lọc theo khoảng ngày tùy chỉnh (ví dụ: 7 ngày qua, 28 ngày qua)
-    // Logic này vốn đã đúng nên giữ nguyên.
-    const durationInDays = endDate.diff(startDate, 'day') + 1; // +1 để bao gồm cả ngày cuối
-    const prevEndDate = startDate.clone().subtract(1, 'day');
-    const prevStartDate = prevEndDate.clone().subtract(durationInDays - 1, 'day');
+    // Nếu kỳ hiện tại là một khoảng thời gian "tròn tháng" (bắt đầu từ ngày 1 và kết thúc vào cuối tháng)
+    if (startDate.date() === 1 && endDate.endOf('month').isSame(endDate, 'day')) {
+        const durationInMonths = endDate.diff(startDate, 'month') + 1;
+        prevStartDate = startDate.clone().subtract(durationInMonths, 'month').startOf('month');
+        // prevEndDate sẽ là ngày cuối cùng của kỳ so sánh, đảm bảo nó là cuối tháng
+        prevEndDate = prevStartDate.clone().add(durationInMonths, 'month').subtract(1, 'day').endOf('month');
+    } else {
+        // Logic mặc định cho các khoảng ngày tùy chỉnh khác
+        prevStartDate = prevEndDate.clone().subtract(durationInDays - 1, 'day');
+    }
+
+    console.log('Kỳ hiện tại (ngày tùy chỉnh):', startDate.format('YYYY-MM-DD'), '-', endDate.format('YYYY-MM-DD'));
+    console.log('Kỳ so sánh (ngày tùy chỉnh):', prevStartDate.format('YYYY-MM-DD'), '-', prevEndDate.format('YYYY-MM-DD'));
+    console.log('Loại bộ lọc:', filterType);
+
     return [prevStartDate.startOf('day'), prevEndDate.endOf('day')];
 };
 

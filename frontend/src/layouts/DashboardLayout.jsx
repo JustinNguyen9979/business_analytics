@@ -31,7 +31,6 @@ import { recalculateBrandDataAndWait, getAllBrands } from '../services/api';
 import { clearAllApplicationCaches } from '../utils/cacheManager';
 import { useLayout } from '../context/LayoutContext';
 import { useNotification } from '../context/NotificationContext';
-// import { slugify } from '../utils/slugify'; // Không cần slugify ở đây nữa vì backend đã trả về slug
 import { BrandProvider, useBrand } from '../context/BrandContext';
 
 
@@ -250,7 +249,6 @@ function LayoutWithBrandContext() {
             </Drawer>
 
             <Box component="main" sx={{ flexGrow: 1, py: 3, overflow: 'auto', height: '100vh' }}>
-                <Toolbar />
                 <Outlet />
             </Box>
 
