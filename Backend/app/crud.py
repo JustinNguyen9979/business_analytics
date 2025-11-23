@@ -561,9 +561,19 @@ def get_sources_for_brand(db: Session, brand_id: int) -> list[str]:
         return [] # Return empty list on error
 
 def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end_date: date, source: str = None):
-    """Deletes transactional data for a brand within a date range, optionally filtered by source."""
+    """
+    Deletes transactional data, checks if any source is now empty, and returns a list of such sources.
+    """
     try:
-        # BƯỚC 1: Xác định tập hợp các đơn hàng sẽ bị xóa
+        # BƯỚC 0: Xác định các source sẽ bị ảnh hưởng TRƯỚC KHI xóa
+        sources_to_check = []
+        if source:
+            sources_to_check.append(source)
+        else:
+            # Lấy tất cả các source hiện có của brand
+            sources_to_check = get_sources_for_brand(db, brand_id)
+
+        # --- LOGIC XÓA HIỆN TẠI (GIỮ NGUYÊN) ---
         orders_to_delete_query = db.query(models.Order).filter(
             models.Order.brand_id == brand_id,
             models.Order.order_date.between(start_date, end_date)
@@ -571,22 +581,15 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
         if source:
             orders_to_delete_query = orders_to_delete_query.filter(models.Order.source == source)
 
-        # BƯỚC 2: Lấy danh sách các username duy nhất từ các đơn hàng sẽ bị xóa
         usernames_in_deleted_orders = {
             row.username for row in orders_to_delete_query.with_entities(models.Order.username).distinct() if row.username
         }
 
         if usernames_in_deleted_orders:
-            # BƯỚC 3: Với mỗi username, kiểm tra xem họ có còn đơn hàng nào khác (không bị xóa) không
-            
-            # Tạo một subquery để tìm tất cả các đơn hàng còn lại của các username này
-            # Đơn hàng còn lại là đơn hàng nằm ngoài khoảng ngày HOẶC khác nguồn (nếu source được chỉ định)
             remaining_orders_subquery = db.query(models.Order.username).filter(
                 models.Order.brand_id == brand_id,
                 models.Order.username.in_(usernames_in_deleted_orders)
             )
-
-            # Áp dụng điều kiện NOT của query xóa
             if source:
                  remaining_orders_subquery = remaining_orders_subquery.filter(
                     (models.Order.order_date.between(start_date, end_date) == False) |
@@ -596,57 +599,28 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
                  remaining_orders_subquery = remaining_orders_subquery.filter(
                     models.Order.order_date.between(start_date, end_date) == False
                 )
-
-            # Lấy danh sách các user vẫn còn đơn hàng
             users_with_remaining_orders = {
                 row.username for row in remaining_orders_subquery.distinct().all()
             }
-            
-            # BƯỚC 4: Xác định những user cần xóa (những user chỉ có đơn hàng trong tập bị xóa)
             users_to_delete = usernames_in_deleted_orders - users_with_remaining_orders
-            
             if users_to_delete:
-                # Thực hiện xóa khách hàng
                 db.query(models.Customer).filter(
                     models.Customer.brand_id == brand_id,
                     models.Customer.username.in_(list(users_to_delete))
                 ).delete(synchronize_session=False)
                 print(f"INFO: Đã xóa {len(users_to_delete)} khách hàng không còn đơn hàng nào.")
 
-        # Delete Ads
-        ads_query = db.query(models.Ad).filter(
-            models.Ad.brand_id == brand_id,
-            models.Ad.ad_date.between(start_date, end_date)
-        )
-        if source:
-            ads_query = ads_query.filter(models.Ad.source == source)
-        
-        ads_count = ads_query.count()
-        ads_query.delete(synchronize_session=False)
-        
-        # Delete Revenues
-        revenues_query = db.query(models.Revenue).filter(
-            models.Revenue.brand_id == brand_id,
-            models.Revenue.transaction_date.between(start_date, end_date)
-        )
-        if source:
-            revenues_query = revenues_query.filter(models.Revenue.source == source)
-        
-        revenues_count = revenues_query.count()
-        revenues_query.delete(synchronize_session=False)
+        # Delete Ads, Revenues, Orders
+        for model_class in [models.Ad, models.Revenue, models.Order]:
+            date_column = getattr(model_class, 'ad_date' if model_class == models.Ad else 'transaction_date' if model_class == models.Revenue else 'order_date')
+            query = db.query(model_class).filter(
+                getattr(model_class, 'brand_id') == brand_id,
+                date_column.between(start_date, end_date)
+            )
+            if source:
+                query = query.filter(getattr(model_class, 'source') == source)
+            query.delete(synchronize_session=False)
 
-        # Delete Orders
-        orders_query = db.query(models.Order).filter(
-            models.Order.brand_id == brand_id,
-            models.Order.order_date.between(start_date, end_date)
-        )
-        if source:
-            orders_query = orders_query.filter(models.Order.source == source)
-        
-        orders_count = orders_query.count()
-        orders_query.delete(synchronize_session=False)
-
-        # THÊM MỚI: Xóa DailyStat nếu xóa tất cả các nguồn trong khoảng thời gian
         if not source:
             db.query(models.DailyStat).filter(
                 models.DailyStat.brand_id == brand_id,
@@ -656,10 +630,29 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
 
         db.commit()
 
-        # THÊM MỚI: Xóa cache để đảm bảo frontend load lại dữ liệu mới
+        # BƯỚC MỚI: Kiểm tra xem source nào đã bị xóa hoàn toàn
+        fully_deleted_sources = []
+        if sources_to_check:
+            for src in sources_to_check:
+                # Đếm xem source này còn bản ghi nào trong cả 3 bảng không
+                remaining_count = 0
+                for model_class in [models.Order, models.Revenue, models.Ad]:
+                    count = db.query(model_class).filter(
+                        getattr(model_class, 'brand_id') == brand_id,
+                        getattr(model_class, 'source') == src
+                    ).count()
+                    remaining_count += count
+                    if remaining_count > 0: # Tối ưu: nếu đã tìm thấy > 0 thì không cần đếm nữa
+                        break
+                
+                if remaining_count == 0:
+                    fully_deleted_sources.append(src)
+        
+        print(f"INFO: Các source đã bị xóa hoàn toàn: {fully_deleted_sources}")
+
         _clear_brand_cache(brand_id)
 
-        return {"message": f"Successfully deleted data for brand {brand_id} between {start_date} and {end_date}."}
+        return fully_deleted_sources # Trả về danh sách các source đã bị xóa sạch
     except Exception as e:
         db.rollback()
         print(f"Error deleting data for brand {brand_id}: {e}")

@@ -138,12 +138,23 @@ def delete_data_in_range(
     db: Session = Depends(get_db),
     source: str = Query(None, description="Optional: Filter by source (e.g., 'shopee', 'tiktok'). If not provided, deletes from all sources.")
 ):
-    """Deletes transactional data for a brand within a specified date range, optionally filtered by source."""
+    """
+    Deletes transactional data for a brand within a specified date range.
+    Returns a list of sources that have been completely wiped out.
+    """
     try:
-        crud.delete_brand_data_in_range(db, brand.id, payload.start_date, payload.end_date, source)
-        # Invalidate relevant cache after deletion
+        # Hàm crud giờ sẽ trả về danh sách các source đã bị xóa hoàn toàn
+        fully_deleted_sources = crud.delete_brand_data_in_range(
+            db, brand.id, payload.start_date, payload.end_date, source
+        )
+        
+        # Kích hoạt tính toán lại dữ liệu trong nền
         recalculate_all_brand_data.delay(brand.id)
-        return {"message": "Yêu cầu xóa dữ liệu đã được thực hiện. Dữ liệu đang được tính toán lại."}
+        
+        return {
+            "message": "Yêu cầu xóa dữ liệu đã được thực hiện. Dữ liệu đang được tính toán lại.",
+            "fully_deleted_sources": fully_deleted_sources
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Lỗi server khi xóa dữ liệu: {str(e)}")
 

@@ -132,7 +132,7 @@ function BrandLobby() {
 
                 <Grid container spacing={4} justifyContent="center">
                     {brands.map((brand) => (
-                        <Grid item key={brand.id}>
+                        <Grid key={brand.id}>
                             <BrandCard
                                 brand={brand}
                                 onClick={handleBrandClick}
@@ -142,7 +142,7 @@ function BrandLobby() {
                             />
                         </Grid>
                     ))}
-                    <Grid item>
+                    <Grid>
                         <CreateBrandCard
                             onCreate={handleBrandCreated}
                         />

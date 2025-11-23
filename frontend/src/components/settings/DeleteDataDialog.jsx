@@ -12,6 +12,19 @@ import { dateShortcuts } from '../../config/dashboardConfig';
 import { getSourcesForBrand, deleteDataInRange } from '../../services/api';
 import { useNotification } from '../../context/NotificationContext';
 
+const getCustomPlatforms = (brandSlug) => {
+    if (!brandSlug) return [];
+    try {
+        const saved = localStorage.getItem(`customPlatforms_${brandSlug}`);
+        return saved ? JSON.parse(saved) : [];
+    } catch (e) { return []; }
+};
+
+const saveCustomPlatforms = (brandSlug, platforms) => {
+    if (!brandSlug) return;
+    localStorage.setItem(`customPlatforms_${brandSlug}`, JSON.stringify(platforms));
+};
+
 // --- COMPONENT ĐÃ ĐƯỢC TÁI CẤU TRÚC ---
 // Nhận thẳng brandSlug và brandName từ props, không cần tự fetch
 function DeleteDataDialog({ open, onClose, brandSlug, brandName }) {
@@ -77,13 +90,30 @@ function DeleteDataDialog({ open, onClose, brandSlug, brandName }) {
             const [start, end] = dateRange;
             const sourceParam = selectedSource === 'all' ? null : selectedSource;
             
-            // Dùng trực tiếp brandSlug từ prop
-            await deleteDataInRange(brandSlug, start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD'), sourceParam);
+            // API giờ sẽ trả về { message, fully_deleted_sources }
+            const response = await deleteDataInRange(brandSlug, start.format('YYYY-MM-DD'), end.format('YYYY-MM-DD'), sourceParam);
             
-            showNotification('Xóa dữ liệu thành công! Trang sẽ được tải lại.', 'success');
+            // Logic mới: Xử lý xóa source khỏi localStorage
+            if (response && Array.isArray(response.fully_deleted_sources) && response.fully_deleted_sources.length > 0) {
+                console.log('Các source sẽ bị xóa khỏi localStorage:', response.fully_deleted_sources);
+                const currentCustomPlatforms = getCustomPlatforms(brandSlug);
+                
+                // Lọc bỏ những source đã bị xóa hoàn toàn
+                const updatedCustomPlatforms = currentCustomPlatforms.filter(platform => 
+                    !response.fully_deleted_sources.includes(platform.name.toLowerCase()) && 
+                    !response.fully_deleted_sources.includes(platform.key)
+                );
+
+                if (updatedCustomPlatforms.length < currentCustomPlatforms.length) {
+                    saveCustomPlatforms(brandSlug, updatedCustomPlatforms);
+                    showNotification(`Đã xóa vĩnh viễn nguồn: ${response.fully_deleted_sources.join(', ')}.`, 'warning');
+                }
+            }
+            
+            showNotification('Xóa dữ liệu thành công!', 'success');
             setTimeout(() => {
                 window.location.reload();
-            }, 2000);
+            }, 2500); // Tăng nhẹ thời gian để user đọc kịp notification
             onClose();
         } catch (error) {
             showNotification(error.response?.data?.detail || 'Lỗi khi xóa dữ liệu.', 'error');
@@ -103,10 +133,12 @@ function DeleteDataDialog({ open, onClose, brandSlug, brandName }) {
             onClose={onClose} 
             maxWidth="sm" 
             fullWidth
-            PaperProps={{
-                sx: {
-                    borderColor: 'error.main',
-                    boxShadow: `0 0 40px rgba(255, 23, 68, 0.2), inset 0 0 20px rgba(255, 23, 68, 0.05)`,
+            slotProps={{
+                paper: {
+                    sx: {
+                        borderColor: 'error.main',
+                        boxShadow: `0 0 40px rgba(255, 23, 68, 0.2), inset 0 0 20px rgba(255, 23, 68, 0.05)`,
+                    }
                 }
             }}
         >

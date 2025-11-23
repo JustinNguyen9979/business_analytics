@@ -163,10 +163,17 @@ function GeoMapChartComponent({ data }) {
                     <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 2, textAlign: 'center' }}>
                         Top 5 Tỉnh/Thành có lượng khách hàng cao nhất
                     </Typography>
-                    <Grid container spacing={{ xs: 2, sm: 3 }} justifyContent={{ sm: 'center', lg: 'space-between' }}>
+                    {/* THAY THẾ GRID BẰNG BOX */}
+                    <Box sx={{
+                        display: 'grid',
+                        // Sử dụng auto-fit để các item tự động xuống dòng và co giãn
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                        gap: { xs: 1, sm: 2 }, // Giảm khoảng cách giữa các item
+                        justifyContent: 'space-between' // Thêm justify-content
+                    }}>
                         {top5Provinces.map((province, index) => (
-                            <Grid item key={province.city} xs={12} sm={6} lg="auto">
-                                <Stack direction="row" spacing={1.5} alignItems="center" justifyContent={{ xs: 'center', sm: 'flex-start'}}>
+                            <Box key={province.city} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+                                <Stack direction="row" spacing={1.5} alignItems="center">
                                     <Typography sx={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'text.secondary', width: '24px' }}>
                                         {index + 1}.
                                     </Typography>
@@ -177,9 +184,9 @@ function GeoMapChartComponent({ data }) {
                                         </Typography>
                                     </Box>
                                 </Stack>
-                            </Grid>
+                            </Box>
                         ))}
-                    </Grid>
+                    </Box>
                 </Box>
             )}
         </Box>
