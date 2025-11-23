@@ -150,7 +150,7 @@ function DashboardPage() {
                     </Box>
                 </Box>
                 
-                <Box sx={{ pb: 3, pt: 1, height: 450, position: 'relative' }}>
+                <Box sx={{ pb: 3, pt: 1, height: 750, position: 'relative' }}>
                     {lineChart.loading ? <ChartSkeleton /> : (
                         <Suspense fallback={<ChartSkeleton />}>
                             {lineChart.data.current && lineChart.data.current.length > 0 ? (

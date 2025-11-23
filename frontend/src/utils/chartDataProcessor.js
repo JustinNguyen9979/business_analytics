@@ -10,19 +10,22 @@ dayjs.extend(isBetween);
  * @param {Array<dayjs>} dateRange - Khoảng thời gian [start, end].
  * @returns {'day' | 'week' | 'month'}
  */
-const determineAggregation = (filterType, dateRange) => {
-    if (filterType === 'year') {
-        return 'month';
+const determineAggregation = (dateRange) => {
+    const [start, end] = dateRange;
+
+    // Tính tổng số ngày trong khoảng thời gian, cộng 1 để bao gồm cả ngày cuối.
+    const totalDays = end.diff(start, 'day') + 1;
+
+    // Ước tính số tháng. Dùng số ngày trung bình trong tháng (365.25 / 12 = 30.4375)
+    const estimatedMonths = totalDays / 30.4375;
+
+    if (estimatedMonths >= 11.5) { // Dùng 11.5 thay vì 12 để account cho sai số nhỏ (ví dụ 11.9x vẫn tính là 12 tháng)
+        return 'month'; // Từ ~12 tháng trở lên -> xem theo tháng
     }
-    if (filterType === 'quarter') {
-        return 'week';
+    if (estimatedMonths >= 1.5) { // Dùng 1.5 thay vì 2 để account cho sai số nhỏ (ví dụ 1.9x vẫn tính là 2 tháng)
+        return 'week';  // Từ ~2 tháng đến dưới ~12 tháng -> xem theo tuần
     }
-    if (filterType === 'month') {
-        const [start, end] = dateRange;
-        const monthSpan = end.diff(start, 'month') + 1;
-        return monthSpan >= 3 ? 'week' : 'day';
-    }
-    return 'day';
+    return 'day';       // Dưới ~2 tháng -> xem theo ngày
 };
 
 /**
@@ -33,13 +36,13 @@ const determineAggregation = (filterType, dateRange) => {
  */
 export const processChartData = (dailyData, chartDateRange) => {
     // Các điều kiện an toàn
-    if (!dailyData || !chartDateRange?.range || !chartDateRange?.type) {
+    if (!dailyData || !chartDateRange?.range) {
         return { aggregatedData: [], aggregationType: 'day' };
     }
 
-    const { range, type } = chartDateRange;
+    const { range } = chartDateRange; // Chỉ cần range
     const [startDate, endDate] = range;
-    const aggregationType = determineAggregation(type, range);
+    const aggregationType = determineAggregation(range); // Gọi hàm đã sửa đổi
 
     // TH1: Không cần tổng hợp, trả về dữ liệu gốc
     if (aggregationType === 'day') {

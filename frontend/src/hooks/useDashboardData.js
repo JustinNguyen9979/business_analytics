@@ -17,7 +17,7 @@ const getPreviousPeriod = (startDate, endDate, filterType = 'custom') => {
 
     // === PHẦN SỬA ĐỔI BẮT ĐẦU ===
     // Logic 1: Dành cho các bộ lọc có đơn vị lịch rõ ràng
-    if (['year', 'quarter', 'month'].includes(filterType)) {
+    if (['this_year', 'year', 'quarter', 'month', 'this_month'].includes(filterType)) {
         // 1. Tính khoảng thời gian của kỳ hiện tại (tính bằng tháng)
         // Ví dụ: T4 -> T6 là 3 tháng. endDate.diff(startDate, 'month') = 2. Do đó cần +1
         const durationInMonths = endDate.diff(startDate, 'month') + 1;

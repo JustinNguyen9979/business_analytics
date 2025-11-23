@@ -8,7 +8,7 @@ export const dateShortcuts = [
         { label: 'Tuần hiện tại', type: 'this_week', getValue: () => [dayjs().startOf('week'), dayjs().endOf('week')] },
         { label: 'Tháng hiện tại', type: 'this_month', getValue: () => [dayjs().startOf('month'), dayjs().endOf('day')] },
         { label: 'Tháng trước', type: 'last_month', getValue: () => [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] },
-        { label: 'Năm nay', type: 'this_year', getValue: () => [dayjs().startOf('year'), dayjs().endOf('day')] },
+        { label: 'Năm nay', type: 'this_year', getValue: () => [dayjs().startOf('year'), dayjs().endOf('year')] },
     ];
 
 export const kpiGroups = [

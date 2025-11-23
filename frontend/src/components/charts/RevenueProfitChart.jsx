@@ -183,17 +183,16 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
         },
         legend: {
             font: { color: theme.palette.text.secondary, size: 16 },
-            // THÊM CÁC DÒNG NÀY ĐỂ CHUYỂN CHÚ THÍCH XUỐNG DƯỚI
-            orientation: 'h',      // Hiển thị theo hàng ngang
-            yanchor: 'top',     // Neo vào cạnh dưới
-            y: -0.3,               // Đẩy nó xuống dưới trục X một chút (-0.3 là một giá trị tương đối)
-            xanchor: 'center',     // Căn giữa theo chiều ngang
-            x: 0.5,                 // Đặt ở vị trí 50% chiều rộng của biểu đồ
+            orientation: 'h',
+            yanchor: 'top',
+            y: -0.1, // Giảm khoảng cách từ biểu đồ xuống chú thích
+            xanchor: 'center',
+            x: 0.5,
             traceorder: 'normal',
             valign: 'top',
         },
-        // Tăng margin dưới để có không gian cho chú thích
-        margin: { l: 80, r: 40, b: 80, t: 60 },
+        // Giảm margin dưới để tối ưu không gian
+        margin: { l: 80, r: 40, b: 60, t: 60 },
         hovermode: 'x',
         hoverlabel: { 
             bgcolor: 'rgba(10, 25, 41, 0.9)', 
@@ -210,25 +209,23 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
 
     if (!data || data.length === 0) {
         return (
-            <Paper variant="placeholder" sx={{ height: 450, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Paper variant="placeholder" sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Typography color="text.secondary">Không có dữ liệu để hiển thị biểu đồ.</Typography>
             </Paper>
         );
     }
 
     return (
-        <Box ref={chartContainerRef}>
-            <Box sx={{ height: '450px' }}>
-                <Plot
-                    key={chartRevision} 
-                    data={animatedData}
-                    layout={layout}
-                    useResizeHandler={true}
-                    style={{ width: '100%', height: '100%' }}
-                    config={{ displayModeBar: false, responsive: true }}
-                    revision={chartRevision}
-                />
-            </Box>
+        <Box ref={chartContainerRef} sx={{ height: '100%', width: '100%' }}>
+            <Plot
+                key={chartRevision}
+                data={animatedData}
+                layout={layout}
+                useResizeHandler={true}
+                style={{ width: '100%', height: '100%' }}
+                config={{ displayModeBar: false, responsive: true }}
+                revision={chartRevision}
+            />
         </Box>
     );
 }
