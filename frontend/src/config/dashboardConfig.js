@@ -1,4 +1,7 @@
+import { keyframes } from "@emotion/react";
 import dayjs from "dayjs";
+import { Form } from "react-router-dom";
+import { formatCurrency } from "../utils/formatters";
 
 export const dateShortcuts = [
         { label: 'Hôm nay', type: 'today', getValue: () => [dayjs().startOf('day'), dayjs().endOf('day')] },
@@ -30,10 +33,15 @@ export const kpiGroups = [
             groupTitle: 'Marketing',
             items: [
                 { key: 'adSpend', title: 'CHI PHÍ ADS', format: 'currency' },
-                { key: 'roas', title: 'ROAS', format: 'number', tooltipText: 'Return on Ad Spend - Doanh thu trên chi phí quảng cáo. Công thức: Doanh thu từ Ads / Chi phí Ads.' },
+                { key: 'conversion', title: 'CHUYỂN ĐỔI', format: 'number'},
+                { key: 'cpm', title: 'CPM', format: 'currency', tooltipText: 'Chi phí cho 1.000 lần hiển thị'},
                 { key: 'cpo', title: 'CPO', format: 'currency', tooltipText: 'Cost Per Order - Chi phí để có được một đơn hàng từ quảng cáo.' },
                 { key: 'ctr', title: 'CTR (%)', format: 'percent', tooltipText: 'Click-Through Rate - Tỷ lệ nhấp chuột vào quảng cáo.' },
                 { key: 'cpc', title: 'CPC', format: 'currency', tooltipText: 'Cost Per Click - Chi phí cho mỗi lượt nhấp chuột vào quảng cáo.' },
+                { key: 'roas', title: 'ROAS', format: 'number', tooltipText: 'Return on Ad Spend - Doanh thu trên chi phí quảng cáo. Công thức: Doanh thu từ Ads / Chi phí Ads.' },
+                { key: 'impressions', title: 'LƯỢT HIỂN THỊ', format: 'number'},
+                { key: 'reach', title: 'LƯỢT TIẾP CẬN', format: 'number'},
+                { key: 'click', title: 'CLICK', format: 'number'},
                 { key: 'conversionRate', title: 'TỶ LỆ CHUYỂN ĐỔI (%)', format: 'percent' },
             ]
         },

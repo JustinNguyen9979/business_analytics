@@ -9,7 +9,7 @@ CANCELLED_STATUSES = {'hủy', 'cancel', 'đã hủy', 'cancelled'}
 def _calculate_core_kpis(
     orders: List[models.Order],
     revenues: List[models.Revenue],
-    ads: List[models.Ad],
+    marketing_spends: List[models.MarketingSpend],
     creation_date_order_codes: Set[str]
 ) -> dict:
     
@@ -55,7 +55,7 @@ def _calculate_core_kpis(
     cogs_for_finance = sum(cogs_map.get(code, 0) for code in financial_completed_codes)
     
     # `adSpend`: Tổng chi phí quảng cáo.
-    adSpend = sum(a.expense for a in ads)
+    adSpend = sum(m.ad_spend for m in marketing_spends)
 
     # `totalCost`: Tổng chi phí = COGS + Chi phí thực hiện + Chi phí quảng cáo.
     totalCost = cogs_for_finance + executionCost + adSpend
@@ -156,7 +156,7 @@ def _calculate_core_kpis(
 def calculate_daily_kpis(
     orders_in_day: List[models.Order], 
     revenues_in_day: List[models.Revenue], 
-    ads_in_day: List[models.Ad],
+    marketing_spends: List[models.MarketingSpend],
     creation_date_order_codes: Set[str]
 ) -> dict:
     """
@@ -164,7 +164,7 @@ def calculate_daily_kpis(
     Hàm này gọi hàm helper và thêm vào các chỉ số chỉ có ý nghĩa trong ngày.
     """
     try:
-        kpis = _calculate_core_kpis(orders_in_day, revenues_in_day, ads_in_day, creation_date_order_codes)
+        kpis = _calculate_core_kpis(orders_in_day, revenues_in_day, marketing_spends, creation_date_order_codes)
         
         # Chỉ số này không bị ảnh hưởng, vẫn có thể giữ nguyên
         usernames_today = {o.username for o in orders_in_day if o.username}
@@ -181,14 +181,14 @@ def calculate_daily_kpis(
 def calculate_aggregated_kpis(
     all_orders: List[models.Order],
     all_revenues: List[models.Revenue],
-    all_ads: List[models.Ad]
+    all_marketing_spends: List[models.MarketingSpend],
 ) -> dict:
     """
     Tính toán KPI tổng hợp cho một khoảng thời gian.
     """
     try:
         creation_date_order_codes = {o.order_code for o in all_orders}
-        kpis = _calculate_core_kpis(all_orders, all_revenues, all_ads, creation_date_order_codes)
+        kpis = _calculate_core_kpis(all_orders, all_revenues, all_marketing_spends, creation_date_order_codes)
         return kpis
     except Exception as e:
         print(f"CALCULATOR ERROR (aggregated): {e}")

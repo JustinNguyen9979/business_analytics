@@ -15,8 +15,8 @@ class Brand(Base):
     products = relationship("Product", back_populates="owner_brand", cascade="all, delete-orphan")
     customers = relationship("Customer", back_populates="owner_brand", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="owner_brand", cascade="all, delete-orphan")
-    ads = relationship("Ad", back_populates="owner_brand", cascade="all, delete-orphan")
     revenues = relationship("Revenue", back_populates="owner_brand", cascade="all, delete-orphan")
+    marketing_spends = relationship("MarketingSpend", back_populates="owner_brand", cascade="all, delete-orphan")
 
 class Product(Base):
     __tablename__ = "products"
@@ -65,28 +65,6 @@ class Order(Base):
     )
     
     owner_brand = relationship("Brand", back_populates="orders")
-
-class Ad(Base):
-    __tablename__ = "ads"
-    id = Column(Integer, primary_key=True, index=True)
-    
-    # Cấu trúc đã rất phù hợp với template, giữ nguyên
-    campaign_name = Column(String, index=True)
-    ad_date = Column(Date, nullable=True)
-    impressions = Column(Integer, default=0)
-    clicks = Column(Integer, default=0)
-    expense = Column(Float, default=0.0)
-    orders = Column(Integer, default=0) 
-    gmv = Column(Float, default=0.0)
-    source = Column(String, nullable=False, index=True)
-    brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
-    details = Column(JSONB, nullable=True)
-
-    __table_args__ = (
-        Index('ix_ad_brand_id_ad_date', 'brand_id', 'ad_date'),
-    )
-    
-    owner_brand = relationship("Brand", back_populates="ads")
 
 class Revenue(Base):
     __tablename__ = "revenues"
@@ -152,3 +130,25 @@ class DailyStat(Base):
     )
 
     owner_brand = relationship("Brand")
+
+class MarketingSpend(Base):
+    __tablename__ = "marketing_spends"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brand_id = Column(Integer, ForeignKey("brands.id"), nullable=False, index=True)
+    source = Column(String, nullable=False, index=True)
+    date = Column(Date, nullable=False, index=True)
+    
+    ad_spend = Column(Float, default=0.0)
+    cpm = Column(Float, default=0.0)
+    ctr = Column(Float, default=0.0)
+    cpa = Column(Float, default=0.0)
+    cpc = Column(Float, default=0.0)
+    conversions = Column(Integer, default=0)
+    impressions = Column(Integer, default=0)
+    reach = Column(Integer, default=0)
+    clicks = Column(Integer, default=0)
+
+    owner_brand = relationship("Brand", back_populates="marketing_spends")
+
+    __table_args__ = (UniqueConstraint('brand_id', 'source', 'date', name='_brand_source_date_uc'),)

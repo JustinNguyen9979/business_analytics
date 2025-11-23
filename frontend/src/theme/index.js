@@ -305,6 +305,19 @@ const theme = createTheme({
         // 8. CSS Global & Animations
         MuiCssBaseline: {
             styleOverrides: {
+                // Global Scrollbar Styling
+                scrollbarWidth: 'thin',
+                '&::-webkit-scrollbar': { width: '6px', height: '6px' },
+                '&::-webkit-scrollbar-track': { background: 'transparent' },
+                '&::-webkit-scrollbar-thumb': {
+                    backgroundColor: 'rgba(0, 229, 255, 0.6)', // Neon Cyan với độ trong suốt nhẹ
+                    borderRadius: 3,
+                    transition: 'background-color 0.3s ease, box-shadow 0.3s ease', // Thêm transition
+                    '&:hover': {
+                        backgroundColor: PALETTE.primary.main, // Sáng rực hơn khi hover
+                        boxShadow: '0 0 8px rgba(0, 229, 255, 0.8)', // Hiệu ứng glow mạnh khi hover
+                    }
+                },
                 body: {
                     backgroundColor: PALETTE.background.default,
                     backgroundImage: `
@@ -312,14 +325,6 @@ const theme = createTheme({
                         radial-gradient(circle at 85% 30%, rgba(41, 121, 255, 0.08), transparent 25%)
                     `, // Tạo hiệu ứng nền không gian mờ ảo
                     backgroundAttachment: 'fixed',
-                    scrollbarWidth: 'thin',
-                    '&::-webkit-scrollbar': { width: '6px', height: '6px' },
-                    '&::-webkit-scrollbar-track': { background: 'transparent' },
-                    '&::-webkit-scrollbar-thumb': {
-                        backgroundColor: 'rgba(0, 229, 255, 0.2)',
-                        borderRadius: 3,
-                        '&:hover': { backgroundColor: PALETTE.primary.main }
-                    },
                 },
                 // Animation sóng (Ripple) cho bản đồ
                 '@keyframes ripple-effect': {

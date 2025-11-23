@@ -37,9 +37,9 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
         models.Revenue.transaction_date == target_date
     ).all()
     
-    ads = db.query(models.Ad).filter(
-        models.Ad.brand_id == brand_id,
-        models.Ad.ad_date == target_date
+    marketing_spends = db.query(models.MarketingSpend).filter(
+        models.MarketingSpend.brand_id == brand_id,
+        models.MarketingSpend.date == target_date
     ).all()
 
     # Lấy các loại đơn hàng cần thiết
@@ -64,7 +64,7 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
     # 2. Gọi "Đầu bếp" tính toán, truyền vào TẬP HỢP CÁC MÃ ĐƠN TẠO HÔM NAY
     # Đây là "nguồn chân lý" cho các chỉ số vận hành trong ngày
     created_today_codes = {o.order_code for o in orders_created_today}
-    kpis = kpi_calculator.calculate_daily_kpis(final_orders_list, revenues, ads, created_today_codes)
+    kpis = kpi_calculator.calculate_daily_kpis(final_orders_list, revenues, marketing_spends, created_today_codes)
 
     # 3. Tìm hoặc tạo mới bản ghi DailyStat
     stat_entry = db.query(models.DailyStat).filter(
@@ -121,18 +121,11 @@ def get_raw_orders_in_range(db: Session, brand_id: int, start_date: date, end_da
         models.Order.order_date.between(start_date, end_date)
     ).all()
 
-def get_raw_ads_in_range(db: Session, brand_id: int, start_date: date, end_date: date) -> list[models.Ad]:
-    """Chỉ lấy ra danh sách các bản ghi quảng cáo thô trong khoảng thời gian."""
-    return db.query(models.Ad).filter(
-        models.Ad.brand_id == brand_id,
-        models.Ad.ad_date.between(start_date, end_date)
-    ).all()
-
 def get_all_activity_dates(db: Session, brand_id: int):
     order_dates = db.query(models.Order.order_date.label("activity_date")).filter(models.Order.brand_id == brand_id, models.Order.order_date.isnot(None))
     revenue_dates = db.query(models.Revenue.transaction_date.label("activity_date")).filter(models.Revenue.brand_id == brand_id, models.Revenue.transaction_date.isnot(None))
-    ad_dates = db.query(models.Ad.ad_date.label("activity_date")).filter(models.Ad.brand_id == brand_id, models.Ad.ad_date.isnot(None))
-    all_dates_union = union_all(order_dates, revenue_dates, ad_dates).alias("all_dates")
+    marketing_dates = db.query(models.MarketingSpend.date.label("activity_date")).filter(models.MarketingSpend.brand_id == brand_id, models.MarketingSpend.date.isnot(None))
+    all_dates_union = union_all(order_dates, revenue_dates, marketing_dates).alias("all_dates")
     distinct_dates_query = select(all_dates_union.c.activity_date).distinct()
     return sorted([d for d, in db.execute(distinct_dates_query).fetchall()])
 
@@ -260,6 +253,38 @@ def upsert_product(db: Session, brand_id: int, sku: str, name: str, cost_price: 
         )
         db.add(db_product)
     return db_product
+
+def upsert_marketing_spend(db: Session, brand_id: int, source: str, spend_data: schemas.MarketingSpendCreate) -> models.MarketingSpend:
+    """
+    Creates or updates a marketing spend record for a specific brand, source, and date.
+    - If a record for the given brand, source, and date exists, it's updated.
+    - Otherwise, a new record is created.
+    """
+    # Find existing record
+    db_spend = db.query(models.MarketingSpend).filter(
+        models.MarketingSpend.brand_id == brand_id,
+        models.MarketingSpend.source == source,
+        models.MarketingSpend.date == spend_data.date
+    ).first()
+
+    spend_data_dict = spend_data.model_dump()
+
+    if db_spend:
+        # Update existing record
+        for key, value in spend_data_dict.items():
+            setattr(db_spend, key, value)
+    else:
+        # Create new record
+        db_spend = models.MarketingSpend(
+            **spend_data_dict,
+            brand_id=brand_id,
+            source=source
+        )
+        db.add(db_spend)
+    
+    # The commit will be handled by the calling function (process_standard_file)
+    
+    return db_spend
 
 def get_or_create_customer(db: Session, customer_data: dict, brand_id: int):
     username = customer_data.get('username') # SỬA: 'Người Mua' -> 'username'
@@ -504,21 +529,24 @@ def get_kpis_by_platform(db: Session, brand_id: int, start_date: date, end_date:
     # 1. Lấy toàn bộ dữ liệu trong khoảng thời gian đã chọn một lần duy nhất
     all_orders = get_raw_orders_in_range(db, brand_id, start_date, end_date)
     all_revenues = get_raw_revenues_in_range(db, brand_id, start_date, end_date)
-    all_ads = get_raw_ads_in_range(db, brand_id, start_date, end_date)
+    all_marketing_spends = db.query(models.MarketingSpend).filter(
+        models.MarketingSpend.brand_id == brand_id,
+        models.MarketingSpend.date.between(start_date, end_date)
+    ).all()
 
     # 2. Tìm tất cả các 'source' (nền tảng) duy nhất từ dữ liệu đã lấy
     all_sources = sorted(list(
         {o.source for o in all_orders if o.source}
         .union({r.source for r in all_revenues if r.source})
-        .union({a.source for a in all_ads if a.source})
+        .union({m.source for m in all_marketing_spends if m.source})
     ))
 
     results = []
 
     # 3. Tính toán dòng "Tổng cộng" cho tất cả các sàn
     # Chỉ tính nếu có bất kỳ hoạt động nào
-    if all_orders or all_revenues or all_ads:
-        total_kpis = kpi_calculator.calculate_aggregated_kpis(all_orders, all_revenues, all_ads)
+    if all_orders or all_revenues or all_marketing_spends:
+        total_kpis = kpi_calculator.calculate_aggregated_kpis(all_orders, all_revenues, all_marketing_spends)
         if total_kpis:
             total_kpis['platform'] = 'Tổng cộng'
             results.append(total_kpis)
@@ -528,11 +556,11 @@ def get_kpis_by_platform(db: Session, brand_id: int, start_date: date, end_date:
         # Lọc dữ liệu theo 'source' hiện tại
         orders_for_source = [o for o in all_orders if o.source == source]
         revenues_for_source = [r for r in all_revenues if r.source == source]
-        ads_for_source = [a for a in all_ads if a.source == source]
+        marketing_for_source = [m for m in all_marketing_spends if m.source == source]
 
         # Chỉ tính toán nếu có dữ liệu cho sàn này
-        if orders_for_source or revenues_for_source or ads_for_source:
-            kpis_for_source = kpi_calculator.calculate_aggregated_kpis(orders_for_source, revenues_for_source, ads_for_source)
+        if orders_for_source or revenues_for_source or marketing_for_source:
+            kpis_for_source = kpi_calculator.calculate_aggregated_kpis(orders_for_source, revenues_for_source, marketing_for_source)
             if kpis_for_source:
                 # Viết hoa chữ cái đầu của tên sàn cho đẹp
                 kpis_for_source['platform'] = source.capitalize()
@@ -546,9 +574,9 @@ def get_sources_for_brand(db: Session, brand_id: int) -> list[str]:
         print(f"DEBUG: get_sources_for_brand called for brand_id: {brand_id}")
         order_sources = db.query(models.Order.source.label('source_column')).filter(models.Order.brand_id == brand_id, models.Order.source.isnot(None))
         revenue_sources = db.query(models.Revenue.source.label('source_column')).filter(models.Revenue.brand_id == brand_id, models.Revenue.source.isnot(None))
-        ad_sources = db.query(models.Ad.source.label('source_column')).filter(models.Ad.brand_id == brand_id, models.Ad.source.isnot(None))
+        marketing_sources = db.query(models.MarketingSpend.source.label('source_column')).filter(models.MarketingSpend.brand_id == brand_id, models.MarketingSpend.source.isnot(None))
 
-        all_sources_union = union_all(order_sources, revenue_sources, ad_sources).alias("all_sources")
+        all_sources_union = union_all(order_sources, revenue_sources, marketing_sources).alias("all_sources")
         distinct_sources_query = select(all_sources_union.c.source_column).distinct()
         
         raw_sources = db.execute(distinct_sources_query).fetchall()
@@ -610,16 +638,24 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
                 ).delete(synchronize_session=False)
                 print(f"INFO: Đã xóa {len(users_to_delete)} khách hàng không còn đơn hàng nào.")
 
-        # Delete Ads, Revenues, Orders
-        for model_class in [models.Ad, models.Revenue, models.Order]:
-            date_column = getattr(model_class, 'ad_date' if model_class == models.Ad else 'transaction_date' if model_class == models.Revenue else 'order_date')
-            query = db.query(model_class).filter(
-                getattr(model_class, 'brand_id') == brand_id,
-                date_column.between(start_date, end_date)
-            )
-            if source:
-                query = query.filter(getattr(model_class, 'source') == source)
-            query.delete(synchronize_session=False)
+        # Delete Revenues, Orders, MarketingSpend
+        for model_class in [models.Revenue, models.Order, models.MarketingSpend]:
+            date_column_name = None
+            if model_class == models.Revenue: date_column_name = 'transaction_date'
+            elif model_class == models.Order: date_column_name = 'order_date'
+            elif model_class == models.MarketingSpend: date_column_name = 'date'
+            
+            # Fix: Ensure date_column_name is set before use and use getattr correctly
+            if date_column_name:
+                query = db.query(model_class).filter(
+                    getattr(model_class, 'brand_id') == brand_id,
+                    getattr(model_class, date_column_name).between(start_date, end_date)
+                )
+                if source:
+                    query = query.filter(getattr(model_class, 'source') == source)
+                query.delete(synchronize_session=False)
+            else:
+                print(f"WARNING: No date column specified for model {model_class.__tablename__}. Skipping date range deletion for this model.")
 
         if not source:
             db.query(models.DailyStat).filter(
@@ -634,9 +670,9 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
         fully_deleted_sources = []
         if sources_to_check:
             for src in sources_to_check:
-                # Đếm xem source này còn bản ghi nào trong cả 3 bảng không
+                # Đếm xem source này còn bản ghi nào trong các bảng không
                 remaining_count = 0
-                for model_class in [models.Order, models.Revenue, models.Ad]:
+                for model_class in [models.Order, models.Revenue, models.MarketingSpend]:
                     count = db.query(model_class).filter(
                         getattr(model_class, 'brand_id') == brand_id,
                         getattr(model_class, 'source') == src

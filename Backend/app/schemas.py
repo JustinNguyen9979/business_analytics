@@ -32,19 +32,33 @@ class OrderBase(BaseModel):
 class Order(OrderBase):
     id: int; brand_id: int; source: str; model_config = ConfigDict(from_attributes=True)
 
-class AdBase(BaseModel):
-    campaign_name: Optional[str]; ad_date: Optional[date]; impressions: int = 0; clicks: int = 0
-    expense: float = 0.0; orders: int = 0; gmv: float = 0.0; details: Optional[Dict[str, Any]] = None
-
-class Ad(AdBase):
-    id: int; brand_id: int; source: str; model_config = ConfigDict(from_attributes=True)
-
 class RevenueBase(BaseModel):
     order_code: Optional[str]; transaction_date: Optional[date]; net_revenue: float = 0.0
     gmv: float = 0.0; details: Optional[Dict[str, Any]] = None
     
 class Revenue(RevenueBase):
     id: int; brand_id: int; source: str; model_config = ConfigDict(from_attributes=True)
+
+class MarketingSpendBase(BaseModel):
+    date: date
+    ad_spend: float = 0.0
+    cpm: float = 0.0
+    ctr: float = 0.0
+    cpa: float = 0.0
+    cpc: float = 0.0
+    conversions: int = 0
+    impressions: int = 0
+    reach: int = 0
+    clicks: int = 0
+
+class MarketingSpendCreate(MarketingSpendBase):
+    pass
+
+class MarketingSpend(MarketingSpendBase):
+    id: int
+    brand_id: int
+    source: str
+    model_config = ConfigDict(from_attributes=True)
 
 # --- CÁC SCHEMA LIÊN QUAN ĐẾN BRAND (Không thay đổi) ---
 class BrandBase(BaseModel):
@@ -61,7 +75,6 @@ class Brand(BrandBase):
     products: List[Product] = []
     customers: List[Customer] = []
     orders: List[Order] = []
-    ads: List[Ad] = []
     revenues: List[Revenue] = []
     model_config = ConfigDict(from_attributes=True)
 

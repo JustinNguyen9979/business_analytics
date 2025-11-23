@@ -6,6 +6,7 @@ import traceback
 import io
 import models
 import crud
+import schemas
 from datetime import date, datetime
 from typing import Union, List
 
@@ -62,6 +63,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
         cost_sheet = find_sheet_name(sheet_names, ['giá vốn', 'cost'])
         order_sheet = find_sheet_name(sheet_names, ['đơn hàng', 'order'])
         revenue_sheet = find_sheet_name(sheet_names, ['doanh thu', 'revenue'])
+        marketing_sheet = find_sheet_name(sheet_names, ['marketing'])
 
         # --- BƯỚC 1: XỬ LÝ SHEET GIÁ VỐN ---
         if cost_sheet:
@@ -198,7 +200,42 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
         else:
             print("Không tìm thấy sheet Doanh thu.")
 
-        # --- BƯỚC 4: COMMIT GIAO DỊCH ---
+        # --- BƯỚC 4: XỬ LÝ SHEET MARKETING ---
+        if marketing_sheet:
+            print(f"Đang xử lý sheet '{marketing_sheet}'...")
+            df_marketing = pd.read_excel(xls, sheet_name=marketing_sheet, header=0).fillna(0)
+            if not df_marketing.empty:
+                count = 0
+                for _, row in df_marketing.iterrows():
+                    parsed_date = parse_date(row.get('ads_date'))
+                    if not parsed_date:
+                        continue # Bỏ qua dòng nếu không có ngày hợp lệ
+
+                    spend_data = schemas.MarketingSpendCreate(
+                        date=parsed_date,
+                        ad_spend=to_float(row.get('adSpend')),
+                        cpm=to_float(row.get('cpm')),
+                        ctr=to_float(row.get('ctr')),
+                        cpa=to_float(row.get('cpa')),
+                        cpc=to_float(row.get('cpc')),
+                        conversions=to_int(row.get('conversion')),
+                        impressions=to_int(row.get('impressions')),
+                        reach=to_int(row.get('reach')),
+                        clicks=to_int(row.get('click'))
+                    )
+                    crud.upsert_marketing_spend(
+                        db=db,
+                        brand_id=brand_id,
+                        source=source,
+                        spend_data=spend_data
+                    )
+                    count += 1
+                results['marketing_sheet'] = f"Đã xử lý {count} dòng chi phí marketing."
+                print(results['marketing_sheet'])
+        else:
+            print("Không tìm thấy sheet Marketing.")
+
+        # --- BƯỚC 5: COMMIT GIAO DỊCH ---
         print("Đang thực hiện commit dữ liệu vào DB...")
         db.commit()
         print("COMMIT THÀNH CÔNG!")
