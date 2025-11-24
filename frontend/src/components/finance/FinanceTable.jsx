@@ -145,13 +145,16 @@ const FinanceTable = ({ data, loading, error }) => {
                     onPageChange={handleChangePage}
                     onRowsPerPageChange={handleChangeRowsPerPage}
                     labelRowsPerPage="Số dòng:"
-                    labelDisplayedRows={({ from, to, count }) => 
-                        `${from}–${to} trong số ${count !== -1 ? count : `hơn ${to}`}`
-                    }
+                    labelDisplayedRows={({ page }) => `Trang ${page + 1}`}
                     sx={{
                         borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                        // Căn giữa tất cả các item trong thanh toolbar của pagination
+                        '& .MuiToolbar-root': {
+                            alignItems: 'center',
+                            paddingTop: '4px', // Đẩy nội dung xuống thấp hơn một chút
+                        },
                         '.MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows': {
-                            marginBottom: 0, // Fix lỗi layout nhỏ của MUI
+                            margin: 0, // Fix lỗi layout nhỏ của MUI
                         }
                     }}
                 />

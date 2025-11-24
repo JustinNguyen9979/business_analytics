@@ -134,7 +134,7 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
 
 
             # --------------------------------------------------------------
-            # --- Nhánh 2: BIỂU ĐỒ (Đã tối ưu bên CRUD) ---
+            # --- Nhánh 2: BIỂU ĐỒ ---
             # --------------------------------------------------------------
             elif request_type == "daily_kpis_chart":
                 # Gọi hàm crud mới đã sửa để lấy từ DailyStat
@@ -154,7 +154,7 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                 result_data = crud.get_customer_distribution_with_coords(db, brand_id, start_date, end_date)
 
             # --------------------------------------------------------------
-            # --- Nhánh 5: KPI THEO PLATFORM (Chưa tối ưu DailyStat, dùng logic cũ) ---
+            # --- Nhánh 5: KPI THEO PLATFORM ---
             # --------------------------------------------------------------
             elif request_type == "kpis_by_platform":
                 # Vì DailyStat hiện tại chưa lưu cột 'source', ta vẫn dùng logic cũ cho phần này
