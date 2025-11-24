@@ -161,15 +161,15 @@ def _calculate_core_kpis(
         "cancellationRate": cancellationRate_op, 
         "refundRate": refundRate_op,
 
-        "cpm": cpm,
-        "cpa": cpa,
-        "cpc": cpc,
-        "ctr": ctr,
-        "impressions": impressions,
+        "cpm": cpm, # Chi phí cho 1000 lần hiển thị
+        "cpa": cpa, # Chi phí mỗi lượt chuyển đổi
+        "cpc": cpc, # Chi phí mỗi lượt nhấp
+        "ctr": ctr, # Tỷ lệ nhấp
+        "impressions": impressions, # Lượt hiển thị
         "clicks": clicks,
         "conversions": conversions,
-        "reach": reach,
-        "frequency": frequency,
+        "reach": reach, # Lượt tiếp cận
+        "frequency": frequency, # Tần suất
     }
 
 # ==============================================================================
