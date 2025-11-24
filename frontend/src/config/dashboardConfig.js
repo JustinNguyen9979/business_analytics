@@ -40,8 +40,9 @@ export const kpiGroups = [
                 { key: 'cpc', title: 'CPC', format: 'currency', tooltipText: 'Cost Per Click - Chi phí cho mỗi lượt nhấp chuột vào quảng cáo.' },
                 { key: 'roas', title: 'ROAS', format: 'number', tooltipText: 'Return on Ad Spend - Doanh thu trên chi phí quảng cáo. Công thức: Doanh thu từ Ads / Chi phí Ads.' },
                 { key: 'impressions', title: 'LƯỢT HIỂN THỊ', format: 'number'},
-                { key: 'reach', title: 'LƯỢT TIẾP CẬN', format: 'number'},
                 { key: 'click', title: 'CLICK', format: 'number'},
+                { key: 'reach', title: 'LƯỢT TIẾP CẬN', format: 'number'},
+                { key: 'frequency', title: 'TẦN SUẤT', format: 'number'},
                 { key: 'conversionRate', title: 'TỶ LỆ CHUYỂN ĐỔI (%)', format: 'percent' },
             ]
         },

@@ -124,7 +124,19 @@ def _calculate_core_kpis(
     refundRate_op = (refunded_transactions_count / total_financial_transaction_orders) if total_financial_transaction_orders > 0 else 0
     upt = (totalQuantitySold_op / completedOrders_op) if completedOrders_op > 0 else 0
 
-    # === KHỐI 4: TỔNG HỢP KẾT QUẢ ===
+    # === KHỐI 4: KHỐI MARKETING ===
+    impressions = sum(m.impressions for m in marketing_spends)
+    clicks = sum(m.clicks for m in marketing_spends)
+    conversions = sum(m.conversions for m in marketing_spends)
+    reach = sum(m.reach for m in marketing_spends)
+
+    cpm = (adSpend / impressions) * 1000 if impressions > 0 else 0
+    cpc = (adSpend / clicks) if clicks > 0 else 0
+    ctr = (clicks / impressions) * 100 if impressions > 0 else 0
+    cpa = (adSpend / conversions) if conversions > 0 else 0
+    frequency = (impressions / reach) if reach > 0 else 0
+
+    # === KHỐI 5: TỔNG HỢP KẾT QUẢ ===
     return {
         "gmv": gmv, 
         "netRevenue": netRevenue, 
@@ -148,6 +160,16 @@ def _calculate_core_kpis(
         "completionRate": completionRate_op, 
         "cancellationRate": cancellationRate_op, 
         "refundRate": refundRate_op,
+
+        "cpm": cpm,
+        "cpa": cpa,
+        "cpc": cpc,
+        "ctr": ctr,
+        "impressions": impressions,
+        "clicks": clicks,
+        "conversions": conversions,
+        "reach": reach,
+        "frequency": frequency,
     }
 
 # ==============================================================================

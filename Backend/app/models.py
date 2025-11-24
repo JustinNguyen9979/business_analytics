@@ -106,8 +106,17 @@ class DailyStat(Base):
     total_orders = Column(Integer, default=0) # Tổng số đơn hàng
     cogs = Column(Float, default=0.0)            # Giá vốn hàng bán
     execution_cost = Column(Float, default=0.0)  # Chi phí thực thi (từ total_fees)
-    
-    # Các chỉ số mới được thêm vào
+
+    cpm = Column(Float, default=0.0)   
+    cpa = Column(Float, default=0.0)   
+    ctr = Column(Float, default=0.0)   
+    cpc = Column(Float, default=0.0)  
+    conversions = Column(Integer, default=0)  
+    impressions = Column(Integer, default=0)  
+    clicks = Column(Integer, default=0)  
+    reach = Column(Integer, default=0)  
+    frequency = Column(Float, default=0)
+
     roi = Column(Float, default=0.0)
     profit_margin = Column(Float, default=0.0)
     take_rate = Column(Float, default=0.0)

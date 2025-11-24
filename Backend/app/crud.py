@@ -175,6 +175,15 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
                 "cancellationRate": stat.cancellation_rate,
                 "refundRate": stat.refund_rate,
                 "totalCustomers": stat.total_customers,
+                "impressions": stat.impressions,
+                "clicks": stat.clicks,
+                "conversions": stat.conversions,
+                "cpc": stat.cpc,
+                "cpm": stat.cpm,
+                "ctr": stat.ctr,
+                "cpa": stat.cpa,
+                "reach": stat.reach,
+                "frequency": stat.frequency,
             })
         else:
             # Nếu ngày đó chưa có dữ liệu (Worker chưa chạy xong hoặc không có đơn), trả về 0
@@ -186,6 +195,15 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
                 "upt": 0, "uniqueSkusSold": 0, "totalQuantitySold": 0,
                 "completionRate": 0, "cancellationRate": 0, "refundRate": 0,
                 "totalCustomers": 0,
+                "impressions": 0,
+                "clicks": 0,
+                "conversions": 0,
+                "cpc": 0,
+                "cpa": 0,
+                "cpm": 0,
+                "ctr": 0,
+                "reach": 0,
+                "frequency": 0,
             })            
         current_date += timedelta(days=1)
 
