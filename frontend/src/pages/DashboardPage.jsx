@@ -68,13 +68,6 @@ function DashboardPage() {
 
     const dashboardState = useDashboardData(brandId, filtersForHook)
 
-    // const dashboardState = useDashboardData(brandId, {
-    //     kpi: kpiFilterControl.filter,
-    //     lineChart: lineChartFilterControl.filter,
-    //     donut: donutFilterControl.filter,
-    //     topProducts: topProductsFilterControl.filter,
-    //     map: mapFilterControl.filter,
-    // });
     const { kpi, lineChart, donut, topProducts, map } = dashboardState;
 
     // --- STATE QUẢN LÝ UI ---

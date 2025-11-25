@@ -1,4 +1,4 @@
-import React, { useMemo, useState, lazy, Suspense } from 'react';
+import React, { useMemo, useState, lazy, Suspense, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Box, Typography, Paper, Button, Skeleton } from '@mui/material';
 import {
@@ -10,9 +10,9 @@ import {
     AttachMoney as AttachMoneyIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
-import { useTheme } from '@mui/material/styles';
 import { useDashboardData } from '../hooks/useDashboardData';
 import { useDateFilter } from '../hooks/useDateFilter';
+import { useTheme } from '@mui/material/styles';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import FinanceTable from '../components/finance/FinanceTable';
 import KpiCard from '../components/dashboard/KpiCard';
@@ -21,17 +21,18 @@ import { dateShortcuts } from '../config/dashboardConfig';
 import { formatCurrency, formatPercentage } from '../utils/formatters';
 import { useBrand } from '../context/BrandContext';
 import SourceDistributionChart from '../components/charts/SourceDistributionChart';
+import FinanceComparisonChart from '../components/charts/FinanceComparisonChart';
 
 // Lấy giá trị mặc định là "Tháng này"
 const defaultDateRange = dateShortcuts.find(s => s.type === 'this_month').getValue();
 const defaultDateLabel = dateShortcuts.find(s => s.type === 'this_month').label;
-
 const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
+
 const ChartSkeleton = () => (
     <Skeleton
-        variant = "rectangular"
-        width = "100%"
-        height = "100%"
+        variant="rectangular"
+        width="100%"
+        height="100%"
         sx={{ borderRadius: 2, bgcolor: 'rgba(255, 255, 255, 0.05)' }}
     />
 );
@@ -49,22 +50,46 @@ const KpiCardSkeleton = () => (
 function FinancePage() {
     const theme = useTheme();
     const { id: brandId } = useBrand();
-
     const lineChartFilterControl = useDateFilter({ defaultType: 'this_month' });
 
     const dashboardFilters = useMemo(() => ({
         lineChart: lineChartFilterControl.filter,
-        kpi: null,
-        donut: null,
-        topProducts: null,
-        map: null,
+        kpi: null, donut: null, topProducts: null, map: null,
     }), [lineChartFilterControl.filter]);
 
-    const {lineChart} = useDashboardData(brandId, dashboardFilters);
-    const financeChartSeries = useMemo(() => [
-        { key: 'cogs', name: 'Giá vốn', color: theme.palette.warning.main },
-        { key: 'executionCost', name: 'Chi phí thực thi', color: theme.palette.info.main },
-    ], [theme.palette.warning.main, theme.palette.info.main]);
+    const { lineChart } = useDashboardData(brandId, dashboardFilters);
+
+    const comparisonChartSeries = useMemo(() => [
+        { key: 'netRevenue', name: 'Doanh thu', color: theme.palette.primary.light },
+        { key: 'cogs', name: 'Giá vốn', color: theme.palette.warning.light },
+        { key: 'profit', name: 'Lợi nhuận', color: theme.palette.success.light },
+    ], [theme.palette]);
+
+    const allAvailableSeries = useMemo(() => [
+        { key: 'netRevenue', name: 'Doanh thu ròng', color: theme.palette.primary.main },
+        { key: 'profit', name: 'Lợi nhuận', color: '#28a545' },
+        { key: 'gmv', name: 'GMV', color: theme.palette.warning.main },
+        { key: 'totalCost', name: 'Tổng Chi phí', color: theme.palette.error.main },
+        { key: 'cogs', name: 'Giá vốn', color: theme.palette.secondary.main },
+        { key: 'adSpend', name: 'Chi phí Ads', color: theme.palette.info.main },
+        { key: 'executionCost', name: 'Chi phí thực thi', color: theme.palette.text.secondary },
+    ], [theme]);
+
+    const [visibleSeriesKeys, setVisibleSeriesKeys] = useState(['netRevenue', 'profit']);
+
+    const handleToggleSeries = useCallback((key) => {
+        setVisibleSeriesKeys(prevKeys => {
+            if (prevKeys.includes(key)) {
+                return prevKeys.filter(k => k !== key);
+            } else {
+                return [...prevKeys, key];
+            }
+        });
+    }, []);
+
+    const filteredLineChartSeries = useMemo(() => {
+        return allAvailableSeries.filter(s => visibleSeriesKeys.includes(s.key));
+    }, [allAvailableSeries, visibleSeriesKeys]);
 
     const [dateRange, setDateRange] = useState(defaultDateRange);
     const [dateLabel, setDateLabel] = useState(defaultDateLabel);
@@ -162,11 +187,42 @@ function FinancePage() {
 
             {/* --- BIỂU ĐỒ ĐƯỜNG --- */}
             <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4 }}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 3, pt: 3 }}>
-                    <Typography variant="h6" noWrap>Biểu đồ chi phí theo thời gian</Typography>
-                    <Box>
-                        <Button variant="outlined" size="small" {...lineChartFilterControl.buttonProps}/>
-                        <DateRangeFilterMenu {...lineChartFilterControl.menuProps} />
+                <Box sx={{ height: 600, mb: 4 }}>
+                    {loading ? (
+                        <Skeleton variant="rectangular" width="100%" height="100%" sx={{ borderRadius: 4 }} />
+                    ) : (
+                        <FinanceComparisonChart
+                            data={platformData}
+                            series={comparisonChartSeries}
+                            title="So sánh Tài chính giữa các Nền tảng"
+                        />
+                    )}
+                </Box>
+
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 3, pt: 3}}>
+                    <Typography variant="h6" noWrap>Xu hướng theo thời gian (Toàn bộ thương hiệu)</Typography>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                        {/* Các nút bật/tắt series */}
+                        {allAvailableSeries.map(s => (
+                            <Button
+                                key={s.key}
+                                variant={visibleSeriesKeys.includes(s.key) ? 'contained' : 'outlined'}
+                                onClick={() => handleToggleSeries(s.key)}
+                                size="small"
+                                sx={{
+                                    borderColor: s.color,
+                                    color: visibleSeriesKeys.includes(s.key) ? theme.palette.common.white : s.color,
+                                    bgcolor: visibleSeriesKeys.includes(s.key) ? s.color : 'transparent',
+                                    '&:hover': {
+                                        bgcolor: visibleSeriesKeys.includes(s.key) ? s.color : 'transparent',
+                                        borderColor: s.color,
+                                        opacity: 0.8,
+                                    }
+                                }}
+                            >
+                                {s.name}
+                            </Button>
+                        ))}
                     </Box>
                 </Box>
 
@@ -175,13 +231,14 @@ function FinancePage() {
                         <Suspense fallback={<ChartSkeleton />}>
                             {lineChart.data.current && lineChart.data.current.length > 0 ? (
                                 <RevenueProfitChart
-                                data={lineChart.data.current}
-                                comparisonData={lineChart.data.previous}
-                                series={financeChartSeries}
-                                isLoading={lineChart.loading}
-                                aggregationType={lineChart.data.aggregationType}
-                            />
-                            ) : <ChartPlaceholder title="Biểu đồ chi phí" />}
+                                    data={lineChart.data.current}
+                                    comparisonData={lineChart.data.previous}
+                                    series={filteredLineChartSeries}
+                                    isLoading={lineChart.loading}
+                                    chartRevision={0}
+                                    aggregationType={lineChart.data.aggregationType}
+                                />
+                            ): <ChartPlaceholder title="Biểu đồ xu hướng" />}
                         </Suspense>
                     )}
                 </Box>

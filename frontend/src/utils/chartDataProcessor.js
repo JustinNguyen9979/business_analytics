@@ -70,12 +70,6 @@ export const processChartData = (dailyData, chartDateRange) => {
             numericKeys.forEach(k => newEntry[k] = 0);
             monthlyMap.set(key, newEntry);
             cursorDate = cursorDate.add(1, 'month');
-            // monthlyMap.set(key, {
-            //     date: cursorDate.toDate(),
-            //     netRevenue: 0,
-            //     profit: 0,
-            // });
-            // cursorDate = cursorDate.add(1, 'month');
         }
 
         // 2. Lấp đầy dữ liệu, chỉ cộng vào đúng tháng/năm
@@ -88,8 +82,6 @@ export const processChartData = (dailyData, chartDateRange) => {
                         monthEntry[k] += day[k];
                     }
                 });
-                // monthEntry.netRevenue += day.netRevenue;
-                // monthEntry.profit += day.profit;
             }
         }
         return { aggregatedData: Array.from(monthlyMap.values()), aggregationType };
@@ -112,12 +104,6 @@ export const processChartData = (dailyData, chartDateRange) => {
             numericKeys.forEach(k => newEntry[k] = 0);
             weeklyMap.set(key, newEntry);
             cursorDate = cursorDate.add(1, 'week');
-            // weeklyMap.set(key, {
-            //     date: cursorDate.toDate(),
-            //     netRevenue: 0,
-            //     profit: 0,
-            // });
-            // cursorDate = cursorDate.add(1, 'week');
         }
 
         // 3.2. Lấp đầy dữ liệu
@@ -131,9 +117,6 @@ export const processChartData = (dailyData, chartDateRange) => {
                         weekEntry[k] += day[k];
                     }
                 });
-                // const weekEntry = weeklyMap.get(key);
-                // weekEntry.netRevenue += day.netRevenue;
-                // weekEntry.profit += day.profit;
             }
         }
         return { aggregatedData: Array.from(weeklyMap.values()), aggregationType };
