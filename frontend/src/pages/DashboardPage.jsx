@@ -1,9 +1,9 @@
 // FILE: frontend/src/pages/DashboardPage.jsx (PHIÊN BẢN HOÀN THIỆN)
 
 import { useTheme } from '@mui/material/styles';
-import React, { useState, useCallback, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useCallback, useEffect, Suspense, lazy, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, Stack, Skeleton } from '@mui/material';
+import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, Stack, Skeleton, filledInputClasses } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import dayjs from 'dayjs';
 import { useDashboardData } from '../hooks/useDashboardData';
@@ -34,6 +34,12 @@ function DashboardPage() {
     const { id: brandId, name: brandName } = useBrand();
     const { isSidebarOpen } = useLayout();
 
+    const lineChartSeries = useMemo(() => [
+        { key: 'netRevenue', name: 'Doanh thu ròng', color: theme.palette.primary.main},
+        { key: 'profit', name: 'Lợi nhuận', color: '#28a545'},
+        { key: 'totalCost', name: 'Tổng chi phí', color: '#cdb832ff'},
+    ], theme.palette.primary.main);
+
     // Gọi hook cho từng bộ lọc
     const kpiFilterControl = useDateFilter({
         defaultType: 'this_month',
@@ -46,13 +52,29 @@ function DashboardPage() {
     const topProductsFilterControl = useDateFilter({ defaultType: 'this_month' });
     const mapFilterControl = useDateFilter({ defaultType: 'this_month' });
 
-    const dashboardState = useDashboardData(brandId, {
+    const filtersForHook = useMemo (() => ({
         kpi: kpiFilterControl.filter,
         lineChart: lineChartFilterControl.filter,
         donut: donutFilterControl.filter,
         topProducts: topProductsFilterControl.filter,
         map: mapFilterControl.filter,
-    });
+    }), [
+        kpiFilterControl.filter,
+        lineChartFilterControl.filter,
+        donutFilterControl.filter,
+        topProductsFilterControl.filter,
+        mapFilterControl.filter,
+    ]);
+
+    const dashboardState = useDashboardData(brandId, filtersForHook)
+
+    // const dashboardState = useDashboardData(brandId, {
+    //     kpi: kpiFilterControl.filter,
+    //     lineChart: lineChartFilterControl.filter,
+    //     donut: donutFilterControl.filter,
+    //     topProducts: topProductsFilterControl.filter,
+    //     map: mapFilterControl.filter,
+    // });
     const { kpi, lineChart, donut, topProducts, map } = dashboardState;
 
     // --- STATE QUẢN LÝ UI ---
@@ -157,6 +179,8 @@ function DashboardPage() {
                                 <RevenueProfitChart 
                                     data={lineChart.data.current} 
                                     comparisonData={lineChart.data.previous}
+                                    series={lineChartSeries}
+                                    isLoading={lineChart.loading}
                                     chartRevision={chartRevision}
                                     aggregationType={lineChart.data.aggregationType}
                                 />

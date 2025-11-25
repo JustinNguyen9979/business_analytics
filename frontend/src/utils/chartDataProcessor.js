@@ -13,6 +13,8 @@ dayjs.extend(isBetween);
 const determineAggregation = (dateRange) => {
     const [start, end] = dateRange;
 
+    if (!start || !end) return 'day';
+
     // Tính tổng số ngày trong khoảng thời gian, cộng 1 để bao gồm cả ngày cuối.
     const totalDays = end.diff(start, 'day') + 1;
 
@@ -49,20 +51,31 @@ export const processChartData = (dailyData, chartDateRange) => {
         return { aggregatedData: dailyData, aggregationType };
     }
 
+    const sampleEntry = dailyData[0] || {};
+    const numericKeys = Object.keys(sampleEntry).filter(k => typeof sampleEntry[k] === 'number');
     // TH2: Tổng hợp theo THÁNG (khi xem theo NĂM)
     if (aggregationType === 'month') {
         const monthlyMap = new Map();
 
         // 1. Tạo khung dữ liệu theo tháng, đảm bảo an toàn
         let cursorDate = startDate.clone().startOf('month');
+        // let safety = 0;
         while (cursorDate.isBefore(endDate) || cursorDate.isSame(endDate, 'day')) {
+            // if (safety++ > 1000) {
+            //     console.error("[Processor] Infinite loop detected in MONTH aggregation. Breaking.");
+            //     break;
+            // }
             const key = cursorDate.format('YYYY-MM');
-            monthlyMap.set(key, {
-                date: cursorDate.toDate(),
-                netRevenue: 0,
-                profit: 0,
-            });
+            const newEntry = { date: cursorDate.toDate() };
+            numericKeys.forEach(k => newEntry[k] = 0);
+            monthlyMap.set(key, newEntry);
             cursorDate = cursorDate.add(1, 'month');
+            // monthlyMap.set(key, {
+            //     date: cursorDate.toDate(),
+            //     netRevenue: 0,
+            //     profit: 0,
+            // });
+            // cursorDate = cursorDate.add(1, 'month');
         }
 
         // 2. Lấp đầy dữ liệu, chỉ cộng vào đúng tháng/năm
@@ -70,8 +83,13 @@ export const processChartData = (dailyData, chartDateRange) => {
             const key = dayjs(day.date).format('YYYY-MM');
             if (monthlyMap.has(key)) {
                 const monthEntry = monthlyMap.get(key);
-                monthEntry.netRevenue += day.netRevenue;
-                monthEntry.profit += day.profit;
+                numericKeys.forEach(k => {
+                    if (typeof day[k] === 'number') {
+                        monthEntry[k] += day[k];
+                    }
+                });
+                // monthEntry.netRevenue += day.netRevenue;
+                // monthEntry.profit += day.profit;
             }
         }
         return { aggregatedData: Array.from(monthlyMap.values()), aggregationType };
@@ -83,14 +101,23 @@ export const processChartData = (dailyData, chartDateRange) => {
         
         // 3.1. Tạo khung dữ liệu theo tuần
         let cursorDate = startDate.clone().startOf('week');
+        // let safety = 0;
         while (cursorDate.isBefore(endDate) || cursorDate.isSame(endDate, 'day')) {
+            // if (safety++ > 1000) {
+            //     console.error("[Processor] Infinite loop detected in WEEK aggregation. Breaking.");
+            //     break;
+            // }
             const key = cursorDate.format('YYYY-MM-DD');
-            weeklyMap.set(key, {
-                date: cursorDate.toDate(),
-                netRevenue: 0,
-                profit: 0,
-            });
+            const newEntry = { date: cursorDate.toDate() };
+            numericKeys.forEach(k => newEntry[k] = 0);
+            weeklyMap.set(key, newEntry);
             cursorDate = cursorDate.add(1, 'week');
+            // weeklyMap.set(key, {
+            //     date: cursorDate.toDate(),
+            //     netRevenue: 0,
+            //     profit: 0,
+            // });
+            // cursorDate = cursorDate.add(1, 'week');
         }
 
         // 3.2. Lấp đầy dữ liệu
@@ -99,8 +126,14 @@ export const processChartData = (dailyData, chartDateRange) => {
             const key = weekStartDate.format('YYYY-MM-DD');
             if (weeklyMap.has(key)) {
                 const weekEntry = weeklyMap.get(key);
-                weekEntry.netRevenue += day.netRevenue;
-                weekEntry.profit += day.profit;
+                numericKeys.forEach(k => {
+                    if (typeof day[k] === 'number') {
+                        weekEntry[k] += day[k];
+                    }
+                });
+                // const weekEntry = weeklyMap.get(key);
+                // weekEntry.netRevenue += day.netRevenue;
+                // weekEntry.profit += day.profit;
             }
         }
         return { aggregatedData: Array.from(weeklyMap.values()), aggregationType };

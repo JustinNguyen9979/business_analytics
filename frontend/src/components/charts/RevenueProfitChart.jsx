@@ -10,7 +10,7 @@ import dayjs from 'dayjs';
 // Hàm "Easing" để animation mượt hơn (bắt đầu chậm, tăng tốc rồi chậm lại ở cuối)
 const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationType }) {
+function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationType, series = [], isLoading }) {
     const theme = useTheme();
     const [animatedData, setAnimatedData] = useState([]);
     const animationFrameId = useRef(null);
@@ -28,11 +28,12 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
         }
 
         // --- HÀM TẠO CẤU TRÚC DỮ LIỆU ---
-        const createChartTraces = (currentData, comparisonData) => {
+        const createChartTraces = (currentData, comparisonData, series) => {
             const currentPoints = currentData;
             const currentDates = currentPoints.map(d => dayjs(d.date).toDate());
-            const currentRevenues = currentPoints.map(d => d.netRevenue);
-            const currentProfits = currentPoints.map(d => d.profit);
+
+            // const currentRevenues = currentPoints.map(d => d.netRevenue);
+            // const currentProfits = currentPoints.map(d => d.profit);
 
             const comparisonPoints = comparisonData || [];
             let dateOffset = 0;
@@ -40,53 +41,86 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
                 dateOffset = dayjs(currentData[0].date).diff(dayjs(comparisonData[0].date), 'milliseconds');
             }
             const comparisonDates = comparisonPoints.map(d => dayjs(d.date).add(dateOffset, 'milliseconds').toDate());
-            const comparisonRevenues = comparisonPoints.map(d => d.netRevenue);
-            const comparisonProfits = comparisonPoints.map(d => d.profit);
+            // const comparisonRevenues = comparisonPoints.map(d => d.netRevenue);
+            // const comparisonProfits = comparisonPoints.map(d => d.profit);
 
-            const traceStyles = {
-                comparisonRevenue: { type: 'scatter', mode: 'lines', name: 'Doanh thu ròng (Kỳ trước)    ', 
-                    line: { color: theme.palette.primary.main, width: 2, dash: 'dot' }, 
-                    opacity: 0.6, 
-                    connectgaps: false, 
-                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">DTR (Kỳ trước): </span><b style="color: ${theme.palette.primary.main};">%{y:,.0f} đ</b><extra></extra>`, 
-                    legendgroup: 'group1' 
-                },
+            return series.flatMap ( s => {
+                const currentValues = currentPoints.map(d => d[s.key])
+                const comparisonValues = comparisonPoints.map(d => d[s.key])
 
-                comparisonProfit: { type: 'scatter', mode: 'lines', name: 'Lợi nhuận (Kỳ trước)    ', 
-                    line: { color: '#28a545', width: 2, dash: 'dot' }, 
-                    opacity: 0.6, connectgaps: false, 
-                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">LN (Kỳ trước): </span><b style="color: #28a545;">%{y:,.0f} đ</b><extra></extra>`, 
-                    legendgroup: 'group2' },
+                const comparisonTrace = {
+                    x: comparisonDates,
+                    y: comparisonValues,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: `${s.name} (Kỳ trước)`,
+                    line: {color: s.color, width: 2, dash: 'dot'},
+                    opacity: 0.6,
+                    connectgaps: false,
+                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">${s.name} (Kỳ trước): </span><b style="color: ${s.color};">%{y:,.0f} đ</b><extra></extra>`, 
+                };
 
-                currentRevenue: { type: 'scatter', 
-                    mode: 'lines+markers', 
-                    name: 'Doanh thu ròng    ', 
-                    line: { color: theme.palette.primary.main, width: 2 }, 
-                    marker: { color: theme.palette.primary.main, size: 5 }, 
-                    connectgaps: false, 
-                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">Doanh thu ròng: </span><b style="color: ${theme.palette.primary.main};">%{y:,.0f} đ</b><extra></extra>`, 
-                    legendgroup: 'group3' },
+                const currentTrace = {
+                    x: currentDates,
+                    y: currentValues,
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    name: s.name,
+                    line: { color: s.color, width: 2 },
+                    marker: { color: s.color, size: 5 },
+                    connectgaps: false,
+                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">${s.name}: </span><b style="color: ${s.color};">%{y:,.0f} đ</b><extra></extra>`,
+                };
 
-                currentProfit: { type: 'scatter', 
-                    mode: 'lines+markers', 
-                    name: 'Lợi nhuận    ', 
-                    line: { color: '#28a545', width: 2 }, 
-                    marker: { color: '#28a545', size: 5 }, 
-                    connectgaps: false, 
-                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">Lợi nhuận: </span><b style="color: #28a545;">%{y:,.0f} đ</b><extra></extra>`, 
-                    legendgroup: 'group4' },
-            };
+                if (comparisonValues.every(v => v === undefined || v === null)) {
+                    return [currentTrace];
+                }
 
-            return [
-                { x: comparisonDates, y: comparisonRevenues, ...traceStyles.comparisonRevenue },
-                { x: comparisonDates, y: comparisonProfits, ...traceStyles.comparisonProfit },
-                { x: currentDates, y: currentRevenues, ...traceStyles.currentRevenue },
-                { x: currentDates, y: currentProfits, ...traceStyles.currentProfit },
-            ];
+                return [comparisonTrace, currentTrace];
+
+                // comparisonRevenue: { type: 'scatter', mode: 'lines', name: 'Doanh thu ròng (Kỳ trước)    ', 
+                //     line: { color: theme.palette.primary.main, width: 2, dash: 'dot' }, 
+                //     opacity: 0.6, 
+                //     connectgaps: false, 
+                //     hovertemplate: `<span style="color: ${theme.palette.text.secondary};">DTR (Kỳ trước): </span><b style="color: ${theme.palette.primary.main};">%{y:,.0f} đ</b><extra></extra>`, 
+                //     legendgroup: 'group1' 
+                // },
+
+                // comparisonProfit: { type: 'scatter', mode: 'lines', name: 'Lợi nhuận (Kỳ trước)    ', 
+                //     line: { color: '#28a545', width: 2, dash: 'dot' }, 
+                //     opacity: 0.6, connectgaps: false, 
+                //     hovertemplate: `<span style="color: ${theme.palette.text.secondary};">LN (Kỳ trước): </span><b style="color: #28a545;">%{y:,.0f} đ</b><extra></extra>`, 
+                //     legendgroup: 'group2' },
+
+                // currentRevenue: { type: 'scatter', 
+                //     mode: 'lines+markers', 
+                //     name: 'Doanh thu ròng    ', 
+                //     line: { color: theme.palette.primary.main, width: 2 }, 
+                //     marker: { color: theme.palette.primary.main, size: 5 }, 
+                //     connectgaps: false, 
+                //     hovertemplate: `<span style="color: ${theme.palette.text.secondary};">Doanh thu ròng: </span><b style="color: ${theme.palette.primary.main};">%{y:,.0f} đ</b><extra></extra>`, 
+                //     legendgroup: 'group3' },
+
+                // currentProfit: { type: 'scatter', 
+                //     mode: 'lines+markers', 
+                //     name: 'Lợi nhuận    ', 
+                //     line: { color: '#28a545', width: 2 }, 
+                //     marker: { color: '#28a545', size: 5 }, 
+                //     connectgaps: false, 
+                //     hovertemplate: `<span style="color: ${theme.palette.text.secondary};">Lợi nhuận: </span><b style="color: #28a545;">%{y:,.0f} đ</b><extra></extra>`, 
+                //     legendgroup: 'group4' },
+            });
+
+            // return [
+            //     { x: comparisonDates, y: comparisonRevenues, ...traceStyles.comparisonRevenue },
+            //     { x: comparisonDates, y: comparisonProfits, ...traceStyles.comparisonProfit },
+            //     { x: currentDates, y: currentRevenues, ...traceStyles.currentRevenue },
+            //     { x: currentDates, y: currentProfits, ...traceStyles.currentProfit },
+            // ];
         };
 
         // --- LOGIC ANIMATION MỚI SỬ DỤNG requestAnimationFrame ---
-        const finalTraces = createChartTraces(data, comparisonData);
+        const finalTraces = createChartTraces(data, comparisonData, series);
         const duration = 800;
         let startTime = null;
 
@@ -123,16 +157,21 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             setAnimatedData([]); // Clear state
         };
 
-    }, [data, comparisonData, theme]);
+    }, [data, comparisonData, theme, series, isLoading]);
 
 
     // --- PHẦN LAYOUT ---
-    const allYValues = [
-        ...(data?.map(d => d.netRevenue) || []),
-        ...(data?.map(d => d.profit) || []),
-        ...(comparisonData?.map(d => d.netRevenue) || []),
-        ...(comparisonData?.map(d => d.profit) || [])
-    ].filter(v => typeof v === 'number'); // Lọc ra các giá trị không hợp lệ
+    // const allYValues = [
+    //     ...(data?.map(d => d.netRevenue) || []),
+    //     ...(data?.map(d => d.profit) || []),
+    //     ...(comparisonData?.map(d => d.netRevenue) || []),
+    //     ...(comparisonData?.map(d => d.profit) || [])
+    // ].filter(v => typeof v === 'number'); // Lọc ra các giá trị không hợp lệ
+
+    const allYValues = series.flatMap(s => [
+        ...(data?.map(d => d[s.key]) || []),
+        ...(comparisonData?.map(d => d[s.key]) || [])
+    ]).filter(v => typeof v === 'number');
 
     // 2. Tìm giá trị LỚN NHẤT và NHỎ NHẤT
     const maxY = allYValues.length > 0 ? Math.max(...allYValues) : 1;
@@ -207,12 +246,20 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
         },
     };
 
-    if (!data || data.length === 0) {
-        return (
-            <Paper variant="placeholder" sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography color="text.secondary">Không có dữ liệu để hiển thị biểu đồ.</Typography>
-            </Paper>
-        );
+    // if (!data || data.length === 0) {
+    //     return (
+    //         <Paper variant="placeholder" sx={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    //             <Typography color="text.secondary">Không có dữ liệu để hiển thị biểu đồ.</Typography>
+    //         </Paper>
+    //     );
+    // }
+
+    if (isLoading) {
+        return <ChartPlaceholder message="Đang tải dữ liệu biểu đồ..." />;
+    }
+
+    if (!data || data.length === 0 || !series || series.length === 0) {
+        return <ChartPlaceholder message="Không có dữ liệu để hiển thị." />;
     }
 
     return (

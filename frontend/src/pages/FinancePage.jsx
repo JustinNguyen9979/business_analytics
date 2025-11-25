@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, lazy, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import { Box, Typography, Paper, Button, Skeleton } from '@mui/material';
 import {
@@ -10,7 +10,9 @@ import {
     AttachMoney as AttachMoneyIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
-
+import { useTheme } from '@mui/material/styles';
+import { useDashboardData } from '../hooks/useDashboardData';
+import { useDateFilter } from '../hooks/useDateFilter';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import FinanceTable from '../components/finance/FinanceTable';
 import KpiCard from '../components/dashboard/KpiCard';
@@ -24,6 +26,15 @@ import SourceDistributionChart from '../components/charts/SourceDistributionChar
 const defaultDateRange = dateShortcuts.find(s => s.type === 'this_month').getValue();
 const defaultDateLabel = dateShortcuts.find(s => s.type === 'this_month').label;
 
+const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
+const ChartSkeleton = () => (
+    <Skeleton
+        variant = "rectangular"
+        width = "100%"
+        height = "100%"
+        sx={{ borderRadius: 2, bgcolor: 'rgba(255, 255, 255, 0.05)' }}
+    />
+);
 // Component cho KpiCard khi đang tải
 const KpiCardSkeleton = () => (
     <Paper variant="glass" sx={{ p: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -36,8 +47,25 @@ const KpiCardSkeleton = () => (
 );
 
 function FinancePage() {
+    const theme = useTheme();
     const { id: brandId } = useBrand();
-    
+
+    const lineChartFilterControl = useDateFilter({ defaultType: 'this_month' });
+
+    const dashboardFilters = useMemo(() => ({
+        lineChart: lineChartFilterControl.filter,
+        kpi: null,
+        donut: null,
+        topProducts: null,
+        map: null,
+    }), [lineChartFilterControl.filter]);
+
+    const {lineChart} = useDashboardData(brandId, dashboardFilters);
+    const financeChartSeries = useMemo(() => [
+        { key: 'cogs', name: 'Giá vốn', color: theme.palette.warning.main },
+        { key: 'executionCost', name: 'Chi phí thực thi', color: theme.palette.info.main },
+    ], [theme.palette.warning.main, theme.palette.info.main]);
+
     const [dateRange, setDateRange] = useState(defaultDateRange);
     const [dateLabel, setDateLabel] = useState(defaultDateLabel);
     const [anchorEl, setAnchorEl] = useState(null);
@@ -132,7 +160,34 @@ function FinancePage() {
                 ))}
             </Box>
 
-            {/* --- PHẦN 2: CHART PHÂN BỔ (HÀNG DƯỚI - MỚI THÊM) --- */}
+            {/* --- BIỂU ĐỒ ĐƯỜNG --- */}
+            <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 3, pt: 3 }}>
+                    <Typography variant="h6" noWrap>Biểu đồ chi phí theo thời gian</Typography>
+                    <Box>
+                        <Button variant="outlined" size="small" {...lineChartFilterControl.buttonProps}/>
+                        <DateRangeFilterMenu {...lineChartFilterControl.menuProps} />
+                    </Box>
+                </Box>
+
+                <Box sx={{ pb: 3, pt: 1, height: 750, position: 'relative' }}>
+                    {lineChart.loading ? <ChartSkeleton /> : (
+                        <Suspense fallback={<ChartSkeleton />}>
+                            {lineChart.data.current && lineChart.data.current.length > 0 ? (
+                                <RevenueProfitChart
+                                data={lineChart.data.current}
+                                comparisonData={lineChart.data.previous}
+                                series={financeChartSeries}
+                                isLoading={lineChart.loading}
+                                aggregationType={lineChart.data.aggregationType}
+                            />
+                            ) : <ChartPlaceholder title="Biểu đồ chi phí" />}
+                        </Suspense>
+                    )}
+                </Box>
+            </Paper>
+
+            {/* --- PHẦN 2: CHART PHÂN BỔ --- */}
             <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
                 {(() => {
                     const isExpanded = platformData.length > 5;
