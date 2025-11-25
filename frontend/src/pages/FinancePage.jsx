@@ -187,6 +187,7 @@ function FinancePage() {
 
             {/* --- BIỂU ĐỒ ĐƯỜNG --- */}
             <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4 }}>
+                <Typography sx={{ fontWeight: 600, mb: 2 }} variant="h6" noWrap>So sánh Tài chính giữa các Nền tảng</Typography>
                 <Box sx={{ height: 600, mb: 4 }}>
                     {loading ? (
                         <Skeleton variant="rectangular" width="100%" height="100%" sx={{ borderRadius: 4 }} />
@@ -194,36 +195,37 @@ function FinancePage() {
                         <FinanceComparisonChart
                             data={platformData}
                             series={comparisonChartSeries}
-                            title="So sánh Tài chính giữa các Nền tảng"
                         />
                     )}
                 </Box>
+            </Paper>
 
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 3, pt: 3}}>
+            <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4 }}>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
                     <Typography variant="h6" noWrap>Xu hướng theo thời gian (Toàn bộ thương hiệu)</Typography>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 3, pt: 3}}>
                         {/* Các nút bật/tắt series */}
                         {allAvailableSeries.map(s => (
-                            <Button
-                                key={s.key}
-                                variant={visibleSeriesKeys.includes(s.key) ? 'contained' : 'outlined'}
-                                onClick={() => handleToggleSeries(s.key)}
-                                size="small"
-                                sx={{
-                                    borderColor: s.color,
-                                    color: visibleSeriesKeys.includes(s.key) ? theme.palette.common.white : s.color,
-                                    bgcolor: visibleSeriesKeys.includes(s.key) ? s.color : 'transparent',
-                                    '&:hover': {
-                                        bgcolor: visibleSeriesKeys.includes(s.key) ? s.color : 'transparent',
+                                <Button
+                                    key={s.key}
+                                    variant={visibleSeriesKeys.includes(s.key) ? 'contained' : 'outlined'}
+                                    onClick={() => handleToggleSeries(s.key)}
+                                    size="small"
+                                    sx={{
                                         borderColor: s.color,
-                                        opacity: 0.8,
-                                    }
-                                }}
-                            >
+                                        color: visibleSeriesKeys.includes(s.key) ? theme.palette.common.white : s.color,
+                                        bgcolor: visibleSeriesKeys.includes(s.key) ? s.color : 'transparent',
+                                        '&:hover': {
+                                            bgcolor: visibleSeriesKeys.includes(s.key) ? s.color : 'transparent',
+                                            borderColor: s.color,
+                                            opacity: 0.8,
+                                        }
+                                    }}
+                                >
                                 {s.name}
                             </Button>
-                        ))}
-                    </Box>
+                        ))}        
+                    </Box>   
                 </Box>
 
                 <Box sx={{ pb: 3, pt: 1, height: 750, position: 'relative' }}>
