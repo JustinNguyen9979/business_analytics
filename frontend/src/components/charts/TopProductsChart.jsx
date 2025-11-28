@@ -29,7 +29,7 @@ function TopProductsChart({ data }) {
 
         // Bắt đầu animation bằng hàm tái sử dụng
         const cleanup = startAnimation({
-            duration: 800, // Thời gian animation của biểu đồ
+            duration: 1100, // Thời gian animation của biểu đồ
             onFrame: (progress) => {
                 // Áp dụng công thức `current = final * progress` cho cả mảng
                 const currentValues = finalXValues.map(endValue => endValue * progress);

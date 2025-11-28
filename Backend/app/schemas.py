@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional, Dict, Any
-from datetime import date
+from datetime import date, datetime
 
 class DataRequest(BaseModel):
     brand_id: int
@@ -26,7 +26,7 @@ class Customer(CustomerBase):
     model_config = ConfigDict(from_attributes=True)
 
 class OrderBase(BaseModel):
-    order_code: str; order_date: Optional[date] = None; status: Optional[str] = None; username: Optional[str] = None
+    order_code: str; order_date: Optional[datetime] = None; status: Optional[str] = None; username: Optional[str] = None
     total_quantity: int = 0; cogs: float = 0.0; details: Optional[Dict[str, Any]] = None
 
 class Order(OrderBase):

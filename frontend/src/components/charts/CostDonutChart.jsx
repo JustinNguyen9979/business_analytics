@@ -33,7 +33,7 @@ function CostDonutChart({ cogs = 0, executionCost = 0, adSpend = 0 }) {
             showlegend: false
         };
 
-        const duration = 800;
+        const duration = 1100;
         let startTime = null;
         let animationFrameId;
 

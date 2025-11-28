@@ -202,7 +202,7 @@ function FinancePage() {
 
             <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4 }}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" noWrap>Xu hướng theo thời gian (Toàn bộ thương hiệu)</Typography>
+                    <Typography variant="h6" noWrap>Biểu đồ xu hướng</Typography>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 3, pt: 3}}>
                         {/* Các nút bật/tắt series */}
                         {allAvailableSeries.map(s => (

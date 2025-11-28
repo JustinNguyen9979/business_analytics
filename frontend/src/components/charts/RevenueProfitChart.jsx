@@ -78,7 +78,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
 
         // --- LOGIC ANIMATION MỚI SỬ DỤNG requestAnimationFrame ---
         const finalTraces = createChartTraces(data, comparisonData, series);
-        const duration = 800;
+        const duration = 1200;
         let startTime = null;
 
         const animate = (timestamp) => {
@@ -125,22 +125,69 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
     ]).filter(v => typeof v === 'number');
 
     // 2. Tìm giá trị LỚN NHẤT và NHỎ NHẤT
-    const maxY = allYValues.length > 0 ? Math.max(...allYValues) : 1;
+    let maxY = allYValues.length > 0 ? Math.max(...allYValues) : 0;
     const minY = allYValues.length > 0 ? Math.min(...allYValues) : 0;
 
-    // 3. Tính toán khoảng đệm (padding) để biểu đồ không bị sát lề
-    const dataSpan = maxY - minY;
-    // Nếu tất cả giá trị bằng nhau (span=0), tạo một khoảng đệm mặc định
-    const padding = dataSpan === 0 ? Math.abs(maxY * 0.2) || 1 : dataSpan * 0.1;
+    // --- LOGIC QUAN TRỌNG: ĐỊNH HÌNH QUY MÔ TIỀN TỆ ---
+    // Nếu doanh thu < 10 Triệu (hoặc bằng 0), ta ép biểu đồ hiển thị khung 0 - 10 Triệu.
+    // Điều này giúp biểu đồ luôn "ra dáng" tiền tệ, không bị hiển thị lèo tèo 1, 2 đồng.
+    const MIN_MONETARY_SCALE = 10000000; // 10 Triệu
+    if (maxY < MIN_MONETARY_SCALE) {
+        maxY = MIN_MONETARY_SCALE;
+    }
 
-    // 4. Xác định khoảng hiển thị cuối cùng cho trục Y
-    const yAxisRange = [
-        // Nếu giá trị nhỏ nhất là số dương, trục Y vẫn bắt đầu từ 0 cho trực quan
-        // Nếu là số âm, bắt đầu từ dưới số đó một chút (trừ đi padding)
-        minY >= 0 ? 0 : minY - padding,
-        // Luôn kết thúc ở trên giá trị lớn nhất một chút (cộng thêm padding)
-        maxY + padding
-    ];
+    // 3. Tính toán khoảng đệm (padding) để biểu đồ không bị sát lề
+    // ... (Giữ nguyên logic cũ) ...
+    const padding = maxY * 0.1; // Padding đơn giản 10%
+
+    // --- HÀM FORMAT SỐ TIỀN (Custom formatter) ---
+    const formatCurrencyAxis = (val) => {
+        if (val === 0) return '0';
+        if (val >= 1000000000) return (val / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+        if (val >= 1000000) return (val / 1000000).toFixed(1).replace(/\.0$/, '') + 'M'; // Ưu tiên hiện M (Triệu)
+        if (val >= 1000) return (val / 1000).toFixed(0) + 'k';
+        return val.toString();
+    };
+
+    // --- XỬ LÝ FORMAT TRỤC Y (LOGIC MỚI V3 - TỰ TÍNH TICKVALS) ---
+    
+    let tickVals = [];
+    let tickText = [];
+    let chartRange = [];
+
+    // Dữ liệu (hoặc scale ảo) đã đảm bảo >= 10M, ta dùng logic chia vạch tự động
+    const roughStep = maxY / 5;
+    const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+    const normalizedStep = roughStep / magnitude;
+    let step;
+    if (normalizedStep < 1.5) step = 1 * magnitude;
+    else if (normalizedStep < 2.5) step = 2 * magnitude;
+    else if (normalizedStep < 5.5) step = 5 * magnitude;
+    else step = 10 * magnitude;
+
+    // Tạo mảng tickVals: 0, step, 2*step... đến khi vượt qua maxY một chút
+    // Ví dụ scale 10M: 0, 2M, 4M, 6M, 8M, 10M
+    for (let v = 0; v <= maxY + (step * 0.1); v += step) {
+        tickVals.push(v);
+        tickText.push(formatCurrencyAxis(v));
+    }
+    
+    chartRange = [minY >= 0 ? 0 : minY - padding, tickVals[tickVals.length - 1] * 1.05];
+
+    let yAxisConfig = {
+        color: theme.palette.text.secondary,
+        gridcolor: theme.palette.divider,
+        hoverformat: ',.0f đ',
+        showspikes: false, zeroline: true,
+        zerolinecolor: theme.palette.divider, zerolinewidth: 2,
+        rangeslider: { visible: false },
+        
+        // Áp dụng Custom Ticks
+        tickmode: 'array',
+        tickvals: tickVals,
+        ticktext: tickText,
+        range: chartRange
+    };
 
     const getXAxisConfig = () => { 
         const tick0 = data.length > 0 ? dayjs(data[0].date).toDate() : new Date();
@@ -162,15 +209,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             gridcolor: theme.palette.divider,
             showspikes: false,
         },
-        yaxis: {
-            range: yAxisRange,
-            color: theme.palette.text.secondary,
-            gridcolor: theme.palette.divider,
-            hoverformat: ',.0f đ',
-            showspikes: false, zeroline: true, // Hiển thị đường zero line để dễ so sánh
-            zerolinecolor: theme.palette.divider, zerolinewidth: 2,
-            rangeslider: { visible: false },
-        },
+        yaxis: yAxisConfig, // Sử dụng config động đã tạo ở trên
         legend: {
             font: { color: theme.palette.text.secondary, size: 16 },
             orientation: 'h',

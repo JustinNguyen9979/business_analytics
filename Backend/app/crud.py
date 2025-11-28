@@ -14,8 +14,13 @@ def _clear_brand_cache(brand_id: int):
     print(f"INFO: Clearing dashboard cache for brand_id: {brand_id}")
     # Dùng SCAN thay cho KEYS để an toàn hơn trên production
     cache_keys_to_delete = []
-    # Quét tất cả các loại cache liên quan đến brand
+    
+    # Quét cache request (API)
     for key in redis_client.scan_iter(f"data_req:{brand_id}:*"):
+        cache_keys_to_delete.append(key)
+        
+    # Quét cache tính toán daily (KPI daily)
+    for key in redis_client.scan_iter(f"kpi_daily:{brand_id}:*"):
         cache_keys_to_delete.append(key)
     
     if cache_keys_to_delete:
@@ -27,11 +32,11 @@ def _clear_brand_cache(brand_id: int):
 def update_daily_stats(db: Session, brand_id: int, target_date: date):
     """
     Hàm này được Worker gọi.
-    Nhiệm vụ: Lấy dữ liệu thô -> Gọi Calculator -> Lưu kết quả vào DailyStat.
+    Nhiệm vụ: Lấy dữ liệu thô -> Gọi Calculator -> Lưu kết quả vào DailyStat (Tổng) và DailyAnalytics (Từng Source).
     """
     import kpi_calculator # Import local
 
-    # 1. Lấy dữ liệu thô
+    # 1. Lấy TOÀN BỘ dữ liệu thô trong ngày
     revenues = db.query(models.Revenue).filter(
         models.Revenue.brand_id == brand_id,
         models.Revenue.transaction_date == target_date
@@ -42,7 +47,7 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
         models.MarketingSpend.date == target_date
     ).all()
 
-    # Lấy các loại đơn hàng cần thiết
+    # Lấy orders cho revenue (cogs)
     revenue_order_codes = {r.order_code for r in revenues if r.order_code}
     orders_for_cogs = []
     if revenue_order_codes:
@@ -53,20 +58,55 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
 
     orders_created_today = db.query(models.Order).filter(
         models.Order.brand_id == brand_id, 
-        models.Order.order_date == target_date
+        func.date(models.Order.order_date) == target_date
     ).all()
 
-    # Gộp danh sách đơn hàng để tính toán
+    # Gộp danh sách tất cả orders liên quan trong ngày
     all_orders_map = {o.order_code: o for o in orders_for_cogs}
     all_orders_map.update({o.order_code: o for o in orders_created_today})
     final_orders_list = list(all_orders_map.values())
 
-    # 2. Gọi "Đầu bếp" tính toán, truyền vào TẬP HỢP CÁC MÃ ĐƠN TẠO HÔM NAY
-    # Đây là "nguồn chân lý" cho các chỉ số vận hành trong ngày
-    created_today_codes = {o.order_code for o in orders_created_today}
-    kpis = kpi_calculator.calculate_daily_kpis(final_orders_list, revenues, marketing_spends, created_today_codes)
+    # --- BƯỚC 2: XÁC ĐỊNH CÁC SOURCE CÓ HOẠT ĐỘNG TRONG NGÀY ---
+    active_sources = set()
+    active_sources.update({r.source for r in revenues if r.source})
+    active_sources.update({o.source for o in orders_created_today if o.source})
+    active_sources.update({m.source for m in marketing_spends if m.source})
+    
+    stat_entry_for_card = None
 
-    # 3. Tìm hoặc tạo mới bản ghi DailyStat
+    # --- BƯỚC 3: TÍNH TOÁN VÀ LƯU CHO TỪNG SOURCE (Vào DailyAnalytics) ---
+    for current_source in active_sources:
+        # Lọc dữ liệu theo source
+        filtered_revenues = [r for r in revenues if r.source == current_source]
+        filtered_marketing = [m for m in marketing_spends if m.source == current_source]
+        filtered_orders = [o for o in final_orders_list if o.source == current_source]
+        filtered_created_orders = [o for o in orders_created_today if o.source == current_source]
+
+        # Gọi Calculator tính toán
+        created_today_codes = {o.order_code for o in filtered_created_orders}
+        kpis = kpi_calculator.calculate_daily_kpis(filtered_orders, filtered_revenues, filtered_marketing, created_today_codes, db_session=db)
+
+        # Lưu vào DailyAnalytics (Chia theo Source)
+        analytics_entry = db.query(models.DailyAnalytics).filter(
+            models.DailyAnalytics.brand_id == brand_id,
+            models.DailyAnalytics.date == target_date,
+            models.DailyAnalytics.source == current_source
+        ).first()
+
+        if not analytics_entry:
+            analytics_entry = models.DailyAnalytics(brand_id=brand_id, date=target_date, source=current_source)
+            db.add(analytics_entry)
+        
+        if kpis:
+            for key, value in kpis.items():
+                if hasattr(analytics_entry, key):
+                    setattr(analytics_entry, key, value)
+
+    # --- BƯỚC 4: TÍNH TOÁN TỔNG HỢP (Vào DailyStat) ---
+    # Tính cho 'all' nhưng CHỈ lưu vào DailyStat
+    all_created_codes = {o.order_code for o in orders_created_today}
+    total_kpis = kpi_calculator.calculate_daily_kpis(final_orders_list, revenues, marketing_spends, all_created_codes, db_session=db)
+
     stat_entry = db.query(models.DailyStat).filter(
         models.DailyStat.brand_id == brand_id,
         models.DailyStat.date == target_date
@@ -76,21 +116,20 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
         stat_entry = models.DailyStat(brand_id=brand_id, date=target_date)
         db.add(stat_entry)
     
-    # 4. Map TOÀN BỘ dữ liệu từ kpi_calculator (vì nó đã được tính đúng)
-    # Dùng vòng lặp để code gọn và dễ bảo trì
-    if kpis:
-        for key, value in kpis.items():
-            # Chuyển đổi camelCase từ kpi dict sang snake_case của model
-            snake_case_key = re.sub(r'(?<!^)(?=[A-Z])', '_', key).lower()
-            if hasattr(stat_entry, snake_case_key):
-                setattr(stat_entry, snake_case_key, value)
+    if total_kpis:
+        for key, value in total_kpis.items():
+            # Map vào DailyStat (Giờ đã có đủ cột JSONB để lưu full data)
+            if hasattr(stat_entry, key):
+                setattr(stat_entry, key, value)
+    
+    stat_entry_for_card = stat_entry
 
     db.commit()
     
     # 5. Xóa cache
     _clear_brand_cache(brand_id)
 
-    return stat_entry
+    return stat_entry_for_card
 
 def slugify(value: str) -> str:
     """
@@ -118,11 +157,11 @@ def get_raw_orders_in_range(db: Session, brand_id: int, start_date: date, end_da
     """Chỉ lấy ra danh sách các bản ghi đơn hàng thô trong khoảng thời gian."""
     return db.query(models.Order).filter(
         models.Order.brand_id == brand_id,
-        models.Order.order_date.between(start_date, end_date)
+        func.date(models.Order.order_date).between(start_date, end_date)
     ).all()
 
 def get_all_activity_dates(db: Session, brand_id: int):
-    order_dates = db.query(models.Order.order_date.label("activity_date")).filter(models.Order.brand_id == brand_id, models.Order.order_date.isnot(None))
+    order_dates = db.query(func.date(models.Order.order_date).label("activity_date")).filter(models.Order.brand_id == brand_id, models.Order.order_date.isnot(None))
     revenue_dates = db.query(models.Revenue.transaction_date.label("activity_date")).filter(models.Revenue.brand_id == brand_id, models.Revenue.transaction_date.isnot(None))
     marketing_dates = db.query(models.MarketingSpend.date.label("activity_date")).filter(models.MarketingSpend.brand_id == brand_id, models.MarketingSpend.date.isnot(None))
     all_dates_union = union_all(order_dates, revenue_dates, marketing_dates).alias("all_dates")
@@ -131,27 +170,24 @@ def get_all_activity_dates(db: Session, brand_id: int):
 
 def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_date: date) -> list:
     """
-    Phiên bản mới: Đọc trực tiếp từ bảng DailyStat.
-    Tốc độ cực nhanh, không cần tính toán lại, không sợ quá tải DB.
+    Lấy dữ liệu KPI tổng hợp cho Dashboard.
+    Đọc trực tiếp từ bảng DailyStat (nơi chứa dữ liệu tổng hợp đầy đủ).
     """
-    # Truy vấn thẳng vào bảng tổng hợp
+    # Truy vấn bảng DailyStat
     stats = db.query(models.DailyStat).filter(
         models.DailyStat.brand_id == brand_id,
         models.DailyStat.date.between(start_date, end_date)
     ).order_by(models.DailyStat.date).all()
 
-    # Chuyển đổi format để trả về cho Frontend (giữ nguyên format cũ để Frontend không bị lỗi)
     results = []
-    
-    # Tạo một map để điền những ngày thiếu (nếu có)
     stats_map = {s.date: s for s in stats}
     
-    # Loop qua từng ngày trong khoảng để đảm bảo biểu đồ liên tục
     current_date = start_date
     while current_date <= end_date:
         stat = stats_map.get(current_date)
         
         if stat:
+            # Map từ cột model (snake_case) sang format JSON frontend (camelCase)
             results.append({
                 "date": current_date.isoformat(),
                 "netRevenue": stat.net_revenue,
@@ -162,8 +198,8 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
                 "cogs": stat.cogs,
                 "executionCost": stat.execution_cost,
                 "roi": stat.roi,
-                "profitMargin": stat.profit_margin,
-                "takeRate": stat.take_rate,
+                # "profitMargin": stat.profit_margin,
+                # "takeRate": stat.take_rate,
                 "completedOrders": stat.completed_orders,
                 "cancelledOrders": stat.cancelled_orders,
                 "refundedOrders": stat.refunded_orders,
@@ -174,7 +210,7 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
                 "completionRate": stat.completion_rate,
                 "cancellationRate": stat.cancellation_rate,
                 "refundRate": stat.refund_rate,
-                "totalCustomers": stat.total_customers,
+                "totalCustomers": stat.total_customers, # Đã có cột này trong DailyStat
                 "impressions": stat.impressions,
                 "clicks": stat.clicks,
                 "conversions": stat.conversions,
@@ -184,26 +220,28 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
                 "cpa": stat.cpa,
                 "reach": stat.reach,
                 "frequency": stat.frequency,
+                
+                # Các trường JSONB (Giờ đã có trong DailyStat)
+                "hourlyBreakdown": stat.hourly_breakdown,
+                "topProducts": stat.top_products,
+                "locationDistribution": stat.location_distribution,
+                "paymentMethodBreakdown": stat.payment_method_breakdown,
+                "cancelReasonBreakdown": stat.cancel_reason_breakdown,
             })
         else:
-            # Nếu ngày đó chưa có dữ liệu (Worker chưa chạy xong hoặc không có đơn), trả về 0
+            # Trả về 0 nếu không có dữ liệu
             results.append({
                 "date": current_date.isoformat(),
                 "netRevenue": 0, "gmv": 0, "profit": 0, "totalCost": 0, "adSpend": 0,
-                "cogs": 0, "executionCost": 0, "roi": 0, "profitMargin": 0, "takeRate": 0,
+                "cogs": 0, "executionCost": 0, "roi": 0, 
+                # "profitMargin": 0, "takeRate": 0,
                 "completedOrders": 0, "cancelledOrders": 0, "refundedOrders": 0, "aov": 0,
                 "upt": 0, "uniqueSkusSold": 0, "totalQuantitySold": 0,
                 "completionRate": 0, "cancellationRate": 0, "refundRate": 0,
                 "totalCustomers": 0,
-                "impressions": 0,
-                "clicks": 0,
-                "conversions": 0,
-                "cpc": 0,
-                "cpa": 0,
-                "cpm": 0,
-                "ctr": 0,
-                "reach": 0,
-                "frequency": 0,
+                "impressions": 0, "clicks": 0, "conversions": 0, "cpc": 0,
+                "cpa": 0, "cpm": 0, "ctr": 0, "reach": 0, "frequency": 0,
+                "hourlyBreakdown": {}, "topProducts": [], "locationDistribution": [], "paymentMethodBreakdown": {}, "cancelReasonBreakdown": {}
             })            
         current_date += timedelta(days=1)
 
@@ -316,6 +354,7 @@ def get_or_create_customer(db: Session, customer_data: dict, brand_id: int):
             username=username,
             city=customer_data.get('city'), 
             district=customer_data.get('district'),
+            source=customer_data.get('source'), # Lưu nguồn khách hàng
             brand_id=brand_id
         )
         db.add(db_customer)
@@ -388,9 +427,9 @@ def _calculate_and_cache_single_day(db: Session, brand_id: int, target_date: dat
     """Hàm nội bộ: Lấy data thô, gọi calculator, và cache kết quả cho một ngày."""
     import kpi_calculator # Import local để tránh circular import
     
-    # 1. Lấy revenues và ads cho ngày mục tiêu
+    # 1. Lấy revenues và marketing_spends cho ngày mục tiêu
     revenues = db.query(models.Revenue).filter(models.Revenue.brand_id == brand_id, models.Revenue.transaction_date == target_date).all()
-    ads = db.query(models.Ad).filter(models.Ad.brand_id == brand_id, models.Ad.ad_date == target_date).all()
+    marketing_spends = db.query(models.MarketingSpend).filter(models.MarketingSpend.brand_id == brand_id, models.MarketingSpend.date == target_date).all()
 
     # 2. Lấy các mã đơn hàng từ revenues của ngày hôm nay
     order_codes_from_revenues = {r.order_code for r in revenues}
@@ -406,7 +445,7 @@ def _calculate_and_cache_single_day(db: Session, brand_id: int, target_date: dat
     # 4. Lấy các đơn hàng được TẠO hôm nay
     orders_created_today = db.query(models.Order).filter(
         models.Order.brand_id == brand_id,
-        models.Order.order_date == target_date
+        func.date(models.Order.order_date) == target_date
     ).all()
 
     # 5. Gộp và loại bỏ trùng lặp để có danh sách đầy đủ nhất
@@ -414,7 +453,10 @@ def _calculate_and_cache_single_day(db: Session, brand_id: int, target_date: dat
     all_orders_map.update({o.order_code: o for o in orders_created_today})
     orders = list(all_orders_map.values())
 
-    daily_kpis = kpi_calculator.calculate_daily_kpis(orders, revenues, ads)
+    # Tạo set chứa mã đơn hàng được tạo hôm nay để truyền vào calculator
+    created_today_codes = {o.order_code for o in orders_created_today}
+
+    daily_kpis = kpi_calculator.calculate_daily_kpis(orders, revenues, marketing_spends, created_today_codes, db_session=db)
 
     cache_key = f"kpi_daily:{brand_id}:{target_date.isoformat()}"
     redis_client.setex(cache_key, timedelta(days=90), json.dumps(daily_kpis, default=str))
@@ -430,7 +472,7 @@ def get_top_selling_products(db: Session, brand_id: int, start_date: date, end_d
         # Bước 1: Chỉ truy vấn lấy các đơn hàng cần thiết, không xử lý JSON ở đây
         orders_in_range = db.query(models.Order).filter(
             models.Order.brand_id == brand_id,
-            models.Order.order_date.between(start_date, end_date)
+            func.date(models.Order.order_date).between(start_date, end_date)
         ).all()
 
         if not orders_in_range:
@@ -486,57 +528,56 @@ def get_top_selling_products(db: Session, brand_id: int, start_date: date, end_d
         print(f"!!! LỖI NGHIÊM TRỌNG KHI LẤY TOP PRODUCTS: {e}")
         return []
 
-def get_customer_distribution_with_coords(db: Session, brand_id: int, start_date: date, end_date: date):
+def get_aggregated_location_distribution(db: Session, brand_id: int, start_date: date, end_date: date):
     """
-    Lấy dữ liệu phân bổ khách hàng kèm tọa độ, truy vấn trực tiếp từ DB.
-    Hàm này đã được sửa lỗi `NameError` và không còn phụ thuộc vào hàm đã bị xóa.
+    Lấy dữ liệu phân bổ khách hàng từ bảng DailyAnalytics (đã tính sẵn) và cộng dồn.
+    Nhanh hơn nhiều so với việc query raw Orders + Customers.
     """
     try:
-        # BƯỚC 1: Truy vấn để đếm số khách hàng duy nhất theo từng tỉnh/thành phố
-        # Query này join bảng Order và Customer, lọc theo brand, khoảng thời gian
-        # và nhóm theo `city` để đếm `username` duy nhất.
-        raw_counts = db.query(
-            models.Customer.city,
-            func.count(models.Order.username.distinct()).label('unique_customers')
-        ).join(
-            models.Customer,
-            and_(
-                models.Order.username == models.Customer.username,
-                models.Order.brand_id == models.Customer.brand_id
-            )
-        ).filter(
-            models.Order.brand_id == brand_id,
-            models.Order.order_date.between(start_date, end_date),
-            models.Customer.city.isnot(None),
-            models.Customer.city != ''
-        ).group_by(
-            models.Customer.city
+        # 1. Lấy các bản ghi DailyAnalytics trong khoảng thời gian (chỉ lấy source tổng 'all')
+        daily_records = db.query(models.DailyAnalytics.location_distribution).filter(
+            models.DailyAnalytics.brand_id == brand_id,
+            models.DailyAnalytics.date.between(start_date, end_date),
+            models.DailyAnalytics.source == 'all'
         ).all()
 
-        results_with_coords = []
-        # BƯỚC 2: Duyệt qua kết quả thô và kết hợp với tọa độ
-        for city_name, customer_count in raw_counts:
-            if not city_name or not customer_count:
-                continue
+        if not daily_records:
+            return []
 
-            # Lấy tọa độ trung tâm từ dictionary đã import
+        # 2. Cộng dồn dữ liệu (Aggregation)
+        # Cấu trúc mong muốn: {"Hanoi": 150, "Ho Chi Minh": 120}
+        city_stats = defaultdict(int)
+
+        for record in daily_records:
+            # record là tuple, record[0] là json location_distribution
+            loc_dist = record[0]
+            if loc_dist and isinstance(loc_dist, list):
+                for item in loc_dist:
+                    city = item.get('city')
+                    orders = item.get('orders', 0) # Hoặc customer_count tùy vào logic lưu
+                    # Lưu ý: KPI calculator đang lưu key là "orders", nhưng map frontend cần đếm số khách
+                    # Tạm thời ta cộng dồn số lượng này.
+                    if city:
+                        city_stats[city] += orders
+
+        # 3. Gắn tọa độ và Format đầu ra
+        results_with_coords = []
+        for city_name, count in city_stats.items():
             centroid = PROVINCE_CENTROIDS.get(city_name)
-            
             if centroid:
-                # Thêm vào danh sách kết quả
                 results_with_coords.append({
                     "city": city_name,
-                    "customer_count": customer_count,
+                    "customer_count": count, # Frontend đang dùng key này
                     "coords": centroid 
                 })
 
-        # Sắp xếp theo số lượng khách hàng giảm dần
+        # 4. Sắp xếp giảm dần
         return sorted(results_with_coords, key=lambda item: item['customer_count'], reverse=True)
 
     except Exception as e:
-        print(f"!!! LỖI KHI LẤY DỮ LIỆU BẢN ĐỒ: {e}")
+        print(f"!!! LỖI KHI LẤY DỮ LIỆU BẢN ĐỒ TỪ ANALYTICS: {e}")
         traceback.print_exc()
-        return [] # Trả về danh sách rỗng nếu có lỗi để tránh crash frontend
+        return []
 
 def get_kpis_by_platform(db: Session, brand_id: int, start_date: date, end_date: date):
     """
@@ -608,87 +649,114 @@ def get_sources_for_brand(db: Session, brand_id: int) -> list[str]:
 
 def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end_date: date, source: str = None):
     """
-    Deletes transactional data, checks if any source is now empty, and returns a list of such sources.
+    Xóa dữ liệu theo logic Revenue-Driven (Dựa vào Transaction Date của Revenue làm chuẩn).
     """
     try:
-        # BƯỚC 0: Xác định các source sẽ bị ảnh hưởng TRƯỚC KHI xóa
+        # BƯỚC 0: Xác định các source cần kiểm tra sạch sẽ sau khi xóa
         sources_to_check = []
         if source:
             sources_to_check.append(source)
         else:
-            # Lấy tất cả các source hiện có của brand
             sources_to_check = get_sources_for_brand(db, brand_id)
 
-        # --- LOGIC XÓA HIỆN TẠI (GIỮ NGUYÊN) ---
-        orders_to_delete_query = db.query(models.Order).filter(
-            models.Order.brand_id == brand_id,
-            models.Order.order_date.between(start_date, end_date)
+        # BƯỚC 1: Lấy danh sách order_code bị ảnh hưởng (Kết hợp cả Revenue và Order)
+        target_order_codes = set()
+
+        # 1.1. Từ Revenue (theo Transaction Date)
+        revenue_query = db.query(models.Revenue.order_code).filter(
+            models.Revenue.brand_id == brand_id,
+            models.Revenue.transaction_date.between(start_date, end_date)
         )
         if source:
-            orders_to_delete_query = orders_to_delete_query.filter(models.Order.source == source)
+            revenue_query = revenue_query.filter(models.Revenue.source == source)
+        target_order_codes.update({row[0] for row in revenue_query.distinct().all() if row[0]})
 
-        usernames_in_deleted_orders = {
-            row.username for row in orders_to_delete_query.with_entities(models.Order.username).distinct() if row.username
-        }
+        # 1.2. Từ Order (theo Order Date) -> Để bắt các đơn chưa có doanh thu hoặc đơn hủy
+        order_query = db.query(models.Order.order_code).filter(
+            models.Order.brand_id == brand_id,
+            func.date(models.Order.order_date).between(start_date, end_date)
+        )
+        if source:
+            order_query = order_query.filter(models.Order.source == source)
+        target_order_codes.update({row[0] for row in order_query.distinct().all() if row[0]})
 
-        if usernames_in_deleted_orders:
-            remaining_orders_subquery = db.query(models.Order.username).filter(
+        # BƯỚC 2: Xử lý Xóa Customer (Nếu khách không còn đơn hàng nào khác)
+        if target_order_codes:
+            # Lấy danh sách khách hàng liên quan đến các đơn hàng sắp bị xóa
+            affected_users_query = db.query(models.Order.username).filter(
                 models.Order.brand_id == brand_id,
-                models.Order.username.in_(usernames_in_deleted_orders)
+                models.Order.order_code.in_(target_order_codes)
             )
-            if source:
-                 remaining_orders_subquery = remaining_orders_subquery.filter(
-                    (models.Order.order_date.between(start_date, end_date) == False) |
-                    (models.Order.source != source)
-                )
-            else:
-                 remaining_orders_subquery = remaining_orders_subquery.filter(
-                    models.Order.order_date.between(start_date, end_date) == False
-                )
-            users_with_remaining_orders = {
-                row.username for row in remaining_orders_subquery.distinct().all()
-            }
-            users_to_delete = usernames_in_deleted_orders - users_with_remaining_orders
-            if users_to_delete:
-                db.query(models.Customer).filter(
-                    models.Customer.brand_id == brand_id,
-                    models.Customer.username.in_(list(users_to_delete))
-                ).delete(synchronize_session=False)
-                print(f"INFO: Đã xóa {len(users_to_delete)} khách hàng không còn đơn hàng nào.")
+            affected_usernames = {row[0] for row in affected_users_query.distinct().all() if row[0]}
 
-        # Delete Revenues, Orders, MarketingSpend
-        for model_class in [models.Revenue, models.Order, models.MarketingSpend]:
-            date_column_name = None
-            if model_class == models.Revenue: date_column_name = 'transaction_date'
-            elif model_class == models.Order: date_column_name = 'order_date'
-            elif model_class == models.MarketingSpend: date_column_name = 'date'
-            
-            # Fix: Ensure date_column_name is set before use and use getattr correctly
-            if date_column_name:
-                query = db.query(model_class).filter(
-                    getattr(model_class, 'brand_id') == brand_id,
-                    getattr(model_class, date_column_name).between(start_date, end_date)
+            if affected_usernames:
+                # Tìm những khách hàng này CÒN đơn hàng nào KHÁC không
+                # (Tức là đơn hàng có order_code KHÔNG nằm trong target_order_codes)
+                users_with_other_orders_query = db.query(models.Order.username).filter(
+                    models.Order.brand_id == brand_id,
+                    models.Order.username.in_(affected_usernames),
+                    ~models.Order.order_code.in_(target_order_codes) # NOT IN
                 )
-                if source:
-                    query = query.filter(getattr(model_class, 'source') == source)
-                query.delete(synchronize_session=False)
-            else:
-                print(f"WARNING: No date column specified for model {model_class.__tablename__}. Skipping date range deletion for this model.")
+                users_keeping_orders = {row[0] for row in users_with_other_orders_query.distinct().all()}
+                
+                # Khách hàng cần xóa = Khách bị ảnh hưởng - Khách vẫn còn đơn giữ lại
+                users_to_delete = affected_usernames - users_keeping_orders
+                
+                if users_to_delete:
+                    db.query(models.Customer).filter(
+                        models.Customer.brand_id == brand_id,
+                        models.Customer.username.in_(list(users_to_delete))
+                    ).delete(synchronize_session=False)
+                    print(f"INFO: Đã xóa {len(users_to_delete)} khách hàng không còn đơn hàng nào.")
 
-        if not source:
-            db.query(models.DailyStat).filter(
-                models.DailyStat.brand_id == brand_id,
-                models.DailyStat.date.between(start_date, end_date)
+            # BƯỚC 3: Xóa ORDERS (Dựa trên danh sách order_code lấy từ Revenue)
+            db.query(models.Order).filter(
+                models.Order.brand_id == brand_id,
+                models.Order.order_code.in_(target_order_codes)
             ).delete(synchronize_session=False)
-            print(f"INFO: Đã xóa DailyStat cho brand {brand_id} từ {start_date} đến {end_date}.")
+            print(f"INFO: Đã xóa {len(target_order_codes)} đơn hàng liên quan đến Revenue trong khoảng thời gian.")
+
+        # BƯỚC 4: Xóa REVENUE (Dựa trên transaction_date)
+        rev_delete_query = db.query(models.Revenue).filter(
+            models.Revenue.brand_id == brand_id,
+            models.Revenue.transaction_date.between(start_date, end_date)
+        )
+        if source:
+            rev_delete_query = rev_delete_query.filter(models.Revenue.source == source)
+        rev_delete_query.delete(synchronize_session=False)
+
+        # BƯỚC 5: Xóa MARKETING SPEND (Dựa trên date)
+        mkt_delete_query = db.query(models.MarketingSpend).filter(
+            models.MarketingSpend.brand_id == brand_id,
+            models.MarketingSpend.date.between(start_date, end_date)
+        )
+        if source:
+            mkt_delete_query = mkt_delete_query.filter(models.MarketingSpend.source == source)
+        mkt_delete_query.delete(synchronize_session=False)
+
+        # BƯỚC 6: Xóa DAILY ANALYTICS
+        analytics_query = db.query(models.DailyAnalytics).filter(
+            models.DailyAnalytics.brand_id == brand_id,
+            models.DailyAnalytics.date.between(start_date, end_date)
+        )
+        if source:
+            analytics_query = analytics_query.filter(models.DailyAnalytics.source == source)
+        analytics_query.delete(synchronize_session=False)
+
+        # BƯỚC 7: Xóa DAILY STAT (Luôn xóa để đảm bảo tính nhất quán)
+        # Vì nếu xóa 1 phần dữ liệu gốc (1 source), số liệu tổng hợp trong DailyStat sẽ không còn đúng nữa.
+        db.query(models.DailyStat).filter(
+            models.DailyStat.brand_id == brand_id,
+            models.DailyStat.date.between(start_date, end_date)
+        ).delete(synchronize_session=False)
 
         db.commit()
+        print(f"INFO: Đã hoàn tất xóa dữ liệu brand {brand_id} từ {start_date} đến {end_date} (Source: {source}).")
 
-        # BƯỚC MỚI: Kiểm tra xem source nào đã bị xóa hoàn toàn
+        # BƯỚC 8: Kiểm tra xem source nào đã bị xóa hoàn toàn (Logic cũ)
         fully_deleted_sources = []
         if sources_to_check:
             for src in sources_to_check:
-                # Đếm xem source này còn bản ghi nào trong các bảng không
                 remaining_count = 0
                 for model_class in [models.Order, models.Revenue, models.MarketingSpend]:
                     count = db.query(model_class).filter(
@@ -696,17 +764,14 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
                         getattr(model_class, 'source') == src
                     ).count()
                     remaining_count += count
-                    if remaining_count > 0: # Tối ưu: nếu đã tìm thấy > 0 thì không cần đếm nữa
-                        break
+                    if remaining_count > 0: break
                 
                 if remaining_count == 0:
                     fully_deleted_sources.append(src)
-        
-        print(f"INFO: Các source đã bị xóa hoàn toàn: {fully_deleted_sources}")
 
         _clear_brand_cache(brand_id)
+        return fully_deleted_sources
 
-        return fully_deleted_sources # Trả về danh sách các source đã bị xóa sạch
     except Exception as e:
         db.rollback()
         print(f"Error deleting data for brand {brand_id}: {e}")

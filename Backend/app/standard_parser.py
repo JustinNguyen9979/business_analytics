@@ -7,35 +7,109 @@ import io
 import models
 import crud
 import schemas
+import re # Import Regex
 from datetime import date, datetime
 from typing import Union, List
+from dateutil import parser as date_parser 
 
 def parse_date(date_str: str) -> Union[date, None]:
     """
-    Hàm chuẩn hóa ngày tháng một cách nghiêm ngặt.
-    Chỉ chấp nhận duy nhất định dạng 'DD/MM/YYYY'.
+    Hàm chuẩn hóa ngày tháng.
+    Xử lý nghiêm ngặt:
+    - Nếu dạng YYYY-MM-DD (có dấu gạch ngang): Hiểu là Năm-Tháng-Ngày.
+    - Nếu dạng DD/MM/YYYY (có dấu gạch chéo): Hiểu là Ngày/Tháng/Năm.
     """
     if not date_str or pd.isna(date_str):
         return None
     
+    s = str(date_str).strip()
+    if not s: return None
+
     try:
-        # Sử dụng datetime.strptime để ép kiểu theo đúng định dạng yêu cầu.
-        # Đây là cách làm chuẩn và an toàn nhất trong Python.
-        dt_object = datetime.strptime(str(date_str).strip(), '%d/%m/%Y')
+        # Nếu là format ISO (chứa dấu gạch ngang -), parse chuẩn quốc tế (Year-Month-Day)
+        if '-' in s:
+            dt_object = date_parser.parse(s, yearfirst=True, dayfirst=False)
+        else:
+            # Nếu là format VN (chứa dấu gạch chéo /), parse theo kiểu VN (Day/Month/Year)
+            dt_object = date_parser.parse(s, dayfirst=True)
+        
+        # Sanity check
+        if dt_object.year < 2000 or dt_object.year > 2030:
+            print(f"CẢNH BÁO: Ngày '{s}' parse ra năm {dt_object.year} không hợp lệ.")
+            return None
+            
         return dt_object.date()
+    except (ValueError, TypeError, OverflowError):
+        print(f"CẢNH BÁO: Không thể đọc định dạng ngày: '{date_str}'.")
+        return None
+
+def parse_datetime(date_str: str) -> Union[datetime, None]:
+    """
+    Hàm chuẩn hóa ngày giờ.
+    """
+    if not date_str or pd.isna(date_str):
+        return None
+    
+    s = str(date_str).strip()
+    if not s: return None
+
+    try:
+        if '-' in s:
+            dt_object = date_parser.parse(s, yearfirst=True, dayfirst=False)
+        else:
+            dt_object = date_parser.parse(s, dayfirst=True)
+
+        return dt_object.replace(microsecond=0)
     except (ValueError, TypeError):
-        # Nếu chuỗi đầu vào không khớp chính xác với định dạng 'DD/MM/YYYY',
-        # một lỗi ValueError sẽ xảy ra, và hàm sẽ trả về None.
-        print(f"CẢNH BÁO: Định dạng ngày tháng không hợp lệ (bỏ qua): '{date_str}'. Chỉ chấp nhận DD/MM/YYYY.")
+        print(f"CẢNH BÁO: Không thể đọc định dạng ngày giờ: '{date_str}'.")
         return None
 
 def to_float(value) -> float:
-    try: return float(str(value).replace(',', ''))
-    except (ValueError, TypeError): return 0.0
+    """
+    Chuyển đổi thông minh mọi định dạng số (US/VN) thành float chuẩn.
+    Xử lý các case:
+    - "19,000.00" -> 19000.0
+    - "19.000,00" -> 19000.0
+    - "19824,353" -> 19824.353
+    - "19000" -> 19000.0
+    """
+    if pd.isna(value) or value == '':
+        return 0.0
+    try:
+        s = str(value).strip()
+        # Chỉ giữ lại số, dấu chấm, dấu phẩy, dấu trừ
+        s = re.sub(r'[^\d\.,-]', '', s)
+        
+        if not s: return 0.0
+
+        # Logic đoán định dạng:
+        if '.' in s and ',' in s:
+            # Nếu có cả 2: Dấu nào nằm cuối cùng là dấu thập phân
+            if s.rfind('.') > s.rfind(','): 
+                # Dạng US: 1,000.00 -> Xóa phẩy
+                s = s.replace(',', '')
+            else:
+                # Dạng VN: 1.000,00 -> Xóa chấm, thay phẩy bằng chấm
+                s = s.replace('.', '').replace(',', '.')
+        
+        elif ',' in s:
+            # Nếu chỉ có dấu phẩy (Ca khó: 19,000 vs 19,5)
+            # Với dữ liệu sàn, giả định dấu phẩy là thập phân nếu nó xuất hiện (để hỗ trợ 19824,353)
+            # Tuy nhiên, nếu nó xuất hiện nhiều lần (1,000,000) thì là dấu ngăn cách
+            if s.count(',') > 1:
+                s = s.replace(',', '') # 1,000,000 -> 1000000
+            else:
+                s = s.replace(',', '.') # 19824,353 -> 19824.353
+        
+        return float(s)
+    except (ValueError, TypeError):
+        return 0.0
 
 def to_int(value) -> int:
-    try: return int(float(str(value).replace(',', '')))
-    except (ValueError, TypeError): return 0
+    """
+    Chuyển đổi thành số nguyên.
+    """
+    return int(to_float(value))
 
 # === HÀM TIỆN ÍCH MỚI: TÌM TÊN SHEET LINH HOẠT ===
 def find_sheet_name(sheet_names: List[str], keywords: List[str]) -> str | None:
@@ -108,17 +182,77 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     first_row = group.iloc[0]
                     username = first_row.get('username')
                     if username:
-                         customer_data = {'username': username, 'city': first_row.get('province'), 'district': first_row.get('district')}
+                         customer_data = {
+                             'username': username, 
+                             'city': first_row.get('province'), 
+                             'district': first_row.get('district'),
+                             'source': source # Truyền nguồn khách hàng
+                         }
                          crud.get_or_create_customer(db, customer_data=customer_data, brand_id=brand_id)
 
                     order_cogs, total_quantity = 0, 0
+                    items_list = [] # Danh sách item đã chuẩn hóa
+
                     for _, row in group.iterrows():
                         quantity = to_int(row.get('quantity'))
-                        cost_price = product_cost_map.get(str(row.get('sku')), 0)
+                        sku = str(row.get('sku'))
+                        
+                        # Lấy giá vốn từ map
+                        cost_price = product_cost_map.get(sku, 0)
                         order_cogs += quantity * cost_price
                         total_quantity += quantity
+                        
+                        # Lấy giá bán (SKU Price) từ file import
+                        # Ưu tiên cột 'sku_price', nếu không có thì thử 'price'
+                        raw_price = row.get('sku_price') if 'sku_price' in row else row.get('price')
+                        price = to_float(raw_price)
 
-                    orders_to_insert.append({ "order_code": order_code, "order_date": parse_date(first_row.get('order_date')), "status": first_row.get('order_status'), "username": username, "total_quantity": total_quantity, "cogs": order_cogs, "details": {"items": group.to_dict('records')}, "brand_id": brand_id, "source": source })
+                        # Tạo item dict chuẩn hóa
+                        item_dict = row.to_dict()
+                        item_dict['price'] = price # Lưu giá bán chuẩn hóa (float)
+                        item_dict['sku'] = sku
+                        item_dict['quantity'] = quantity
+                        
+                        # Dọn dẹp các trường dữ liệu cấp Order bị dư thừa trong Item
+                        # Để tránh rác dữ liệu và định dạng ngày tháng lộn xộn
+                        redundant_keys = [
+                            'order_date', 'delivered_date', 'payment_method', 
+                            'cancel_reason', 'order_status', 'province', 
+                            'district', 'order_id', 'username', 
+                            'sku_price', 'shipping_provider_name'
+                        ]
+                        for key in redundant_keys:
+                            item_dict.pop(key, None)
+                            
+                        items_list.append(item_dict)
+
+                    delivered_date_val = parse_datetime(first_row.get('delivered_date'))
+                    payment_method_val = str(first_row.get('payment_method', ''))
+                    cancel_reason_val = str(first_row.get('cancel_reason', '')) # Đọc lý do hủy
+
+                    # Tạo dict chi tiết bổ sung (Giữ lại các thông tin chung ở đây)
+                    extra_details = {
+                        "items": items_list, 
+                        "payment_method": payment_method_val,
+                        "cancel_reason": cancel_reason_val, 
+                        "shipping_provider_name": str(first_row.get('shipping_provider_name', '')),
+                        "order_status": str(first_row.get('order_status', '')),
+                        # delivered_date cấp root JSON vẫn giữ cho đồng bộ nếu cần, nhưng đã có cột riêng
+                        "delivered_date": delivered_date_val.isoformat() if delivered_date_val else None
+                    }
+
+                    orders_to_insert.append({ 
+                        "order_code": order_code, 
+                        "order_date": parse_datetime(first_row.get('order_date')), 
+                        "delivered_date": delivered_date_val, # Lưu vào cột riêng mới tạo
+                        "status": first_row.get('order_status'), 
+                        "username": username, 
+                        "total_quantity": total_quantity, 
+                        "cogs": order_cogs, 
+                        "details": extra_details, 
+                        "brand_id": brand_id, 
+                        "source": source 
+                    })
                 
                 if orders_to_insert:
                     db.bulk_insert_mappings(models.Order, orders_to_insert)

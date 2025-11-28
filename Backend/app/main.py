@@ -280,5 +280,10 @@ def read_customer_map_distribution(
     db: Session = Depends(get_db)
 ):
     """Lấy dữ liệu phân bổ khách hàng theo tỉnh/thành để vẽ bản đồ."""
-    distribution_data = crud.get_customer_distribution_with_coords(db, brand.id, start_date, end_date)
-    return distribution_data
+    try:
+        distribution_data = crud.get_aggregated_location_distribution(db, brand.id, start_date, end_date)
+        return distribution_data
+    except Exception as e:
+        print(f"!!! LỖI ENDPOINT CUSTOMER MAP: {e}")
+        # Trả về list rỗng thay vì lỗi 500 để tránh crash UI
+        return []
