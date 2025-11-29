@@ -140,39 +140,66 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
     // ... (Giữ nguyên logic cũ) ...
     const padding = maxY * 0.1; // Padding đơn giản 10%
 
-    // --- HÀM FORMAT SỐ TIỀN (Custom formatter) ---
-    const formatCurrencyAxis = (val) => {
-        if (val === 0) return '0';
-        if (val >= 1000000000) return (val / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
-        if (val >= 1000000) return (val / 1000000).toFixed(1).replace(/\.0$/, '') + 'M'; // Ưu tiên hiện M (Triệu)
-        if (val >= 1000) return (val / 1000).toFixed(0) + 'k';
-        return val.toString();
+    // --- THUẬT TOÁN CHIA VẠCH THÔNG MINH (SMART TICKS) ---
+    // Giúp biểu đồ tự động co giãn nhưng vẫn giữ được mốc số đẹp và format chuẩn Việt Nam (B, M, k)
+    
+    const calculateSmartTicks = (minVal, maxVal) => {
+        // 1. Xác định đỉnh mong muốn của biểu đồ (Target Max)
+        // Phải lớn hơn dữ liệu thật ít nhất 10% để thoáng mắt (tránh mất chóp)
+        // Và tối thiểu phải là 10 Triệu (khi dữ liệu nhỏ)
+        const MIN_MONETARY_SCALE_FOR_DISPLAY = 10000000; // 10 Triệu
+        let targetMax = Math.max(maxVal * 1.1, MIN_MONETARY_SCALE_FOR_DISPLAY);
+        const effectiveMin = Math.max(0, minVal); 
+        
+        // 2. Tính khoảng cách sơ bộ (chia làm 5-6 khoảng)
+        const targetTickCount = 5;
+        const rawStep = (targetMax - effectiveMin) / targetTickCount;
+        
+        // 3. Làm tròn bước nhảy (step) về các số đẹp
+        const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+        const normalizedStep = rawStep / magnitude;
+        
+        let niceStep;
+        if (normalizedStep < 1.5) niceStep = 1;
+        else if (normalizedStep < 3) niceStep = 2;
+        else if (normalizedStep < 7) niceStep = 5;
+        else niceStep = 10;
+        
+        const step = niceStep * magnitude;
+        
+        // 4. Sinh ra các tick
+        let ticks = [];
+        let labels = [];
+        
+        // Bắt đầu từ 0 (hoặc làm tròn xuống)
+        // Ví dụ: min=0 -> start=0. min=100 -> start=0.
+        let currentTick = Math.floor(effectiveMin / step) * step;
+        
+        // Chạy cho đến khi vượt qua targetMax
+        // Điều kiện này đảm bảo tick cuối cùng luôn cao hơn dữ liệu thật -> Không bao giờ mất chóp
+        while (currentTick <= targetMax + step) { 
+            ticks.push(currentTick);
+            
+            // Format label
+            let label = '';
+            if (currentTick === 0) label = '0';
+            else if (currentTick >= 1000000000) label = (currentTick / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+            else if (currentTick >= 1000000) label = (currentTick / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+            else if (currentTick >= 1000) label = (currentTick / 1000).toFixed(0) + 'k';
+            else label = currentTick.toString();
+            
+            labels.push(label);
+            
+            // Nếu tick này đã bao trọn dữ liệu (lớn hơn maxVal + padding), ta có thể dừng sớm
+            if (currentTick > targetMax) break;
+            
+            currentTick += step;
+        }
+        
+        return { tickVals: ticks, tickText: labels, range: [0, ticks[ticks.length-1]] };
     };
 
-    // --- XỬ LÝ FORMAT TRỤC Y (LOGIC MỚI V3 - TỰ TÍNH TICKVALS) ---
-    
-    let tickVals = [];
-    let tickText = [];
-    let chartRange = [];
-
-    // Dữ liệu (hoặc scale ảo) đã đảm bảo >= 10M, ta dùng logic chia vạch tự động
-    const roughStep = maxY / 5;
-    const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
-    const normalizedStep = roughStep / magnitude;
-    let step;
-    if (normalizedStep < 1.5) step = 1 * magnitude;
-    else if (normalizedStep < 2.5) step = 2 * magnitude;
-    else if (normalizedStep < 5.5) step = 5 * magnitude;
-    else step = 10 * magnitude;
-
-    // Tạo mảng tickVals: 0, step, 2*step... đến khi vượt qua maxY một chút
-    // Ví dụ scale 10M: 0, 2M, 4M, 6M, 8M, 10M
-    for (let v = 0; v <= maxY + (step * 0.1); v += step) {
-        tickVals.push(v);
-        tickText.push(formatCurrencyAxis(v));
-    }
-    
-    chartRange = [minY >= 0 ? 0 : minY - padding, tickVals[tickVals.length - 1] * 1.05];
+    const { tickVals, tickText, range } = calculateSmartTicks(minY, maxY);
 
     let yAxisConfig = {
         color: theme.palette.text.secondary,
@@ -182,11 +209,12 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
         zerolinecolor: theme.palette.divider, zerolinewidth: 2,
         rangeslider: { visible: false },
         
-        // Áp dụng Custom Ticks
+        // Áp dụng Smart Ticks
         tickmode: 'array',
         tickvals: tickVals,
         ticktext: tickText,
-        range: chartRange
+        range: range, // Set range cứng theo ticks đã tính toán để đảm bảo khớp
+        autorange: false 
     };
 
     const getXAxisConfig = () => { 
