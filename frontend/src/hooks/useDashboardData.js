@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { fetchAsyncData } from '../services/api';
+import { fetchAsyncData, fetchCustomerMap } from '../services/api';
 import dayjs from 'dayjs';
 import { processChartData } from '../utils/chartDataProcessor';
 
@@ -77,11 +77,11 @@ const getPreviousPeriod = (startDate, endDate, filterType = 'custom') => {
 
 /**
  * Custom Hook DUY NHẤT, linh hoạt để quản lý nhiều khối dữ liệu độc lập trên dashboard.
- * @param {string} brandId - ID của thương hiệu.
+ * @param {string} brandSlug - Slug của thương hiệu.
  * @param {object} filters - Một object chứa các bộ lọc cho từng khối dữ liệu.
  * Ví dụ: { kpi: kpiFilter, lineChart: chartFilter, donut: donutFilter, ... }
  */
-export const useDashboardData = (brandId, filters) => {
+export const useDashboardData = (brandSlug, filters) => {
     // <<< THAY ĐỔI 1: Cấu trúc state mới, mỗi khối dữ liệu là một object riêng >>>
     const [state, setState] = useState({
         kpi: { data: { current: null, previous: null }, loading: true, error: null },
@@ -102,7 +102,7 @@ export const useDashboardData = (brandId, filters) => {
     // <<< THAY ĐỔI 2: useEffect riêng cho KPI >>>
     useEffect(() => {
         const filter = filters.kpi;
-        if (!brandId || !filter || !filter.range) return;
+        if (!brandSlug || !filter || !filter.range) return;
 
         const controller = new AbortController();
 
@@ -111,8 +111,8 @@ export const useDashboardData = (brandId, filters) => {
             const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
             try {
                 const [current, previous] = await Promise.all([
-                    fetchAsyncData('kpi_summary', brandId, filter.range, {}, controller.signal),
-                    fetchAsyncData('kpi_summary', brandId, prevRange, {}, controller.signal)
+                    fetchAsyncData('kpi_summary', brandSlug, filter.range, {}, controller.signal),
+                    fetchAsyncData('kpi_summary', brandSlug, prevRange, {}, controller.signal)
                 ]);
                 updateState('kpi', { data: { current, previous }, loading: false });
             } catch (err) {
@@ -125,12 +125,12 @@ export const useDashboardData = (brandId, filters) => {
         fetchKpi();
 
         return () => controller.abort();
-    }, [brandId, filters.kpi]); // Chỉ phụ thuộc vào bộ lọc KPI
+    }, [brandSlug, filters.kpi]); // Chỉ phụ thuộc vào bộ lọc KPI
 
     // <<< THAY ĐỔI 3: useEffect riêng cho Biểu đồ đường (Line Chart) >>>
     useEffect(() => {
         const filter = filters.lineChart;
-        if (!brandId || !filter || !filter.range) return;
+        if (!brandSlug || !filter || !filter.range) return;
         
         const controller = new AbortController();
 
@@ -139,8 +139,8 @@ export const useDashboardData = (brandId, filters) => {
             const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
             try {
                 const [currentRes, previousRes] = await Promise.all([
-                    fetchAsyncData('daily_kpis_chart', brandId, filter.range, {}, controller.signal),
-                    fetchAsyncData('daily_kpis_chart', brandId, prevRange, {}, controller.signal)
+                    fetchAsyncData('daily_kpis_chart', brandSlug, filter.range, {}, controller.signal),
+                    fetchAsyncData('daily_kpis_chart', brandSlug, prevRange, {}, controller.signal)
                 ]);
                 const processedCurrent = processChartData(currentRes?.data, filter);
                 const processedPrevious = processChartData(previousRes?.data, { range: prevRange, type: filter.type });
@@ -162,20 +162,20 @@ export const useDashboardData = (brandId, filters) => {
         fetchLineChart();
 
         return () => controller.abort();
-    }, [brandId, filters.lineChart]); // Chỉ phụ thuộc vào bộ lọc Line Chart
+    }, [brandSlug, filters.lineChart]); // Chỉ phụ thuộc vào bộ lọc Line Chart
 
     // <<< THAY ĐỔI 4: useEffect riêng cho các biểu đồ còn lại (Donut, Top Products, Map) >>>
     // Helper function để tránh lặp code
     const createSingleChartEffect = (key, requestType, filter) => {
         useEffect(() => {
-            if (!brandId || !filter || !filter.range) return;
+            if (!brandSlug || !filter || !filter.range) return;
             
             const controller = new AbortController();
 
             const fetchData = async () => {
                 updateState(key, { loading: true, error: null });
                 try {
-                    const result = await fetchAsyncData(requestType, brandId, filter.range, {}, controller.signal);
+                    const result = await fetchAsyncData(requestType, brandSlug, filter.range, {}, controller.signal);
                     updateState(key, { data: result, loading: false });
                 } catch (err) {
                     if (!axios.isCancel(err)) {
@@ -187,12 +187,42 @@ export const useDashboardData = (brandId, filters) => {
             fetchData();
 
             return () => controller.abort();
-        }, [brandId, filter]);
+        }, [brandSlug, filter]);
     };
 
     createSingleChartEffect('donut', 'kpi_summary', filters.donut);
     createSingleChartEffect('topProducts', 'top_products', filters.topProducts);
-    createSingleChartEffect('map', 'customer_map', filters.map);
+    
+    // <<< THAY ĐỔI 5: Effect riêng cho MAP (Gọi API trực tiếp, không qua Worker) >>>
+    useEffect(() => {
+        const filter = filters.map;
+        if (!brandSlug || !filter || !filter.range) return;
+        
+        const controller = new AbortController();
+
+        const fetchMapData = async () => {
+            updateState('map', { loading: true, error: null });
+            const [start, end] = filter.range;
+            try {
+                // Gọi API trực tiếp (Synchronous)
+                const result = await fetchCustomerMap(
+                    brandSlug, 
+                    start.format('YYYY-MM-DD'), 
+                    end.format('YYYY-MM-DD'), 
+                    controller.signal
+                );
+                updateState('map', { data: result, loading: false });
+            } catch (err) {
+                if (!axios.isCancel(err)) {
+                    updateState('map', { error: err.message || 'Lỗi tải dữ liệu bản đồ.', loading: false });
+                }
+            }
+        };
+
+        fetchMapData();
+
+        return () => controller.abort();
+    }, [brandSlug, filters.map]);
     
     // Trả về toàn bộ state đã được cấu trúc
     return state;

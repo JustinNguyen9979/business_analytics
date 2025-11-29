@@ -1,24 +1,40 @@
 // FILE: frontend/src/services/api.js
 import axios from 'axios';
 
-
 // Tạo một instance của axios với cấu hình sẵn
 const apiClient = axios.create({
     // '/api' sẽ được Vite proxy chuyển tiếp đến backend
     baseURL: '/api',
 });
 
+export const fetchCustomerMap = async (brandSlug, startDate, endDate, signal) => {
+    try {
+        const response = await apiClient.get(`/brands/${brandSlug}/customer-map-distribution`, {
+            params: { start_date: startDate, end_date: endDate },
+            signal
+        });
+        return response.data;
+    } catch (error) {
+        if (axios.isCancel(error)) {
+            console.log('Request cancelled:', error.message);
+        } else {
+            console.error(`Error fetching customer map for brand ${brandSlug}:`, error);
+        }
+        throw error;
+    }
+};
+
 /**
  * Gửi yêu cầu tính toán dữ liệu đến backend.
  * @param {string} requestType - Loại dữ liệu cần tính (kpi_summary, daily_kpis_chart, ...).
- * @param {number} brandId - ID của brand.
+ * @param {string} brandSlug - Slug của brand.
  * @param {object} params - Các tham số (start_date, end_date, ...).
  * @returns {Promise<object>} - Phản hồi từ API, có thể là dữ liệu ngay (cache hit) hoặc task_id (cache miss).
  */
-export const requestData = async (requestType, brandId, params, signal) => {
+export const requestData = async (requestType, brandSlug, params, signal) => {
     try {
         const payload = {
-            brand_id: brandId,
+            brand_slug: brandSlug,
             request_type: requestType,
             params: params,
         };
@@ -168,12 +184,12 @@ export const deleteDataInRange = async (brandSlug, startDate, endDate, source = 
  * Đây là logic bất đồng bộ chính được các hook sử dụng.
  * TÍCH HỢP CLIENT-SIDE CACHE.
  * @param {string} requestType - Loại dữ liệu cần tính (kpi_summary, kpis_by_platform, ...).
- * @param {number} brandId - ID của brand.
+ * @param {string} brandSlug - Slug của brand.
  * @param {Array<dayjs>} dateRange - Mảng [ngày bắt đầu, ngày kết thúc].
  * @param {object} params - Các tham số bổ sung.
  * @returns {Promise<object>} - Dữ liệu đã được xử lý thành công.
  */
-export const fetchAsyncData = async (requestType, brandId, dateRange, params = {}, signal) => {
+export const fetchAsyncData = async (requestType, brandSlug, dateRange, params = {}, signal) => {
     // Helper to check for abort signal
     const throwIfAborted = () => {
         if (signal?.aborted) {
@@ -191,7 +207,7 @@ export const fetchAsyncData = async (requestType, brandId, dateRange, params = {
     };
 
     try {
-        const initialResponse = await requestData(requestType, brandId, fullParams, signal);
+        const initialResponse = await requestData(requestType, brandSlug, fullParams, signal);
         
         if (initialResponse.status === 'SUCCESS') {
             const resultData = initialResponse.data;

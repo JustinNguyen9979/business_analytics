@@ -7,7 +7,6 @@ from sqlalchemy import func, union_all, select, and_
 from datetime import date, timedelta
 from cache import redis_client
 from models import DailyStat
-from province_centroids import PROVINCE_CENTROIDS
 
 def _clear_brand_cache(brand_id: int):
     """Xóa các cache liên quan đến dashboard của một brand bằng cách dùng SCAN để không block Redis."""
@@ -529,54 +528,55 @@ def get_top_selling_products(db: Session, brand_id: int, start_date: date, end_d
         return []
 
 def get_aggregated_location_distribution(db: Session, brand_id: int, start_date: date, end_date: date):
-    """
-    Lấy dữ liệu phân bổ khách hàng từ bảng DailyAnalytics (đã tính sẵn) và cộng dồn.
-    Nhanh hơn nhiều so với việc query raw Orders + Customers.
-    """
     try:
-        # 1. Lấy các bản ghi DailyAnalytics trong khoảng thời gian (chỉ lấy source tổng 'all')
-        daily_records = db.query(models.DailyAnalytics.location_distribution).filter(
-            models.DailyAnalytics.brand_id == brand_id,
-            models.DailyAnalytics.date.between(start_date, end_date),
-            models.DailyAnalytics.source == 'all'
+        daily_records = db.query(models.DailyStat.location_distribution).filter(
+            models.DailyStat.brand_id == brand_id,
+            models.DailyStat.date.between(start_date, end_date),
         ).all()
 
         if not daily_records:
             return []
-
-        # 2. Cộng dồn dữ liệu (Aggregation)
-        # Cấu trúc mong muốn: {"Hanoi": 150, "Ho Chi Minh": 120}
-        city_stats = defaultdict(int)
+        
+        city_stats = {}
 
         for record in daily_records:
-            # record là tuple, record[0] là json location_distribution
-            loc_dist = record[0]
+            loc_dist = record[0]  # Lấy giá trị location_distribution từ tuple
             if loc_dist and isinstance(loc_dist, list):
                 for item in loc_dist:
+                    if not isinstance(item, dict): continue
+
                     city = item.get('city')
-                    orders = item.get('orders', 0) # Hoặc customer_count tùy vào logic lưu
-                    # Lưu ý: KPI calculator đang lưu key là "orders", nhưng map frontend cần đếm số khách
-                    # Tạm thời ta cộng dồn số lượng này.
+                    orders = item.get('orders', 0)
+                    revenue = item.get('revenue', 0)
+                    
+                    # Xử lý tọa độ: DB lưu latitude/longitude, Frontend cần coords [lon, lat]
+                    lat = item.get('latitude')
+                    lon = item.get('longitude')
+
                     if city:
-                        city_stats[city] += orders
+                        if city not in city_stats:
+                            city_stats[city] = {
+                                'city': city,
+                                'orders': 0,
+                                'revenue': 0,
+                                'latitude': lat,
+                                'longitude': lon,
+                            }
+                        
+                        city_stats[city]["orders"] += orders
+                        city_stats[city]["revenue"] += revenue
+                        
+                        # Ưu tiên lấy coords nếu chưa có
+                        if (city_stats[city]["latitude"] is None) and (lat is not None):
+                            city_stats[city]["latitude"] = lat
+                            city_stats[city]["longitude"] = lon
+                            
+        results = list(city_stats.values())
 
-        # 3. Gắn tọa độ và Format đầu ra
-        results_with_coords = []
-        for city_name, count in city_stats.items():
-            centroid = PROVINCE_CENTROIDS.get(city_name)
-            if centroid:
-                results_with_coords.append({
-                    "city": city_name,
-                    "customer_count": count, # Frontend đang dùng key này
-                    "coords": centroid 
-                })
-
-        # 4. Sắp xếp giảm dần
-        return sorted(results_with_coords, key=lambda item: item['customer_count'], reverse=True)
-
+        # Sắp xếp theo số lượng đơn hàng (orders)
+        return sorted(results, key=lambda item: item['orders'], reverse=True)
     except Exception as e:
-        print(f"!!! LỖI KHI LẤY DỮ LIỆU BẢN ĐỒ TỪ ANALYTICS: {e}")
-        traceback.print_exc()
+        print(f"!!! LỖI KHI TÍNH TOÁN LOCATION DISTRIBUTION TỔNG HỢP: {e}")
         return []
 
 def get_kpis_by_platform(db: Session, brand_id: int, start_date: date, end_date: date):

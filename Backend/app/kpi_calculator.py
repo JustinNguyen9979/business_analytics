@@ -6,6 +6,7 @@ from collections import defaultdict
 from unidecode import unidecode
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from province_centroids import PROVINCE_CENTROIDS
 
 CANCELLED_STATUSES = {'hủy', 'cancel', 'đã hủy', 'cancelled'}
 
@@ -189,10 +190,17 @@ def _calculate_location_distribution(orders: List[models.Order], db_session: Ses
                 # Nếu muốn chính xác doanh thu, cần join với Revenue hoặc lấy từ order details
                 
         # Chuyển đổi sang list format
-        results = [
-            {"city": city, "orders": data["orders"], "revenue": data["revenue"]}
-            for city, data in city_stats.items()
-        ]
+        results = []
+        for city, data in city_stats.items():
+            coords = PROVINCE_CENTROIDS.get(city)
+            if coords:
+                results.append({
+                    "city": city,
+                    "orders": data["orders"],
+                    "revenue": data["revenue"],
+                    "longitude": coords[0],
+                    "latitude": coords[1]
+                })
         
         # Sắp xếp theo số đơn giảm dần
         return sorted(results, key=lambda x: x["orders"], reverse=True)

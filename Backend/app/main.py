@@ -169,9 +169,14 @@ def request_data_processing(
     db: Session = Depends(get_db)
 ):
     """
-    Endpoint chính: Nhận yêu cầu, kiểm tra cache, hoặc giao việc cho worker.
+    Endpoint chính: Nhận yêu cầu (dùng SLUG), kiểm tra cache, hoặc giao việc cho worker.
     """
-    brand_id = request_body.brand_id
+    # 1. Lấy brand_id từ slug để đảm bảo bảo mật
+    db_brand = crud.get_brand_by_slug(db, slug=request_body.brand_slug)
+    if not db_brand:
+        raise HTTPException(status_code=404, detail=f"Brand slug '{request_body.brand_slug}' không tồn tại.")
+    
+    brand_id = db_brand.id
     request_type = request_body.request_type
     params = request_body.params
 
@@ -229,6 +234,22 @@ def recalculate_brand_data(brand: models.Brand = Depends(get_brand_from_slug), d
 # === 3. ENDPOINTS LẤY DỮ LIỆU CHO DASHBOARD (DATA RETRIEVAL) ===
 # ==============================================================================
 
+@app.get("/brands/{brand_slug}/customer-map-distribution", response_model=List[schemas.CustomerMapDistributionItem])
+def read_customer_map_distribution(
+    start_date: date,
+    end_date: date,
+    brand: models.Brand = Depends(get_brand_from_slug),
+    db: Session = Depends(get_db)
+):
+    """Lấy dữ liệu phân bổ khách hàng theo tỉnh/thành để vẽ bản đồ."""
+    try:
+        distribution_data = crud.get_aggregated_location_distribution(db, brand.id, start_date, end_date)
+        return distribution_data
+    except Exception as e:
+        print(f"!!! LỖI ENDPOINT CUSTOMER MAP: {e}")
+        # Trả về list rỗng thay vì lỗi 500 để tránh crash UI
+        return []
+
 @app.get("/brands/{brand_slug}", response_model=schemas.BrandWithKpis)
 def read_brand_kpis(
     start_date: date, 
@@ -271,19 +292,3 @@ def read_top_products(
     except Exception as e:
         print(f"!!! LỖI ENDPOINT TOP PRODUCTS: {e}")
         raise HTTPException(status_code=500, detail="Lỗi server khi xử lý yêu cầu.")
-
-@app.get("/brands/{brand_slug}/customer-map-distribution", response_model=List[schemas.CustomerMapDistributionItem])
-def read_customer_map_distribution(
-    start_date: date,
-    end_date: date,
-    brand: models.Brand = Depends(get_brand_from_slug),
-    db: Session = Depends(get_db)
-):
-    """Lấy dữ liệu phân bổ khách hàng theo tỉnh/thành để vẽ bản đồ."""
-    try:
-        distribution_data = crud.get_aggregated_location_distribution(db, brand.id, start_date, end_date)
-        return distribution_data
-    except Exception as e:
-        print(f"!!! LỖI ENDPOINT CUSTOMER MAP: {e}")
-        # Trả về list rỗng thay vì lỗi 500 để tránh crash UI
-        return []

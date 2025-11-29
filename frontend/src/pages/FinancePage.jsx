@@ -49,7 +49,7 @@ const KpiCardSkeleton = () => (
 
 function FinancePage() {
     const theme = useTheme();
-    const { id: brandId } = useBrand();
+    const { slug: brandSlug } = useBrand();
     const lineChartFilterControl = useDateFilter({ defaultType: 'this_month' });
 
     const dashboardFilters = useMemo(() => ({
@@ -57,7 +57,7 @@ function FinancePage() {
         kpi: null, donut: null, topProducts: null, map: null,
     }), [lineChartFilterControl.filter]);
 
-    const { lineChart } = useDashboardData(brandId, dashboardFilters);
+    const { lineChart } = useDashboardData(brandSlug, dashboardFilters);
 
     const comparisonChartSeries = useMemo(() => [
         { key: 'netRevenue', name: 'Doanh thu', color: theme.palette.primary.light },
@@ -95,7 +95,7 @@ function FinancePage() {
     const [dateLabel, setDateLabel] = useState(defaultDateLabel);
     const [anchorEl, setAnchorEl] = useState(null);
     
-    const { currentData, previousData, loading, error } = useFinanceData(brandId, dateRange);
+    const { currentData, previousData, loading, error } = useFinanceData(brandSlug, dateRange);
 
     const handleOpenFilter = (event) => setAnchorEl(event.currentTarget);
     const handleCloseFilter = () => setAnchorEl(null);

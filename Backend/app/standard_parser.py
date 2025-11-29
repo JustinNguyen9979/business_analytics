@@ -11,6 +11,7 @@ import re # Import Regex
 from datetime import date, datetime
 from typing import Union, List
 from dateutil import parser as date_parser 
+from vietnam_address_mapping import get_new_province_name 
 
 def parse_date(date_str: str) -> Union[date, None]:
     """
@@ -182,11 +183,15 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     first_row = group.iloc[0]
                     username = first_row.get('username')
                     if username:
+                         # Chuẩn hóa tên tỉnh thành trước khi lưu
+                         raw_province = str(first_row.get('province', ''))
+                         normalized_city = get_new_province_name(raw_province)
+                         
                          customer_data = {
                              'username': username, 
-                             'city': first_row.get('province'), 
+                             'city': normalized_city, # Lưu tên chuẩn (Ví dụ: Hà Nội, TP. Hồ Chí Minh...)
                              'district': first_row.get('district'),
-                             'source': source # Truyền nguồn khách hàng
+                             'source': source 
                          }
                          crud.get_or_create_customer(db, customer_data=customer_data, brand_id=brand_id)
 

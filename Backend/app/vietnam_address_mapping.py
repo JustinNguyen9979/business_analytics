@@ -95,25 +95,32 @@ OLD_TO_NEW_MAPPING = {
 def get_new_province_name(old_name: str):
     """
     Chuẩn hóa và tìm tên tỉnh mới tương ứng từ một tên cũ.
+    Logic: Input -> Làm sạch -> Tra cứu Mapping -> Tên Mới.
     """
     if not old_name:
         return None
 
-    # Chuẩn hóa đầu vào
-    normalized_input = old_name.replace("Tỉnh ", "").replace("Thành phố ", "").strip()
+    # 1. Làm sạch cơ bản
+    # Xóa các tiền tố hành chính thường gặp
+    cleaned_name = old_name.strip()
+    prefixes = ["Tỉnh ", "Thành phố ", "TP. ", "Tp. ", "T. "]
+    for prefix in prefixes:
+        if cleaned_name.startswith(prefix):
+            cleaned_name = cleaned_name[len(prefix):].strip()
+    
+    # 2. Tra cứu chính xác
+    if cleaned_name in OLD_TO_NEW_MAPPING:
+        return OLD_TO_NEW_MAPPING[cleaned_name]
 
-    # 1. Tra cứu trực tiếp trong từ điển ánh xạ
-    if normalized_input in OLD_TO_NEW_MAPPING:
-        return OLD_TO_NEW_MAPPING[normalized_input]
+    # 3. Tra cứu không dấu (Fuzzy matching)
+    # Tạo một bản sao mapping với key không dấu để tra cứu nhanh
+    # (Lưu ý: Nên cache cái này nếu gọi nhiều, nhưng tạm thời loop cũng được vì list ngắn)
+    input_unidecode = unidecode(cleaned_name).lower()
+    
+    for old_key, new_val in OLD_TO_NEW_MAPPING.items():
+        if unidecode(old_key).lower() == input_unidecode:
+            return new_val
 
-    # 2. Nếu không có, thử tìm xem nó có phải là một tên tỉnh mới không
-    if normalized_input in NEW_PROVINCES:
-        return normalized_input
-
-    # 3. Thử tìm kiếm không dấu
-    unidecoded_input = unidecode(normalized_input).lower()
-    for old, new in OLD_TO_NEW_MAPPING.items():
-        if unidecode(old).lower() == unidecoded_input:
-            return new
-
-    return None
+    # 4. Nếu không tìm thấy trong mapping
+    # Trả về tên đã làm sạch, hy vọng nó là tên chuẩn mới chưa kịp cập nhật vào mapping
+    return cleaned_name

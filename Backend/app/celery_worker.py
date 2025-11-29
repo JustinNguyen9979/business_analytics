@@ -148,12 +148,6 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                 result_data = crud.get_top_selling_products(db, brand_id, start_date, end_date, limit)
 
             # --------------------------------------------------------------
-            # --- Nhánh 4: BẢN ĐỒ (Lấy từ DailyAnalytics đã aggregate) ---
-            # --------------------------------------------------------------
-            elif request_type == "customer_map":
-                result_data = crud.get_aggregated_location_distribution(db, brand_id, start_date, end_date)
-
-            # --------------------------------------------------------------
             # --- Nhánh 5: KPI THEO PLATFORM ---
             # --------------------------------------------------------------
             elif request_type == "kpis_by_platform":

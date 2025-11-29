@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 from datetime import date, datetime
 
 class DataRequest(BaseModel):
-    brand_id: int
+    brand_slug: str
     request_type: str
     params: Dict[str, Any]
 
@@ -147,7 +147,9 @@ class CustomerDistributionItem(BaseModel):
 
 class CustomerMapDistributionItem(BaseModel):
     city: str
-    customer_count: int
-    coords: List[float] # Sẽ là một mảng [kinh độ, vĩ độ]
+    orders: int
+    revenue: float = 0.0
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)

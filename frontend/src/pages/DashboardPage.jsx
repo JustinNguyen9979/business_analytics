@@ -31,14 +31,14 @@ const ChartSkeleton = () => (
 
 function DashboardPage() {
     const theme = useTheme();
-    const { id: brandId, name: brandName } = useBrand();
+    const { slug: brandSlug, name: brandName } = useBrand();
     const { isSidebarOpen } = useLayout();
 
     const lineChartSeries = useMemo(() => [
         { key: 'netRevenue', name: 'Doanh thu ròng', color: theme.palette.primary.main},
         { key: 'profit', name: 'Lợi nhuận', color: '#28a545'},
         { key: 'totalCost', name: 'Tổng chi phí', color: '#cdb832ff'},
-    ], theme.palette.primary.main);
+    ], [theme.palette.primary.main]);
 
     // Gọi hook cho từng bộ lọc
     const kpiFilterControl = useDateFilter({
@@ -66,7 +66,7 @@ function DashboardPage() {
         mapFilterControl.filter,
     ]);
 
-    const dashboardState = useDashboardData(brandId, filtersForHook)
+    const dashboardState = useDashboardData(brandSlug, filtersForHook)
 
     const { kpi, lineChart, donut, topProducts, map } = dashboardState;
 
@@ -270,7 +270,16 @@ function DashboardPage() {
                         </Box>
                         <Box sx={{ flexGrow: 1, minHeight: { xs: 500, lg: 'auto' }, position: 'relative' }}>
                             {map.loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
-                                map.data ? <GeoMapChart data={map.data}/> : <ChartPlaceholder title="Phân bổ Khách hàng" />
+                                map.data ? (
+                                    <GeoMapChart 
+                                        data={map.data} 
+                                        valueKey="orders" 
+                                        labelKey="city" 
+                                        unitLabel="đơn"
+                                    />
+                                ) : (
+                                    <ChartPlaceholder title="Phân bổ Khách hàng" />
+                                )
                             )}
                         </Box>
                     </Paper>

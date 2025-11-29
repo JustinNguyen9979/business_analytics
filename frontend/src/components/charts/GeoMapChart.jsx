@@ -2,14 +2,26 @@
 
 import React, { memo, useMemo, useEffect, useState } from 'react';
 import { ComposableMap, Geographies, Geography, Marker } from '@vnedyalk0v/react19-simple-maps';
-import { Box, Grid, Stack, Typography, CircularProgress } from '@mui/material';
+import { Box, Stack, Typography, CircularProgress } from '@mui/material';
 import { scaleLinear } from 'd3-scale';
 
+const defaultTooltipFormatter = (label, value) => `${label}: ${value.toLocaleString('vi-VN')}`;
 
-function GeoMapChartComponent({ data }) {
+/**
+* Generic GeoMapChart
+* @param {Array} data - Mảng dữ liệu đầu vào. Mỗi phần tử PHẢI có trường 'coords': [long, lat].
+* @param {string} valueKey - Tên trường chứa giá trị định lượng (VD: 'orders', 'revenue','customer_count').
+* @param {string} labelKey - Tên trường chứa nhãn hiển thị (VD: 'city', 'province').
+* @param {function} tooltipFormatter - Hàm tùy chỉnh hiển thị tooltip (nhận vào item).
+* @param {string} unitLabel - Nhãn đơn vị cho phần Top 5 (VD: 'khách', 'đơn', 'VND').
+*/
+
+function GeoMapChartComponent({ data, valueKey = 'value', labelKey = 'city', tooltipFormatter, unitLabel = '' }) {
+
     // 1. Hook lấy dữ liệu bản đồ với cơ chế cache IndexedDB
     const [geoShapeData, setGeoShapeData] = useState(null);
     const [isLoadingGeo, setIsLoadingGeo] = useState(true);
+    const [showMarkers, setShowMarkers] = useState(false);
 
     useEffect(() => {
         const loadGeography = async () => {
@@ -29,7 +41,6 @@ function GeoMapChartComponent({ data }) {
         loadGeography();
     }, []);
 
-    const [showMarkers, setShowMarkers] = useState(false);
 
     // 3. Hook tính toán scale
     const { sizeScale, opacityScale } = useMemo(() => {
@@ -37,52 +48,36 @@ function GeoMapChartComponent({ data }) {
             return { sizeScale: () => 0, opacityScale: () => 0 };
         }
         
-        const counts = data.map(d => d.customer_count);
-        const max = Math.max(...counts.map(c => Number(c)), 0); 
-        
+        const values = data.map(d => d[valueKey]);
+        const max = Math.max(...values.map(v => Number(v)), 0);
         const size = scaleLinear().domain([0, max]).range([4, 12]).clamp(true);
         const opacity = scaleLinear().domain([0, max]).range([0.6, 1.0]).clamp(true);
 
         return { sizeScale: size, opacityScale: opacity };
-    }, [data]);
+    }, [data, valueKey]);
 
     // 4. Hook tính toán Top 5
-    const top5Provinces = useMemo(() => {
-        if (!data || data.length === 0) {
-            return [];
-        }
+    const topItems = useMemo(() => {
+        if (!data || data.length === 0) return [];
         // Sắp xếp dữ liệu theo customer_count giảm dần và lấy 5 phần tử đầu tiên
         return [...data]
-            .sort((a, b) => b.customer_count - a.customer_count)
-            .slice(0, 5);
-    }, [data]);
+            .sort((a, b) => b[valueKey] - a[valueKey])
+            .slice(0, 6);
+    }, [data, valueKey]);
 
     // 5. Hook hiệu ứng delay
     useEffect(() => {
-        // Chúng ta dùng setTimeout để trì hoãn việc hiển thị các điểm chấm một chút (50ms).
-        // Khoảng thời gian này đủ để trình duyệt vẽ xong nền bản đồ phức tạp trước.
-        const timer = setTimeout(() => {
-            setShowMarkers(true);
-        }, 50); // 50 mili-giây là một độ trễ người dùng không thể nhận ra.
+        if (geoShapeData) {
+            const timer = setTimeout(() => {
+                setShowMarkers(true);
+            }, 50);
+            return () => clearTimeout(timer);
+        } else {
+            setShowMarkers(false);
+        }
+    }, [geoShapeData]);
 
-        // Cleanup function để dọn dẹp timer nếu component bị unmount
-        return () => clearTimeout(timer);
-    }, []);
-
-    // << FIX: Xóa bỏ useEffect gây lỗi "Tooltip is not defined"
-    // useEffect(() => {
-    //     const handleOutsideClick = (event) => {
-    //         if (!event.target.closest('.map-dot')) {
-    //             Tooltip.hide();
-    //         }
-    //     };
-    //     document.addEventListener('click', handleOutsideClick);
-    //     return () => {
-    //         document.removeEventListener('click', handleOutsideClick);
-    //     };
-    // }, []);
-
-    if (isLoadingGeo) {
+    if (isLoadingGeo || !geoShapeData) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
                 <CircularProgress />
@@ -113,15 +108,25 @@ function GeoMapChartComponent({ data }) {
                     </Geographies>
 
                     {showMarkers && data.map(item => {
-                        if (!item.coords || item.coords.length !== 2) return null;
+                        const lat = item.latitude;
+                        const lon = item.longitude;
+                        
+                        if (lat === undefined || lon === undefined || lat === null || lon === null) return null;
 
-                        const size = sizeScale(item.customer_count);
-                        const opacity = opacityScale(item.customer_count);
+                        const val = item[valueKey];
+                        const label = item[labelKey];
+                        const size = sizeScale(val);
+                        const opacity = opacityScale(val);
+
+                        // Fix lỗi ReferenceError: tooltipContent is not defined
+                        const tooltipContent = tooltipFormatter 
+                            ? tooltipFormatter(item) 
+                            : defaultTooltipFormatter(label, val);
 
                         return (
                             <Marker
-                                key={item.city}
-                                coordinates={item.coords}
+                                key={label}
+                                coordinates={[lon, lat]}
                             >
                                 <g style={{ cursor: 'pointer', pointerEvents: 'none' }}>
                                     <circle
@@ -142,15 +147,13 @@ function GeoMapChartComponent({ data }) {
                                         className="map-dot"
                                         r={size}
                                         data-tooltip-id="map-tooltip"
-                                        data-tooltip-content={`${item.city}: ${item.customer_count.toLocaleString('vi-VN')} khách`}
+                                        data-tooltip-content={tooltipContent}
                                         fill={`rgba(255, 82, 82, ${opacity})`}
                                         stroke="#FFFFFF"
                                         strokeWidth={0.5}
                                         style={{ transition: 'transform 0.2s ease', pointerEvents: 'auto' }}
                                         onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.8)'; }}
                                         onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                                        // << FIX: Xóa onClick gây lỗi
-                                        // onClick={(e) => Tooltip.show(e.currentTarget)}
                                     />
                                 </g>
                             </Marker>
@@ -158,10 +161,10 @@ function GeoMapChartComponent({ data }) {
                     })}
                 </ComposableMap>
             </Box>
-            {top5Provinces.length > 0 && (
+            {topItems.length > 0 && (
                 <Box sx={{ p: 2, flexShrink: 0, borderTop: 1, borderColor: 'divider' }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 2, textAlign: 'center' }}>
-                        Top 5 Tỉnh/Thành có lượng khách hàng cao nhất
+                        Top Tỉnh/Thành có lượng khách hàng cao nhất
                     </Typography>
                     {/* THAY THẾ GRID BẰNG BOX */}
                     <Box sx={{
@@ -171,7 +174,7 @@ function GeoMapChartComponent({ data }) {
                         gap: { xs: 1, sm: 2 }, // Giảm khoảng cách giữa các item
                         justifyContent: 'space-between' // Thêm justify-content
                     }}>
-                        {top5Provinces.map((province, index) => (
+                        {topItems.map((province, index) => (
                             <Box key={province.city} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
                                 <Stack direction="row" spacing={1.5} alignItems="center">
                                     <Typography sx={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'text.secondary', width: '24px' }}>
@@ -180,7 +183,7 @@ function GeoMapChartComponent({ data }) {
                                     <Box>
                                         <Typography sx={{ fontWeight: 'bold' }}>{province.city}</Typography>
                                         <Typography variant="body2" color="text.secondary">
-                                            {province.customer_count.toLocaleString('vi-VN')} khách
+                                            {province[valueKey].toLocaleString('vi-VN')} {unitLabel}
                                         </Typography>
                                     </Box>
                                 </Stack>

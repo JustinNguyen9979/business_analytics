@@ -319,7 +319,7 @@ export default function DashboardLayout() {
                 currentBrand = allBrands.find(b => b.slug === brandIdentifier);
                 
                 if (currentBrand) {
-                    setBrandInfo({ id: currentBrand.id, name: currentBrand.name, isLoading: false });
+                    setBrandInfo({ id: currentBrand.id, name: currentBrand.name, slug: currentBrand.slug, isLoading: false });
                 } else {
                     // Nếu không tìm thấy brand nào, chuyển hướng về trang chính
                     navigate('/');
