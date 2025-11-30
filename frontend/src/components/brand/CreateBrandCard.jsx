@@ -69,7 +69,7 @@ function CreateBrandCard({ onCreate }) {
                         helperText={createError}
                     />
                 </DialogContent>
-                <DialogActions sx={{ p: '0 24px 16px' }}>
+                <DialogActions sx={{ p: '16px 24px 16px' }}>
                     <Button onClick={handleClose} color="secondary">Hủy</Button>
                     <Button onClick={handleCreate} variant="contained">Thêm mới</Button>
                 </DialogActions>

@@ -174,7 +174,7 @@ function BrandLobby() {
                             BackdropProps={{ sx: { backdropFilter: 'blur(5px)' } }}
                         />
                     </DialogContent>
-                    <DialogActions sx={{ p: '0 24px 16px' }}>
+                    <DialogActions sx={{  p: '16px 24px 16px' }}>
                         <Button onClick={closeDialogs}>Hủy</Button>
                         <Button onClick={handleRenameSubmit} variant="contained">Lưu</Button>
                     </DialogActions>
@@ -197,7 +197,7 @@ function BrandLobby() {
                             CẢNH BÁO: Dữ liệu đã xóa không thể khôi phục.
                         </Typography>
                     </DialogContent>
-                    <DialogActions sx={{ p: '0 24px 16px' }}>
+                    <DialogActions sx={{ p: '16px 24px 16px' }}>
                         <Button onClick={closeDialogs}>Hủy</Button>
                         <Button onClick={handleDeleteSubmit} color="error" variant="contained">XÁC NHẬN XÓA</Button>
                     </DialogActions>
