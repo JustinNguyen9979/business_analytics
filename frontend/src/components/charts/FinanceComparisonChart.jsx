@@ -14,32 +14,87 @@ import ChartPlaceholder from '../common/ChartPlaceholder';
 function FinanceComparisonChart({ data, series, title }) {
     const theme = useTheme();
 
-    if (!data || data.length === 0 || !series || series.length === 0) {
-        return <ChartPlaceholder message="Không có dữ liệu để so sánh." />;
-    }
-
-    // Tách riêng tên các nền tảng để làm trục X
-    const platforms = data.map(item => item.platform);
+    const platforms = data && data.length > 0 ? data.map(item => item.platform) : [];
 
     // Chuyển đổi dữ liệu thành "traces" mà Plotly yêu cầu
-    const nTraces = series.length;
-    const groupWidth = 0.1;
-    const barWidth = groupWidth / nTraces;
-    const traces = series.map((s, i) => {
-        const offset = -groupWidth / 2 + barWidth / 2 + i * barWidth;
-        return {
-            x: platforms,
-            y: data.map(item => item[s.key] || 0),
-            name: s.name,
-            type: 'bar',
-            width: barWidth,
-            offset: offset,
-            marker: {
-                color: s.color,
-            },
-            hovertemplate: `<span style="color: ${theme.palette.text.secondary};">${s.name}: </span><b style="color: ${s.color} ;">%{y:,.0f} đ</b><extra></extra>`,
-        };
-    });
+    const traces = series && series.length > 0 && data && data.length > 0
+        ? series.map((s, i) => {
+            // Logic tính offset và width chỉ khi có dữ liệu để vẽ bar
+            const nTraces = series.length;
+            const groupWidth = 0.1; // Độ rộng của một nhóm bar
+            const barWidth = groupWidth / nTraces;
+            const offset = -groupWidth / 2 + barWidth / 2 + i * barWidth;
+
+            return {
+                x: platforms,
+                y: data.map(item => item[s.key] || 0),
+                name: s.name,
+                type: 'bar',
+                width: barWidth,
+                offset: offset,
+                marker: {
+                    color: s.color,
+                },
+                hovertemplate: `<span style="color: ${theme.palette.text.secondary};">${s.name}: </span><b style="color: ${s.color} ;">%{y:,.0f} đ</b><extra></extra>`,
+            };
+        })
+        : []; // Trả về mảng rỗng nếu không có dữ liệu hoặc series
+
+    // --- LOGIC TÍNH TOÁN TRỤC Y (Smart Ticks) ---
+    // Lấy tất cả giá trị Y để tính min/max
+    const allYValues = data && data.length > 0 && series && series.length > 0
+        ? series.flatMap(s => data.map(item => item[s.key] || 0))
+        : [0];
+
+    let maxY = Math.max(...allYValues);
+    const minY = Math.min(...allYValues);
+
+    // Quy mô tối thiểu là 10 Triệu để giữ form biểu đồ đẹp
+    const MIN_MONETARY_SCALE = 10000000; 
+    if (maxY < MIN_MONETARY_SCALE) {
+        maxY = MIN_MONETARY_SCALE;
+    }
+
+    // Hàm chia vạch thông minh (copy từ RevenueProfitChart)
+    const calculateSmartTicks = (minVal, maxVal) => {
+        const MIN_MONETARY_SCALE_FOR_DISPLAY = 10000000;
+        let targetMax = Math.max(maxVal * 1.1, MIN_MONETARY_SCALE_FOR_DISPLAY);
+        const effectiveMin = Math.max(0, minVal); 
+        
+        const targetTickCount = 5;
+        const rawStep = (targetMax - effectiveMin) / targetTickCount;
+        
+        const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+        const normalizedStep = rawStep / magnitude;
+        
+        let niceStep;
+        if (normalizedStep < 1.5) niceStep = 1;
+        else if (normalizedStep < 3) niceStep = 2;
+        else if (normalizedStep < 7) niceStep = 5;
+        else niceStep = 10;
+        
+        const step = niceStep * magnitude;
+        
+        let ticks = [];
+        let labels = [];
+        let currentTick = Math.floor(effectiveMin / step) * step;
+        
+        while (currentTick <= targetMax + step) { 
+            ticks.push(currentTick);
+            let label = '';
+            if (currentTick === 0) label = '0';
+            else if (currentTick >= 1000000000) label = (currentTick / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+            else if (currentTick >= 1000000) label = (currentTick / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+            else if (currentTick >= 1000) label = (currentTick / 1000).toFixed(0) + 'k';
+            else label = currentTick.toString();
+            labels.push(label);
+            if (currentTick > targetMax) break;
+            currentTick += step;
+        }
+        return { tickVals: ticks, tickText: labels, range: [0, ticks[ticks.length-1]] };
+    };
+
+    const { tickVals, tickText, range } = calculateSmartTicks(minY, maxY);
 
     const layout = {
         showlegend: false,
@@ -58,11 +113,22 @@ function FinanceComparisonChart({ data, series, title }) {
         xaxis: {
             color: theme.palette.text.secondary,
             gridcolor: 'transparent', // Bỏ grid dọc
+            type: 'category', // BẮT BUỘC: Ép kiểu Category để không bị hiển thị số âm vô nghĩa khi rỗng
+            fixedrange: true, // Không cho zoom trục X
         },
         yaxis: {
             color: theme.palette.text.secondary,
             gridcolor: theme.palette.divider,
             hoverformat: ',.0f đ',
+            // Áp dụng Smart Ticks
+            tickmode: 'array',
+            tickvals: tickVals,
+            ticktext: tickText,
+            range: range,
+            autorange: false,
+            zeroline: true,
+            zerolinecolor: theme.palette.divider,
+            showspikes: false,
         },
         margin: { l: 80, r: 40, b: 20, t: 80 },
         hovermode: 'x unified', // Hiển thị tooltip cho cả nhóm khi hover

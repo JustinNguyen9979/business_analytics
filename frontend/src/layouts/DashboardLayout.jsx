@@ -1,6 +1,6 @@
 // FILE: frontend/src/layouts/DashboardLayout.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { styled } from '@mui/material/styles';
 import { Link as RouterLink, Outlet, useParams, useNavigate, useLocation } from 'react-router-dom';
 import {
@@ -281,7 +281,13 @@ function LayoutWithBrandContext() {
             </Drawer>
 
             <Box component="main" sx={{ flexGrow: 1, py: 3, overflow: 'auto', height: '100vh' }}>
-                <Outlet />
+                <Suspense fallback={
+                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
+                        <CircularProgress />
+                    </Box>
+                }>
+                    <Outlet />
+                </Suspense>
             </Box>
 
             <SingleImportDialog open={isImportDialogOpen} onClose={() => setImportDialogOpen(false)} onUploadComplete={handleUploadComplete} brandSlug={brandIdentifier} />
