@@ -15,15 +15,16 @@ from slowapi import _rate_limit_exceeded_handler, RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from .limiter import limiter
 
+app = FastAPI(
+    title="CEO Dashboard API by Julice",
+    default_response_class=ORJSONResponse 
+)
+
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware, default_limits=["60/minute"])
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # models.Base.metadata.create_all(bind=engine)
-app = FastAPI(
-    title="CEO Dashboard API by Julice",
-    default_response_class=ORJSONResponse 
-)
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
