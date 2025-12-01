@@ -580,52 +580,71 @@ def get_aggregated_location_distribution(db: Session, brand_id: int, start_date:
         return []
 
 def get_kpis_by_platform(db: Session, brand_id: int, start_date: date, end_date: date):
-    """
-    Tính toán và tổng hợp các chỉ số KPI, phân tách theo từng nền tảng (platform/source).
-    """
-    import kpi_calculator # Tránh circular import
+    try:
+        results = db.query(
+            models.DailyAnalytics.source,
+            func.sum(models.DailyAnalytics.net_revenue).label('netRevenue'),
+            func.sum(models.DailyAnalytics.gmv).label('gmv'),
+            func.sum(models.DailyAnalytics.profit).label('profit'),
+            func.sum(models.DailyAnalytics.total_cost).label('totalCost'),
+            func.sum(models.DailyAnalytics.ad_spend).label('adSpend'),
+            func.sum(models.DailyAnalytics.cogs).label('cogs'),
+            func.sum(models.DailyAnalytics.execution_cost).label('executionCost'),
+            func.sum(models.DailyAnalytics.completed_orders).label('completedOrders'),
+            func.sum(models.DailyAnalytics.total_orders).label('totalOrders'),
+            func.sum(models.DailyAnalytics.cancelled_orders).label('cancelledOrders'),
+            func.sum(models.DailyAnalytics.refunded_orders).label('refundedOrders'),
+        ).filter(
+            models.DailyAnalytics.brand_id == brand_id,
+            models.DailyAnalytics.date.between(start_date, end_date)
+        ).group_by(models.DailyAnalytics.source).all()
 
-    # 1. Lấy toàn bộ dữ liệu trong khoảng thời gian đã chọn một lần duy nhất
-    all_orders = get_raw_orders_in_range(db, brand_id, start_date, end_date)
-    all_revenues = get_raw_revenues_in_range(db, brand_id, start_date, end_date)
-    all_marketing_spends = db.query(models.MarketingSpend).filter(
-        models.MarketingSpend.brand_id == brand_id,
-        models.MarketingSpend.date.between(start_date, end_date)
-    ).all()
+        final_data = []
 
-    # 2. Tìm tất cả các 'source' (nền tảng) duy nhất từ dữ liệu đã lấy
-    all_sources = sorted(list(
-        {o.source for o in all_orders if o.source}
-        .union({r.source for r in all_revenues if r.source})
-        .union({m.source for m in all_marketing_spends if m.source})
-    ))
+        total_summary = {
+            'platform': 'Tổng cộng',
+            'netRevenue': 0, 'gmv': 0, 'profit': 0, 'adSpend': 0, 'totalCost': 0,
+            'cogs': 0, 'executionCost': 0, 'completedOrders': 0, 'totalOrders': 0,
+            'cancelledOrders': 0, 'refundedOrders': 0,
+            'roi': 0, 'profitMargin': 0
+        }
+        for row in results:
+            source = row.source
+            item = {
+                'platform': source.capitalize() if source else "Unknown",
+                'netRevenue': row.netRevenue or 0,
+                'gmv': row.gmv or 0,
+                'profit': row.profit or 0,
+                'totalCost': row.totalCost or 0,
+                'adSpend': row.adSpend or 0,
+                'cogs': row.cogs or 0,
+                'executionCost': row.executionCost or 0,
+                'completedOrders': row.completedOrders or 0,
+                'totalOrders': row.totalOrders or 0,
+                'cancelledOrders': row.cancelledOrders or 0,
+                'refundedOrders': row.refundedOrders or 0,
+            }
 
-    results = []
+            item['roi'] = (item['profit'] / item['totalCost']) if item['totalCost'] > 0 else 0
+            item['profitMargin'] = (item['profit'] / item['netRevenue']) if item['netRevenue'] != 0 else 0
 
-    # 3. Tính toán dòng "Tổng cộng" cho tất cả các sàn
-    # Chỉ tính nếu có bất kỳ hoạt động nào
-    if all_orders or all_revenues or all_marketing_spends:
-        total_kpis = kpi_calculator.calculate_aggregated_kpis(all_orders, all_revenues, all_marketing_spends)
-        if total_kpis:
-            total_kpis['platform'] = 'Tổng cộng'
-            results.append(total_kpis)
+            final_data.append(item)
 
-    # 4. Lặp qua từng sàn và tính toán KPI riêng cho sàn đó
-    for source in all_sources:
-        # Lọc dữ liệu theo 'source' hiện tại
-        orders_for_source = [o for o in all_orders if o.source == source]
-        revenues_for_source = [r for r in all_revenues if r.source == source]
-        marketing_for_source = [m for m in all_marketing_spends if m.source == source]
+            for key in total_summary:
+                if key in item and isinstance(item[key], (int, float)):
+                    total_summary[key] += item[key]
 
-        # Chỉ tính toán nếu có dữ liệu cho sàn này
-        if orders_for_source or revenues_for_source or marketing_for_source:
-            kpis_for_source = kpi_calculator.calculate_aggregated_kpis(orders_for_source, revenues_for_source, marketing_for_source)
-            if kpis_for_source:
-                # Viết hoa chữ cái đầu của tên sàn cho đẹp
-                kpis_for_source['platform'] = source.capitalize()
-                results.append(kpis_for_source)
+        total_summary['roi'] = (total_summary['profit'] / total_summary['totalCost']) if total_summary['totalCost'] > 0 else 0
+        total_summary['profitMargin'] = (total_summary['profit'] / total_summary['netRevenue']) if total_summary['netRevenue'] != 0 else 0
 
-    return results
+        if final_data:
+            final_data.insert(0, total_summary)
+        return final_data
+    
+    except Exception as e:
+        print(f"!!! LỖI KHI LẤY KPIS THEO PLATFORM TỪ DB: {e}")
+        traceback.print_exc()
+        return []
 
 def get_sources_for_brand(db: Session, brand_id: int) -> list[str]:
     """Lấy danh sách tất cả các 'source' duy nhất cho một brand."""

@@ -191,6 +191,7 @@ class DailyAnalytics(Base):
     # net_profit = Column(Float, default=0.0)      # Lợi nhuận ròng (Trừ hết sạch chi phí) - Tạm thời chưa dùng
     
     # --- Cấu trúc chi phí chi tiết ---
+    total_cost = Column(Float, default=0.0)        # Tổng chi phí
     cogs = Column(Float, default=0.0)            # Giá vốn hàng bán
     execution_cost = Column(Float, default=0.0)   # Phí sàn (Payment fee, Fixed fee...)
     # commission_fees = Column(Float, default=0.0) # Phí hoa hồng (Affiliate...)

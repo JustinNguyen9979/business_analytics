@@ -11,7 +11,7 @@ import ChartPlaceholder from '../common/ChartPlaceholder';
 // Hàm "Easing" để animation mượt hơn (bắt đầu chậm, tăng tốc rồi chậm lại ở cuối)
 const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
-function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationType, series = [], isLoading }) {
+function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationType, series = [], isLoading, selectedDateRange }) {
     const theme = useTheme();
     const [animatedData, setAnimatedData] = useState([]);
     const animationFrameId = useRef(null);
@@ -31,7 +31,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
         // --- HÀM TẠO CẤU TRÚC DỮ LIỆU ---
         const createChartTraces = (currentData, comparisonData, series) => {
             const currentPoints = currentData;
-            const currentDates = currentPoints.map(d => dayjs(d.date).toDate());
+            const currentDates = currentData.map(d => dayjs(d.date).toDate());
 
             const comparisonPoints = comparisonData || [];
             let dateOffset = 0;
@@ -218,11 +218,96 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
     };
 
     const getXAxisConfig = () => { 
-        const tick0 = data.length > 0 ? dayjs(data[0].date).toDate() : new Date();
+        if (!selectedDateRange || selectedDateRange.length < 2 || !selectedDateRange[0] || !selectedDateRange[1]) {
+            return {};
+        }
+
+        const [startFilterDate, endFilterDate] = selectedDateRange;
+
+        let xRange;
+        let tickFormat;
+        let dtickValue;
+        let tick0Value = startFilterDate.toDate();
+
         switch (aggregationType) {
-            case 'month': return { tickmode: 'linear', tick0: tick0, dtick: 'M1', tickformat: '%b %Y', };
-            case 'week': return { tickmode: 'linear', tick0: tick0, dtick: 7 * 24 * 60 * 60 * 1000, tickformat: 'Tuần %W', };
-            case 'day': default: return { tickmode: 'linear', tick0: tick0, dtick: 24 * 60 * 60 * 1000, tickformat: '%d', };
+            case 'month':
+                xRange = [startFilterDate.startOf('month').subtract(1, 'month').toDate(), endFilterDate.endOf('month').add(1, 'month').toDate()];
+                tickFormat = '%b %Y';
+                dtickValue = 'M1';
+                
+                return { 
+                    tickmode: 'linear', 
+                    tick0: tick0Value, 
+                    dtick: dtickValue, 
+                    tickformat: tickFormat, 
+                    range: xRange, 
+                    tickangle: -45,
+                };
+
+            case 'week': 
+                xRange = [startFilterDate.startOf('week').subtract(3, 'day').toDate(), endFilterDate.endOf('week').add(3, 'day').toDate()];
+                tickFormat = 'Tuần %W';
+                dtickValue = 7 * 24 * 60 * 60 * 1000;
+                
+                return {
+                    tickmode: 'linear',
+                    tick0: tick0Value,
+                    dtick: dtickValue,
+                    tickformat: tickFormat,
+                    range: xRange,
+                    tickangle: -45,
+                };
+
+            case 'day': default:
+                const allDays = [];
+
+                let runner = startFilterDate.clone().startOf('day');
+                const endRunner = endFilterDate.clone().endOf('day');
+
+                while (runner.isBefore(endRunner)) {
+                    allDays.push(runner.toDate());
+                    runner = runner.add(1, 'day');
+                }
+
+                return {
+                    type: 'date',
+                    tickmode: 'array',
+                    tickvals: allDays,
+                    ticktext: allDays.map(d => dayjs(d).format('DD')),
+
+                    range: [
+                        startFilterDate.subtract(12, 'hour').toDate(),
+                        endFilterDate.add(12, 'hour').toDate()
+                    ],
+
+                    tickangle: 0,
+                    showgrid: true,
+                    gridcolor: theme.palette.divider,
+                    tickangle: -45,
+                };
+
+            // case 'day': default:
+            //     const dailyTickVals = [];
+            //     const dailyTickText = [];
+            //     let currentDay = startFilterDate.clone().startOf('day');
+            //     const finalDay = endFilterDate.clone().endOf('day');
+                
+            //     while (currentDay.isBefore(finalDay) || currentDay.isSame(finalDay, 'day')) {
+            //         dailyTickVals.push(currentDay.valueOf());
+            //         dailyTickText.push(currentDay.format('DD'));
+            //         currentDay = currentDay.add(1, 'day');
+            //     }
+            //     xRange = [startFilterDate.subtract(12, 'hour').toDate(), endFilterDate.add(12, 'hour').toDate()];
+            //     return {
+            //         tickmode: 'array',
+            //         tickvals: dailyTickVals,
+            //         ticktext: dailyTickText,
+            //         range: xRange,
+            //         tickangle: -45,
+            //         tickfont: { size: 10 },
+            //         showgrid: true,
+            //         gridwidth: 1,
+            //     };
         }
     };
 
@@ -236,6 +321,8 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             color: theme.palette.text.secondary,
             gridcolor: theme.palette.divider,
             showspikes: false,
+            autorange: false,
+            fixedrange: true,
         },
         yaxis: yAxisConfig, // Sử dụng config động đã tạo ở trên
         legend: {
@@ -250,7 +337,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
         },
         // Giảm margin dưới để tối ưu không gian
         margin: { l: 80, r: 40, b: 60, t: 60 },
-        hovermode: 'x',
+        hovermode: 'x unified',
         hoverlabel: { 
             bgcolor: 'rgba(10, 25, 41, 0.9)', 
             bordercolor: theme.palette.divider, 

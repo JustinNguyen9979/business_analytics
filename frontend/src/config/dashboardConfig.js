@@ -8,8 +8,8 @@ export const dateShortcuts = [
         { label: 'Hôm qua', type: 'yesterday', getValue: () => [dayjs().subtract(1, 'day').startOf('day'), dayjs().subtract(1, 'day').endOf('day')] },
         { label: '7 ngày qua', type: 'last_7_days', getValue: () => [dayjs().subtract(6, 'days').startOf('day'), dayjs().endOf('day')] },
         { label: '28 ngày qua', type: 'last_28_days', getValue: () => [dayjs().subtract(27, 'days').startOf('day'), dayjs().endOf('day')] },
-        { label: 'Tuần này', type: 'this_week', getValue: () => [dayjs().startOf('week'), dayjs().endOf('day')] },
-        { label: 'Tháng này', type: 'this_month', getValue: () => [dayjs().startOf('month'), dayjs().endOf('day')] },
+        { label: 'Tuần này', type: 'this_week', getValue: () => [dayjs().startOf('week'), dayjs().endOf('week')] },
+        { label: 'Tháng này', type: 'this_month', getValue: () => [dayjs().startOf('month'), dayjs().endOf('month')] },
         { label: 'Tháng trước', type: 'last_month', getValue: () => [dayjs().subtract(1, 'month').startOf('month'), dayjs().subtract(1, 'month').endOf('month')] },
         { label: 'Năm nay', type: 'this_year', getValue: () => [dayjs().startOf('year'), dayjs().endOf('year')] },
     ];

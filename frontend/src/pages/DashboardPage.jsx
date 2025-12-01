@@ -176,6 +176,7 @@ function DashboardPage() {
                                     isLoading={lineChart.loading}
                                     chartRevision={chartRevision}
                                     aggregationType={lineChart.data.aggregationType}
+                                    selectedDateRange={lineChartFilterControl.filter.range}
                                 />
                             ) : <ChartPlaceholder title="Doanh thu & Lợi nhuận" />}
                         </Suspense>

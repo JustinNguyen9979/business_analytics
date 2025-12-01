@@ -239,6 +239,7 @@ function FinancePage() {
                                     isLoading={lineChart.loading}
                                     chartRevision={0}
                                     aggregationType={lineChart.data.aggregationType}
+                                    selectedDateRange={lineChartFilterControl.filter.range}
                                 />
                             ): <ChartPlaceholder title="Biểu đồ xu hướng" />}
                         </Suspense>
