@@ -128,9 +128,9 @@ function FinancePage() {
         { key: 'profit', name: 'Lợi nhuận', color: '#28a545' },
         { key: 'gmv', name: 'GMV', color: theme.palette.warning.main },
         { key: 'totalCost', name: 'Tổng Chi phí', color: theme.palette.error.main },
-        { key: 'cogs', name: 'Giá vốn', color: theme.palette.secondary.main },
-        { key: 'adSpend', name: 'Chi phí Ads', color: theme.palette.info.main },
-        { key: 'executionCost', name: 'Chi phí thực thi', color: theme.palette.text.secondary },
+        { key: 'cogs', name: 'Giá vốn', color: '#e17e1b' },
+        { key: 'adSpend', name: 'Chi phí Ads', color: '#1f1fddcc' },
+        { key: 'executionCost', name: 'Chi phí thực thi', color: '#9C27B0' },
     ], [theme]);
 
     const [visibleSeriesKeys, setVisibleSeriesKeys] = useState(['netRevenue', 'profit']);
