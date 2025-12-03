@@ -1,7 +1,7 @@
 # FILE: Backend/app/main.py
 
 import json, crud, models, schemas, standard_parser
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, status, Query, Body
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, status, Query, Body, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel
@@ -11,17 +11,18 @@ from database import SessionLocal, engine
 from datetime import date
 from cache import redis_client
 from celery_worker import process_data_request, recalculate_all_brand_data
-from slowapi import _rate_limit_exceeded_handler, RateLimitExceeded
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from .limiter import limiter
+from limiter import limiter
 
 app = FastAPI(
-    title="CEO Dashboard API by Julice",
+    # title="CEO Dashboard API by Julice",
     default_response_class=ORJSONResponse 
 )
 
 app.state.limiter = limiter
-app.add_middleware(SlowAPIMiddleware, default_limits=["60/minute"])
+app.add_middleware(SlowAPIMiddleware)
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # models.Base.metadata.create_all(bind=engine)
@@ -84,7 +85,7 @@ def clone_brand_api(brand_id: int, db: Session = Depends(get_db)):
 
 @app.post("/brands/{brand_slug}/trigger-recalculation", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("5/minute")
-def trigger_recalculation_api(brand: models.Brand = Depends(get_brand_from_slug)):
+def trigger_recalculation_api(request: Request, brand: models.Brand = Depends(get_brand_from_slug)):
     """
     Kích hoạt task chạy nền để tính toán lại toàn bộ dữ liệu cho brand.
     Trả về ngay lập tức.
@@ -100,6 +101,7 @@ def trigger_recalculation_api(brand: models.Brand = Depends(get_brand_from_slug)
 @app.post("/brands/{brand_slug}/upload-standard-file", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("5/minute")
 async def upload_standard_file(
+    request: Request,
     platform: str, 
     brand: models.Brand = Depends(get_brand_from_slug),
     db: Session = Depends(get_db), 
@@ -116,7 +118,7 @@ async def upload_standard_file(
 
 @app.post("/brands/{brand_slug}/recalculate-and-wait", status_code=status.HTTP_200_OK)
 @limiter.limit("3/minute")
-def recalculate_and_wait(brand: models.Brand = Depends(get_brand_from_slug)):
+def recalculate_and_wait(request: Request, brand: models.Brand = Depends(get_brand_from_slug)):
     """
     Kích hoạt Worker để tính toán lại và BLOCK cho đến khi task hoàn thành.
     """
@@ -145,6 +147,7 @@ def get_brand_sources(brand: models.Brand = Depends(get_brand_from_slug), db: Se
 @app.post("/brands/{brand_slug}/delete-data-in-range", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
 def delete_data_in_range(
+    request: Request,
     payload: DateRangePayload,
     brand: models.Brand = Depends(get_brand_from_slug),
     db: Session = Depends(get_db),
@@ -178,6 +181,7 @@ def generate_cache_key(brand_id: int, request_type: str, params: Dict[str, Any])
 @app.post("/data-requests", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("30/minute")
 def request_data_processing(
+    request: Request,
     request_body: schemas.DataRequest, # Sử dụng Pydantic model để xác thực payload
     db: Session = Depends(get_db)
 ):
@@ -239,7 +243,7 @@ def get_request_status(cache_key: str):
 
 @app.post("/brands/{brand_slug}/recalculate", status_code=status.HTTP_200_OK)
 @limiter.limit("5/minute")
-def recalculate_brand_data(brand: models.Brand = Depends(get_brand_from_slug), db: Session = Depends(get_db)):
+def recalculate_brand_data(request: Request, brand: models.Brand = Depends(get_brand_from_slug), db: Session = Depends(get_db)):
     """Tính toán lại toàn bộ dữ liệu của một brand một cách đồng bộ."""
     result = crud.recalculate_brand_data_sync(db, brand_id=brand.id)
     return result

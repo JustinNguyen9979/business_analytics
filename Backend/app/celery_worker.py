@@ -137,8 +137,22 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
             # --- Nhánh 2: BIỂU ĐỒ ---
             # --------------------------------------------------------------
             elif request_type == "daily_kpis_chart":
-                # Gọi hàm crud mới đã sửa để lấy từ DailyStat
-                result_data = {"data": crud.get_daily_kpis_for_range(db, brand_id, start_date, end_date)}
+                # Lấy danh sách source từ params gửi lên (Frontend sẽ gửi list hoặc string)
+                req_source = params.get("source")
+
+                # Chuẩn hóa thành list nếu cần
+                source_list = None
+                if req_source:
+                    if isinstance(req_source, list):
+                        source_list = req_source
+                    else:
+                        source_list = [req_source]
+
+                result_data = {
+                    "data": crud.get_daily_kpis_for_range(
+                        db, brand_id, start_date, end_date, source_list=source_list
+                    )
+                }
 
             # --------------------------------------------------------------
             # --- Nhánh 3: TOP SẢN PHẨM (Vẫn cần Raw Data Order Items) ---

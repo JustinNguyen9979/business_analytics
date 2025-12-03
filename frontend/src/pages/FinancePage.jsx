@@ -1,13 +1,14 @@
-import React, { useMemo, useState, lazy, Suspense, useCallback } from 'react';
+import React, { useMemo, useState, lazy, Suspense, useCallback, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Box, Typography, Paper, Button, Skeleton } from '@mui/material';
+import { Box, Typography, Paper, Button, Skeleton, IconButton, Tooltip } from '@mui/material';
 import {
     CalendarToday as CalendarTodayIcon,
     MonetizationOn as MonetizationOnIcon,
     TrendingUp as TrendingUpIcon,
     AccountBalanceWallet as AccountBalanceWalletIcon,
     StackedLineChart as StackedLineChartIcon,
-    AttachMoney as AttachMoneyIcon
+    AttachMoney as AttachMoneyIcon,
+    Settings as SettingsIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { useDashboardData } from '../hooks/useDashboardData';
@@ -22,6 +23,10 @@ import { formatCurrency, formatPercentage } from '../utils/formatters';
 import { useBrand } from '../context/BrandContext';
 import SourceDistributionChart from '../components/charts/SourceDistributionChart';
 import FinanceComparisonChart from '../components/charts/FinanceComparisonChart';
+import { getSourcesForBrand } from '../services/api';
+import ChartSettingsPanel from '../components/charts/controls/ChartSettingsPanel';
+import ChartSettingSection from '../components/charts/controls/ChartSettingSection';
+import ChartSettingItem from '../components/charts/controls/ChartSettingItem';
 
 // Lấy giá trị mặc định là "Tháng này"
 const defaultDateRange = dateShortcuts.find(s => s.type === 'this_month').getValue();
@@ -52,10 +57,63 @@ function FinancePage() {
     const { slug: brandSlug } = useBrand();
     const lineChartFilterControl = useDateFilter({ defaultType: 'this_month' });
 
-    const dashboardFilters = useMemo(() => ({
-        lineChart: lineChartFilterControl.filter,
-        kpi: null, donut: null, topProducts: null, map: null,
-    }), [lineChartFilterControl.filter]);
+    const [sourceOptions, setSourceOptions] = useState([]);
+    const [selectedSources, setSelectedSources] = useState(['all']);
+    const [isConfigOpen, setIsConfigOpen] = useState(false);
+    const [filterType, setFilterType] = useState('this_month');
+
+    const [dateRange, setDateRange] = useState(defaultDateRange);
+    const [dateLabel, setDateLabel] = useState(defaultDateLabel);
+    const [anchorEl, setAnchorEl] = useState(null);
+
+    useEffect(() => {
+        if (brandSlug) {
+            getSourcesForBrand(brandSlug)
+                .then(sources => {
+                    const options = sources.map(s => ({ value: s.charAt(0).toUpperCase() + s.slice(1), label: s.charAt(0).toUpperCase() + s.slice(1) }));
+                    setSourceOptions(options);
+                }).catch(err => console.error("Failed to load sources:", err));
+        }
+    }, [brandSlug]);
+
+    const handleToggleSource = (sourceValue) => {
+        setSelectedSources(prev => {
+            const isAllSelected = prev.includes('all');
+            if (sourceValue === 'all') {
+                return isAllSelected ? (sourceOptions.length === 0 ? ['all'] : []) : ['all'];
+            }
+
+            let newSelection;
+            if (isAllSelected) {
+                const allValues = sourceOptions.map(o => o.value);
+                newSelection = allValues.filter(v => v !== sourceValue);
+            } else {
+                if (prev.includes(sourceValue)) {
+                    newSelection = prev.filter(v => v !== sourceValue);
+                } else {
+                    newSelection = [...prev, sourceValue];
+                }
+            }
+
+            const currentSelected = newSelection.filter(v => v !== 'all');
+            if (currentSelected.length === sourceOptions.length && sourceOptions.length > 0) {
+                return ['all'];
+            }
+
+            return currentSelected.length === 0 ? [] : currentSelected;
+        });
+    };
+
+    const dashboardFilters = useMemo(() => {
+        return {
+            lineChart: {
+                range: dateRange,
+                type: filterType,
+                source: selectedSources.includes('all') ? null : selectedSources,
+            },
+            kpi: null, donut: null, topProducts: null, map: null,
+        };
+    }, [dateRange, selectedSources, filterType]);
 
     const { lineChart } = useDashboardData(brandSlug, dashboardFilters);
 
@@ -90,10 +148,6 @@ function FinancePage() {
     const filteredLineChartSeries = useMemo(() => {
         return allAvailableSeries.filter(s => visibleSeriesKeys.includes(s.key));
     }, [allAvailableSeries, visibleSeriesKeys]);
-
-    const [dateRange, setDateRange] = useState(defaultDateRange);
-    const [dateLabel, setDateLabel] = useState(defaultDateLabel);
-    const [anchorEl, setAnchorEl] = useState(null);
     
     const { currentData, previousData, loading, error } = useFinanceData(brandSlug, dateRange);
 
@@ -105,6 +159,7 @@ function FinancePage() {
                          `${newRange[0].format('DD/MM')} - ${newRange[1].format('DD/MM/YYYY')}`;
         setDateRange(newRange);
         setDateLabel(newLabel);
+        setFilterType(newLabelType || 'custom');
         handleCloseFilter();
     };
 
@@ -141,18 +196,22 @@ function FinancePage() {
                 <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
                     Báo cáo Tài chính
                 </Typography>
-                <Button
-                    variant="outlined"
-                    startIcon={<CalendarTodayIcon />}
-                    onClick={handleOpenFilter}
-                    sx={{ 
-                        color: (theme) => theme.palette.primary.main, 
-                        borderColor: (theme) => theme.palette.primary.main, 
-                        borderRadius: 2 
-                    }}
-                >
-                    {dateLabel}
-                </Button>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                    <Button
+                        variant="outlined"
+                        startIcon={<CalendarTodayIcon />}
+                        onClick={handleOpenFilter}
+                        sx={{ 
+                            color: (theme) => theme.palette.primary.main,
+                            borderColor: (theme) => theme.palette.primary.main,
+                            borderRadius: 2
+                         }}
+                    >
+                        {dateLabel}
+                    </Button>
+                </Box>
+                    
+                
                 <DateRangeFilterMenu
                     open={Boolean(anchorEl)}
                     anchorEl={anchorEl}
@@ -200,32 +259,26 @@ function FinancePage() {
                 </Box>
             </Paper>
 
-            <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4 }}>
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="h6" noWrap>Biểu đồ xu hướng</Typography>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, px: 3, pt: 3}}>
-                        {/* Các nút bật/tắt series */}
-                        {allAvailableSeries.map(s => (
-                                <Button
-                                    key={s.key}
-                                    variant={visibleSeriesKeys.includes(s.key) ? 'contained' : 'outlined'}
-                                    onClick={() => handleToggleSeries(s.key)}
-                                    size="small"
-                                    sx={{
-                                        borderColor: s.color,
-                                        color: visibleSeriesKeys.includes(s.key) ? theme.palette.common.white : s.color,
-                                        bgcolor: visibleSeriesKeys.includes(s.key) ? s.color : 'transparent',
-                                        '&:hover': {
-                                            bgcolor: visibleSeriesKeys.includes(s.key) ? s.color : 'transparent',
-                                            borderColor: s.color,
-                                            opacity: 0.8,
-                                        }
-                                    }}
-                                >
-                                {s.name}
-                            </Button>
-                        ))}        
-                    </Box>   
+            <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4, position: 'relative', overflow: 'hidden' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, px: 2, pt: 2 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 600 }}>Biểu đồ xu hướng</Typography>
+                    <Tooltip title="Cấu hình hiển thị">
+                        <IconButton 
+                            onClick={() => setIsConfigOpen(true)}
+                            sx={{ 
+                                border: `1px solid ${theme.palette.divider}`,
+                                borderRadius: 2,
+                                color: isConfigOpen ? theme.palette.primary.main : theme.palette.text.secondary,
+                                bgcolor: isConfigOpen ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
+                                '&:hover': {
+                                    color: theme.palette.primary.main,
+                                    borderColor: theme.palette.primary.main,
+                                }
+                            }}
+                            >
+                                <SettingsIcon />
+                        </IconButton>
+                    </Tooltip>
                 </Box>
 
                 <Box sx={{ pb: 3, pt: 1, height: 750, position: 'relative' }}>
@@ -239,12 +292,47 @@ function FinancePage() {
                                     isLoading={lineChart.loading}
                                     chartRevision={0}
                                     aggregationType={lineChart.data.aggregationType}
-                                    selectedDateRange={lineChartFilterControl.filter.range}
+                                    selectedDateRange={dateRange}
                                 />
                             ): <ChartPlaceholder title="Biểu đồ xu hướng" />}
                         </Suspense>
                     )}
                 </Box>
+
+                <ChartSettingsPanel
+                    open={isConfigOpen}
+                    onClose={() => setIsConfigOpen(false)}
+                    title="Cấu hình biểu đồ"
+                >
+                    <ChartSettingSection title="Chỉ số hiển thị">
+                        {allAvailableSeries.map(series => (
+                            <ChartSettingItem
+                                key={series.key}
+                                label={series.name}
+                                color={series.color}
+                                checked={visibleSeriesKeys.includes(series.key)}
+                                onChange={() => handleToggleSeries(series.key)}
+                                isSwitch={true}
+                            />
+                        ))}
+                    </ChartSettingSection>
+
+                    <ChartSettingSection title="Nguồn dữ liệu">
+                        <ChartSettingItem
+                            label="Tất cả nguồn"
+                            checked={selectedSources.includes('all')}
+                            onChange={() => handleToggleSource('all')}
+                        />
+                        {sourceOptions.map(option => (
+                            <ChartSettingItem
+                                key={option.value}
+                                label={option.value}
+                                checked={selectedSources.includes('all') || selectedSources.includes(option.value)}
+                                onChange={() => handleToggleSource(option.value)}
+                            />
+                        ))}
+                    </ChartSettingSection>
+                </ChartSettingsPanel>
             </Paper>
 
             {/* --- PHẦN 2: CHART PHÂN BỔ --- */}

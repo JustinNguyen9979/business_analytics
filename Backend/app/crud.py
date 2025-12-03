@@ -167,84 +167,278 @@ def get_all_activity_dates(db: Session, brand_id: int):
     distinct_dates_query = select(all_dates_union.c.activity_date).distinct()
     return sorted([d for d, in db.execute(distinct_dates_query).fetchall()])
 
-def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_date: date) -> list:
+def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_date: date, source_list: list[str] = None) -> list:
     """
-    Lấy dữ liệu KPI tổng hợp cho Dashboard.
-    Đọc trực tiếp từ bảng DailyStat (nơi chứa dữ liệu tổng hợp đầy đủ).
+    Lấy dữ liệu KPI tổng hợp cho Dashboard theo cơ chế Hybrid:
+    1. Nếu source_list là None hoặc chứa 'all' -> Query bảng DailyStat (Nhanh nhất, đã pre-aggregated).
+    2. Nếu source_list có giá trị cụ thể -> Query bảng DailyAnalytics và SUM lại (Linh hoạt).
     """
-    # Truy vấn bảng DailyStat
-    stats = db.query(models.DailyStat).filter(
-        models.DailyStat.brand_id == brand_id,
-        models.DailyStat.date.between(start_date, end_date)
-    ).order_by(models.DailyStat.date).all()
 
-    results = []
-    stats_map = {s.date: s for s in stats}
+    # --- TRƯỜNG HỢP 1: LẤY TỔNG (QUERY DAILY_STAT) ---
+    # Logic: Nếu không truyền source hoặc chọn 'all', ta lấy bảng tổng hợp sẵn cho nhanh.
+    is_fetching_all = False
+    if not source_list:
+        is_fetching_all = True
+    elif isinstance(source_list, list) and any(s.lower() == 'all' for s in source_list):
+        is_fetching_all = True
+    elif isinstance(source_list, str) and source_list.lower() == 'all':
+        is_fetching_all = True
     
-    current_date = start_date
-    while current_date <= end_date:
-        stat = stats_map.get(current_date)
+    if is_fetching_all:
+        stats = db.query(models.DailyStat).filter(
+            models.DailyStat.brand_id == brand_id,
+            models.DailyStat.date.between(start_date, end_date)
+        ).order_by(models.DailyStat.date).all()
         
-        if stat:
-            # Map từ cột model (snake_case) sang format JSON frontend (camelCase)
-            results.append({
-                "date": current_date.isoformat(),
-                "netRevenue": stat.net_revenue,
-                "gmv": stat.gmv,
-                "profit": stat.profit,
-                "totalCost": stat.total_cost,
-                "adSpend": stat.ad_spend,
-                "cogs": stat.cogs,
-                "executionCost": stat.execution_cost,
-                "roi": stat.roi,
-                # "profitMargin": stat.profit_margin,
-                # "takeRate": stat.take_rate,
-                "completedOrders": stat.completed_orders,
-                "cancelledOrders": stat.cancelled_orders,
-                "refundedOrders": stat.refunded_orders,
-                "aov": stat.aov,
-                "upt": stat.upt,
-                "uniqueSkusSold": stat.unique_skus_sold,
-                "totalQuantitySold": stat.total_quantity_sold,
-                "completionRate": stat.completion_rate,
-                "cancellationRate": stat.cancellation_rate,
-                "refundRate": stat.refund_rate,
-                "totalCustomers": stat.total_customers, # Đã có cột này trong DailyStat
-                "impressions": stat.impressions,
-                "clicks": stat.clicks,
-                "conversions": stat.conversions,
-                "cpc": stat.cpc,
-                "cpm": stat.cpm,
-                "ctr": stat.ctr,
-                "cpa": stat.cpa,
-                "reach": stat.reach,
-                "frequency": stat.frequency,
-                
-                # Các trường JSONB (Giờ đã có trong DailyStat)
-                "hourlyBreakdown": stat.hourly_breakdown,
-                "topProducts": stat.top_products,
-                "locationDistribution": stat.location_distribution,
-                "paymentMethodBreakdown": stat.payment_method_breakdown,
-                "cancelReasonBreakdown": stat.cancel_reason_breakdown,
-            })
-        else:
-            # Trả về 0 nếu không có dữ liệu
-            results.append({
-                "date": current_date.isoformat(),
-                "netRevenue": 0, "gmv": 0, "profit": 0, "totalCost": 0, "adSpend": 0,
-                "cogs": 0, "executionCost": 0, "roi": 0, 
-                # "profitMargin": 0, "takeRate": 0,
-                "completedOrders": 0, "cancelledOrders": 0, "refundedOrders": 0, "aov": 0,
-                "upt": 0, "uniqueSkusSold": 0, "totalQuantitySold": 0,
-                "completionRate": 0, "cancellationRate": 0, "refundRate": 0,
-                "totalCustomers": 0,
-                "impressions": 0, "clicks": 0, "conversions": 0, "cpc": 0,
-                "cpa": 0, "cpm": 0, "ctr": 0, "reach": 0, "frequency": 0,
-                "hourlyBreakdown": {}, "topProducts": [], "locationDistribution": [], "paymentMethodBreakdown": {}, "cancelReasonBreakdown": {}
-            })            
-        current_date += timedelta(days=1)
+        results = []
+        stats_map = {s.date: s for s in stats}
+        current_date = start_date
 
-    return results
+        while current_date <= end_date:
+            stat = stats_map.get(current_date)
+            if stat:
+                results.append({
+                    "date": current_date.isoformat(),
+                    "netRevenue": stat.net_revenue,
+                    "gmv": stat.gmv,
+                    "profit": stat.profit,
+                    "totalCost": stat.total_cost,
+                    "adSpend": stat.ad_spend,
+                    "cogs": stat.cogs,
+                    "executionCost": stat.execution_cost,
+                    "roi": stat.roi,
+                    "completedOrders": stat.completed_orders,
+                    "cancelledOrders": stat.cancelled_orders,
+                    "refundedOrders": stat.refunded_orders,
+                    "totalOrders": stat.total_orders,
+                    "aov": stat.aov,
+                    "upt": stat.upt,
+                    "uniqueSkusSold": stat.unique_skus_sold,
+                    "totalQuantitySold": stat.total_quantity_sold,
+                    "completionRate": stat.completion_rate,
+                    "cancellationRate": stat.cancellation_rate,
+                    "refundRate": stat.refund_rate,
+                    "totalCustomers": stat.total_customers,
+                    "impressions": stat.impressions,
+                    "clicks": stat.clicks,
+                    "conversions": stat.conversions,
+                    "cpc": stat.cpc,
+                    "cpm": stat.cpm,
+                    "ctr": stat.ctr,
+                    "cpa": stat.cpa,
+                    "reach": stat.reach,
+                    "frequency": stat.frequency,
+                    "hourlyBreakdown": stat.hourly_breakdown,
+                    "topProducts": stat.top_products,
+                    "locationDistribution": stat.location_distribution,
+                    "paymentMethodBreakdown": stat.payment_method_breakdown,
+                    "cancelReasonBreakdown": stat.cancel_reason_breakdown,
+                })
+            else:
+                results.append(_create_empty_daily_stat(current_date))
+            current_date += timedelta(days=1)
+        return results
+    
+    # --- TRƯỜNG HỢP 2: LẤY CHI TIẾT (QUERY DAILY_ANALYTICS & AGGREGATE) ---
+    # Logic: Query bảng chi tiết, lọc theo source và SUM lại.
+    query = db.query(
+        models.DailyAnalytics.date,
+        func.sum(models.DailyAnalytics.net_revenue).label('netRevenue'),
+        func.sum(models.DailyAnalytics.gmv).label('gmv'),
+        func.sum(models.DailyAnalytics.profit).label('profit'),
+        func.sum(models.DailyAnalytics.total_cost).label('totalCost'),
+        func.sum(models.DailyAnalytics.ad_spend).label('adSpend'),
+        func.sum(models.DailyAnalytics.cogs).label('cogs'),
+        func.sum(models.DailyAnalytics.execution_cost).label('executionCost'),
+        
+        func.sum(models.DailyAnalytics.completed_orders).label('completedOrders'),
+        func.sum(models.DailyAnalytics.cancelled_orders).label('cancelledOrders'),
+        func.sum(models.DailyAnalytics.refunded_orders).label('refundedOrders'),
+        func.sum(models.DailyAnalytics.total_orders).label('totalOrders'),
+        
+        func.sum(models.DailyAnalytics.unique_skus_sold).label('uniqueSkusSold'),
+        func.sum(models.DailyAnalytics.total_quantity_sold).label('totalQuantitySold'),
+
+        func.sum(models.DailyAnalytics.new_customers + models.DailyAnalytics.returning_customers).label('totalCustomers'),
+
+        func.sum(models.DailyAnalytics.impressions).label('impressions'),
+        func.sum(models.DailyAnalytics.clicks).label('clicks'),
+        func.sum(models.DailyAnalytics.conversions).label('conversions'),
+        func.sum(models.DailyAnalytics.reach).label('reach')).filter(
+            models.DailyAnalytics.brand_id == brand_id,
+            models.DailyAnalytics.date.between(start_date, end_date)
+        )
+    if source_list:
+        clean_sources = [s for s in source_list if s.lower() != 'all']
+        if clean_sources:
+            query = query.filter(models.DailyAnalytics.source.in_(clean_sources))
+    
+    results = query.group_by(models.DailyAnalytics.date).order_by(models.DailyAnalytics.date).all()
+
+    # Chuyển đổi kết quả query thành list dictionary và tính toán lại các tỷ lệ (Ratios)
+    # Vì ta không thể SUM(ROI), mà phải tính ROI = SUM(Profit) / SUM(Cost)
+    final_data = []
+
+    # Map kết quả vào dictionary để dễ fill ngày thiếu
+    data_map = {}
+    for row in results:
+        net_revenue = row.netRevenue or 0
+        profit = row.profit or 0
+        total_cost = row.totalCost or 0
+        gmv = row.gmv or 0
+        completed_orders = row.completedOrders or 0
+        total_orders = row.totalOrders or 0
+        ad_spend = row.adSpend or 0
+        clicks = row.clicks or 0
+        impressions = row.impressions or 0
+        conversions = row.conversions or 0
+
+         # Tính toán lại các chỉ số dẫn xuất (Derived Metrics)
+        item = {
+            "date": row.date.isoformat(),
+            "netRevenue": net_revenue,
+            "gmv": gmv,
+            "profit": profit,
+            "totalCost": total_cost,
+            "adSpend": ad_spend,
+            "cogs": row.cogs or 0,
+            "executionCost": row.executionCost or 0,
+
+            "completedOrders": completed_orders,
+            "cancelledOrders": row.cancelledOrders or 0,
+            "refundedOrders": row.refundedOrders or 0,
+            "totalOrders": total_orders,
+
+            "uniqueSkusSold": row.uniqueSkusSold or 0,
+            "totalQuantitySold": row.totalQuantitySold or 0,
+            "totalCustomers": row.totalCustomers or 0,
+
+            "impressions": impressions,
+            "clicks": clicks,
+            "conversions": conversions,
+            "reach": row.reach or 0,
+
+            "roi": (profit / total_cost) if total_cost > 0 else 0,
+            "aov": (gmv / completed_orders) if completed_orders > 0 else 0,
+            "upt": (row.totalQuantitySold / completed_orders) if completed_orders > 0 else 0,
+            "completionRate": (completed_orders / total_orders) if total_orders > 0 else 0,
+            "cancellationRate": (row.cancelledOrders / total_orders) if total_orders > 0 else 0,
+            "refundRate": (row.refundedOrders / total_orders) if total_orders > 0 else 0,
+            "ctr": (clicks / impressions) if impressions > 0 else 0,
+            "cpc": (ad_spend / clicks) if clicks > 0 else 0,
+            "cpm": (ad_spend / impressions * 1000) if impressions > 0 else 0,
+            "cpa": (ad_spend / conversions) if conversions > 0 else 0,
+            "frequency": 0,
+
+            "hourlyBreakdown": {},
+            "topProducts": [],
+            "locationDistribution": [],
+            "paymentMethodBreakdown": {},
+            "cancelReasonBreakdown": {}
+        }
+        data_map[row.date] = item
+
+    curr = start_date
+    while curr <= end_date:
+        if curr in data_map:
+            final_data.append(data_map[curr])
+        else:
+            final_data.append(_create_empty_daily_stat(curr))
+        curr += timedelta(days=1)
+    return final_data
+
+def _create_empty_daily_stat(date_obj):
+    return {
+        "date": date_obj.isoformat(),
+        "netRevenue": 0, "gmv": 0, "profit": 0, "totalCost": 0, "adSpend": 0,
+        "cogs": 0, "executionCost": 0, "roi": 0,
+        "completedOrders": 0, "cancelledOrders": 0, "refundedOrders": 0, "totalOrders": 0,
+        "aov": 0, "upt": 0, "uniqueSkusSold": 0, "totalQuantitySold": 0,
+        "completionRate": 0, "cancellationRate": 0, "refundRate": 0, "totalCustomers": 0,
+        "impressions": 0, "clicks": 0, "conversions": 0, "cpc": 0,
+        "cpa": 0, "cpm": 0, "ctr": 0, "reach": 0, "frequency": 0,
+        "hourlyBreakdown": {}, "topProducts": [], "locationDistribution": [],
+        "paymentMethodBreakdown": {}, "cancelReasonBreakdown": {}
+    }
+
+# def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_date: date) -> list:
+#     """
+#     Lấy dữ liệu KPI tổng hợp cho Dashboard.
+#     Đọc trực tiếp từ bảng DailyStat (nơi chứa dữ liệu tổng hợp đầy đủ).
+#     """
+#     # Truy vấn bảng DailyStat
+#     stats = db.query(models.DailyStat).filter(
+#         models.DailyStat.brand_id == brand_id,
+#         models.DailyStat.date.between(start_date, end_date)
+#     ).order_by(models.DailyStat.date).all()
+
+#     results = []
+#     stats_map = {s.date: s for s in stats}
+    
+#     current_date = start_date
+#     while current_date <= end_date:
+#         stat = stats_map.get(current_date)
+        
+#         if stat:
+#             # Map từ cột model (snake_case) sang format JSON frontend (camelCase)
+#             results.append({
+#                 "date": current_date.isoformat(),
+#                 "netRevenue": stat.net_revenue,
+#                 "gmv": stat.gmv,
+#                 "profit": stat.profit,
+#                 "totalCost": stat.total_cost,
+#                 "adSpend": stat.ad_spend,
+#                 "cogs": stat.cogs,
+#                 "executionCost": stat.execution_cost,
+#                 "roi": stat.roi,
+#                 # "profitMargin": stat.profit_margin,
+#                 # "takeRate": stat.take_rate,
+#                 "completedOrders": stat.completed_orders,
+#                 "cancelledOrders": stat.cancelled_orders,
+#                 "refundedOrders": stat.refunded_orders,
+#                 "aov": stat.aov,
+#                 "upt": stat.upt,
+#                 "uniqueSkusSold": stat.unique_skus_sold,
+#                 "totalQuantitySold": stat.total_quantity_sold,
+#                 "completionRate": stat.completion_rate,
+#                 "cancellationRate": stat.cancellation_rate,
+#                 "refundRate": stat.refund_rate,
+#                 "totalCustomers": stat.total_customers, # Đã có cột này trong DailyStat
+#                 "impressions": stat.impressions,
+#                 "clicks": stat.clicks,
+#                 "conversions": stat.conversions,
+#                 "cpc": stat.cpc,
+#                 "cpm": stat.cpm,
+#                 "ctr": stat.ctr,
+#                 "cpa": stat.cpa,
+#                 "reach": stat.reach,
+#                 "frequency": stat.frequency,
+                
+#                 # Các trường JSONB (Giờ đã có trong DailyStat)
+#                 "hourlyBreakdown": stat.hourly_breakdown,
+#                 "topProducts": stat.top_products,
+#                 "locationDistribution": stat.location_distribution,
+#                 "paymentMethodBreakdown": stat.payment_method_breakdown,
+#                 "cancelReasonBreakdown": stat.cancel_reason_breakdown,
+#             })
+#         else:
+#             # Trả về 0 nếu không có dữ liệu
+#             results.append({
+#                 "date": current_date.isoformat(),
+#                 "netRevenue": 0, "gmv": 0, "profit": 0, "totalCost": 0, "adSpend": 0,
+#                 "cogs": 0, "executionCost": 0, "roi": 0, 
+#                 # "profitMargin": 0, "takeRate": 0,
+#                 "completedOrders": 0, "cancelledOrders": 0, "refundedOrders": 0, "aov": 0,
+#                 "upt": 0, "uniqueSkusSold": 0, "totalQuantitySold": 0,
+#                 "completionRate": 0, "cancellationRate": 0, "refundRate": 0,
+#                 "totalCustomers": 0,
+#                 "impressions": 0, "clicks": 0, "conversions": 0, "cpc": 0,
+#                 "cpa": 0, "cpm": 0, "ctr": 0, "reach": 0, "frequency": 0,
+#                 "hourlyBreakdown": {}, "topProducts": [], "locationDistribution": [], "paymentMethodBreakdown": {}, "cancelReasonBreakdown": {}
+#             })            
+#         current_date += timedelta(days=1)
+
+#     return results
 
 def get_all_brands(db: Session):
     """Lấy danh sách tất cả các brand."""

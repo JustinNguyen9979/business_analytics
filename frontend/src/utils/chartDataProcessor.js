@@ -51,8 +51,18 @@ export const processChartData = (dailyData, chartDateRange) => {
         return { aggregatedData: dailyData, aggregationType };
     }
 
-    const sampleEntry = dailyData[0] || {};
-    const numericKeys = Object.keys(sampleEntry).filter(k => typeof sampleEntry[k] === 'number');
+    // Quét toàn bộ dữ liệu để tìm tất cả các key là số, thay vì chỉ lấy từ phần tử đầu tiên
+    // Điều này sửa lỗi: Nếu ngày đầu tiên thiếu field (ví dụ adSpend=0 hoặc null), field đó bị bỏ qua vĩnh viễn.
+    const numericKeysSet = new Set();
+    dailyData.forEach(entry => {
+        Object.keys(entry).forEach(key => {
+            if (typeof entry[key] === 'number') {
+                numericKeysSet.add(key);
+            }
+        });
+    });
+    const numericKeys = Array.from(numericKeysSet);
+
     // TH2: Tổng hợp theo THÁNG (khi xem theo NĂM)
     if (aggregationType === 'month') {
         const monthlyMap = new Map();

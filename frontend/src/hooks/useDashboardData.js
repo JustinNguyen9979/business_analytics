@@ -138,9 +138,10 @@ export const useDashboardData = (brandSlug, filters) => {
             updateState('lineChart', { loading: true, error: null });
             const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
             try {
+                // ĐÃ SỬA: Truyền thêm filter.source vào params
                 const [currentRes, previousRes] = await Promise.all([
-                    fetchAsyncData('daily_kpis_chart', brandSlug, filter.range, {}, controller.signal),
-                    fetchAsyncData('daily_kpis_chart', brandSlug, prevRange, {}, controller.signal)
+                    fetchAsyncData('daily_kpis_chart', brandSlug, filter.range, { source: filter.source }, controller.signal),
+                    fetchAsyncData('daily_kpis_chart', brandSlug, prevRange, { source: filter.source }, controller.signal)
                 ]);
                 const processedCurrent = processChartData(currentRes?.data, filter);
                 const processedPrevious = processChartData(previousRes?.data, { range: prevRange, type: filter.type });

@@ -15,4 +15,4 @@ else:
 
 # Khởi tạo Limiter
 # key_func=get_remote_address: Giới hạn dựa trên địa chỉ IP của người gọi
-limiter = Limiter(key_func=get_remote_address, storage_uri=REDIS_URL)
+limiter = Limiter(key_func=get_remote_address, storage_uri=REDIS_URL, default_limits=["60/minute"])
