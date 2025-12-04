@@ -2,7 +2,14 @@
 
 import dayjs from 'dayjs';
 import isBetween from 'dayjs/plugin/isBetween';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import weekOfYear from 'dayjs/plugin/weekOfYear';
+import advancedFormat from 'dayjs/plugin/advancedFormat';
+
 dayjs.extend(isBetween);
+dayjs.extend(isoWeek);
+dayjs.extend(weekOfYear);
+dayjs.extend(advancedFormat);
 
 /**
  * Xác định loại tổng hợp dữ liệu (ngày, tuần, tháng) dựa trên bộ lọc.
@@ -50,13 +57,19 @@ export const processChartData = (dailyData, chartDateRange) => {
     if (aggregationType === 'day') {
         return { aggregatedData: dailyData, aggregationType };
     }
+    
+    // DEBUG: Kiểm tra aggregation
+    console.log(`[Processor] Aggregating ${dailyData.length} rows to '${aggregationType}'`);
+
+    const DEFAULT_KEYS = ['netRevenue', 'profit', 'totalCost', 'adSpend', 'cogs', 'shippingCost', 'packagingCost', 'operatingCost', 'otherCost'];
 
     // Quét toàn bộ dữ liệu để tìm tất cả các key là số, thay vì chỉ lấy từ phần tử đầu tiên
     // Điều này sửa lỗi: Nếu ngày đầu tiên thiếu field (ví dụ adSpend=0 hoặc null), field đó bị bỏ qua vĩnh viễn.
-    const numericKeysSet = new Set();
+    const numericKeysSet = new Set(DEFAULT_KEYS);
     dailyData.forEach(entry => {
         Object.keys(entry).forEach(key => {
-            if (typeof entry[key] === 'number') {
+            const val = entry[key];
+            if (typeof val === 'number' || (typeof val === 'string' && val.trim() !== '' && !isNaN(Number(val)))) {
                 numericKeysSet.add(key);
             }
         });
@@ -88,8 +101,12 @@ export const processChartData = (dailyData, chartDateRange) => {
             if (monthlyMap.has(key)) {
                 const monthEntry = monthlyMap.get(key);
                 numericKeys.forEach(k => {
-                    if (typeof day[k] === 'number') {
-                        monthEntry[k] += day[k];
+                    // if (typeof day[k] === 'number') {
+                    //     monthEntry[k] += day[k];
+                    // }
+                    const val = Number(day[k]);
+                    if (!isNaN(val)) {
+                        monthEntry[k] += val;
                     }
                 });
             }
@@ -102,7 +119,7 @@ export const processChartData = (dailyData, chartDateRange) => {
         const weeklyMap = new Map();
         
         // 3.1. Tạo khung dữ liệu theo tuần
-        let cursorDate = startDate.clone().startOf('week');
+        let cursorDate = startDate.clone().startOf('isoWeek');
         // let safety = 0;
         while (cursorDate.isBefore(endDate) || cursorDate.isSame(endDate, 'day')) {
             // if (safety++ > 1000) {
@@ -118,13 +135,17 @@ export const processChartData = (dailyData, chartDateRange) => {
 
         // 3.2. Lấp đầy dữ liệu
         for (const day of dailyData) {
-            const weekStartDate = dayjs(day.date).startOf('week');
+            const weekStartDate = dayjs(day.date).startOf('isoWeek');
             const key = weekStartDate.format('YYYY-MM-DD');
             if (weeklyMap.has(key)) {
                 const weekEntry = weeklyMap.get(key);
                 numericKeys.forEach(k => {
-                    if (typeof day[k] === 'number') {
-                        weekEntry[k] += day[k];
+                    // if (typeof day[k] === 'number') {
+                    //     weekEntry[k] += day[k];
+                    // }
+                    const val = Number(day[k]);
+                    if (!isNaN(val)) {
+                        weekEntry[k] += val;
                     }
                 });
             }

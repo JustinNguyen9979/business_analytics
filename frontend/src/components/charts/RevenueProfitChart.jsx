@@ -5,17 +5,28 @@ import Plot from 'react-plotly.js';
 import Plotly from 'plotly.js/dist/plotly-cartesian';
 import { useTheme } from '@mui/material/styles';
 import { Paper, Typography, Box } from '@mui/material';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import weekOfYear from 'dayjs/plugin/weekOfYear';
+import advancedFormat from 'dayjs/plugin/advancedFormat';
 import dayjs from 'dayjs';
 import ChartPlaceholder from '../common/ChartPlaceholder';
+
+dayjs.extend(isoWeek);
+dayjs.extend(weekOfYear);
+dayjs.extend(advancedFormat);
 
 // Hàm "Easing" để animation mượt hơn (bắt đầu chậm, tăng tốc rồi chậm lại ở cuối)
 const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
 function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationType, series = [], isLoading, selectedDateRange }) {
-    const theme = useTheme();
-    const [animatedData, setAnimatedData] = useState([]);
-    const animationFrameId = useRef(null);
-    const chartContainerRef = useRef(null);
+    
+        const theme = useTheme();
+        const [animatedData, setAnimatedData] = useState([]);
+        const animationFrameId = useRef(null);
+        const chartContainerRef = useRef(null);
+        
+        // Tạo key duy nhất dựa trên ngày bắt đầu để force re-mount
+        const chartKey = `${chartRevision}-${selectedDateRange?.[0]?.toString() || 'init'}-${aggregationType}`;
 
     useEffect(() => {
         // Hủy animation cũ nếu có
@@ -23,8 +34,10 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             cancelAnimationFrame(animationFrameId.current);
         }
         
+        // RESET LOGIC: Nếu data thay đổi, ta xóa sạch chart cũ trước để tránh "kẹt"
+        setAnimatedData([]);
+
         if (!data || data.length === 0) {
-            setAnimatedData([]);
             return;
         }
 
@@ -41,8 +54,16 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             const comparisonDates = comparisonPoints.map(d => dayjs(d.date).add(dateOffset, 'milliseconds').toDate());
 
             return series.flatMap ( s => {
-                const currentValues = currentPoints.map(d => d[s.key])
-                const comparisonValues = comparisonPoints.map(d => d[s.key])
+                // SANITIZE: Ép kiểu số an toàn, loại bỏ NaN/null/undefined
+                const currentValues = currentPoints.map(d => {
+                    const val = Number(d[s.key]);
+                    return Number.isFinite(val) ? val : 0;
+                });
+                
+                const comparisonValues = comparisonPoints.map(d => {
+                     const val = Number(d[s.key]);
+                     return Number.isFinite(val) ? val : 0;
+                });
 
                 const comparisonTrace = {
                     x: comparisonDates,
@@ -67,8 +88,9 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
                     connectgaps: false,
                     hovertemplate: `<span style="color: ${theme.palette.text.secondary};">${s.name}: </span><b style="color: ${s.color};">%{y:,.0f} đ</b><extra></extra>`,
                 };
-
-                if (comparisonValues.every(v => v === undefined || v === null)) {
+                
+                // Chỉ ẩn comparison nếu toàn bộ giá trị thực sự là 0 hoặc null
+                if (comparisonValues.every(v => v === 0)) {
                     return [currentTrace];
                 }
 
@@ -78,6 +100,10 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
 
         // --- LOGIC ANIMATION MỚI SỬ DỤNG requestAnimationFrame ---
         const finalTraces = createChartTraces(data, comparisonData, series);
+        
+        // DEBUG: Kiểm tra dữ liệu trace cuối cùng
+        // console.log("Final Traces Prepared:", finalTraces);
+
         const duration = 1200;
         let startTime = null;
 
@@ -99,22 +125,20 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             }
         };
 
-        animationFrameId.current = requestAnimationFrame(animate);
+        // FIX: Dùng setTimeout để đẩy việc bắt đầu animation sang frame tiếp theo,
+        // đảm bảo state setAnimatedData([]) đã được thực thi và UI đã clear.
+        const timer = setTimeout(() => {
+             animationFrameId.current = requestAnimationFrame(animate);
+        }, 50);
 
         return () => {
+            clearTimeout(timer); // Clear timeout
             if (animationFrameId.current) {
                 cancelAnimationFrame(animationFrameId.current);
             }
-            // Purge Plotly WebGL context
-            if (chartContainerRef.current) {
-                try {
-                     Plotly.purge(chartContainerRef.current);
-                } catch(e) {}
-            }
-            setAnimatedData([]); // Clear state
         };
 
-    }, [data, comparisonData, theme, series, isLoading]);
+    }, [data, comparisonData, theme, series, isLoading, selectedDateRange]); // Thêm selectedDateRange vào dependency
 
 
     // --- PHẦN LAYOUT ---
@@ -125,8 +149,16 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
     ]).filter(v => typeof v === 'number');
 
     // 2. Tìm giá trị LỚN NHẤT và NHỎ NHẤT
-    let maxY = allYValues.length > 0 ? Math.max(...allYValues) : 0;
-    const minY = allYValues.length > 0 ? Math.min(...allYValues) : 0;
+    let maxY = 0;
+    let minY = 0;
+    
+    if (allYValues.length > 0) {
+        const safeValues = allYValues.filter(v => Number.isFinite(v));
+        if (safeValues.length > 0) {
+            maxY = Math.max(...safeValues);
+            minY = Math.min(...safeValues);
+        }
+    }
 
     // --- LOGIC QUAN TRỌNG: ĐỊNH HÌNH QUY MÔ TIỀN TỆ ---
     // Nếu doanh thu < 10 Triệu (hoặc bằng 0), ta ép biểu đồ hiển thị khung 0 - 10 Triệu.
@@ -201,6 +233,27 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
 
     const { tickVals, tickText, range } = calculateSmartTicks(minY, maxY);
 
+    const generateXAxisTicks = (startDate, endDate, unit, format, step = 1) => {
+        const ticks = [];
+        const tickTexts = [];
+        
+        // FIX: Dùng isoWeek nếu unit là week để khớp trục thời gian
+        let current = unit === 'week' ? startDate.clone().startOf('isoWeek') : startDate.clone().startOf(unit);
+
+        const endOfRange = unit === 'week' ? endDate.clone().endOf('isoWeek') : endDate.clone().endOf(unit);
+
+        let safety = 0;
+
+        while ((current.isBefore(endOfRange) || current.isSame(endOfRange, unit)) && safety < 1000) {
+            ticks.push(current.toDate());
+            tickTexts.push(current.format(format));
+            current = current.add(step, unit);
+            safety++;
+        }
+
+        return { ticks, tickTexts };
+    };
+
     let yAxisConfig = {
         color: theme.palette.text.secondary,
         gridcolor: theme.palette.divider,
@@ -218,70 +271,89 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
     };
 
     const getXAxisConfig = () => { 
-        if (!selectedDateRange || selectedDateRange.length < 2 || !selectedDateRange[0] || !selectedDateRange[1]) {
+        // Lấy range từ filter để sinh tick cho đẹp
+        if (!selectedDateRange || selectedDateRange.length < 2) {
             return {};
         }
-
         const [startFilterDate, endFilterDate] = selectedDateRange;
+        const safeStart = dayjs(startFilterDate);
+        const safeEnd = dayjs(endFilterDate);
 
-        let xRange;
-        let tickFormat;
-        let dtickValue;
+        // --- FIX QUAN TRỌNG: Tính Range là HỢP (UNION) của Filter và Data ---
+        // 1. Khởi tạo Range bằng Filter (để đảm bảo luôn bao trọn khoảng thời gian người dùng chọn)
+        let minDate = safeStart;
+        let maxDate = safeEnd;
+        
+        // 2. Nếu Data thực tế rộng hơn Filter (ví dụ: tuần bắt đầu trước ngày mùng 1), mở rộng Range ra
+        if (data && data.length > 0) {
+             const dataDates = data.map(d => dayjs(d.date).valueOf());
+             const minDataVal = Math.min(...dataDates);
+             const maxDataVal = Math.max(...dataDates);
+             
+             if (minDataVal < minDate.valueOf()) minDate = dayjs(minDataVal);
+             if (maxDataVal > maxDate.valueOf()) maxDate = dayjs(maxDataVal);
+        }
+        // Gom cả data so sánh (nếu có)
+        if (comparisonData && comparisonData.length > 0) {
+             // Lưu ý: comparisonData đã được shift ngày trong createChartTraces,
+             // nhưng ở đây ta chỉ quan tâm range hiển thị của trục X chính.
+             // Với logic so sánh hiện tại, trục X hiển thị ngày của kỳ hiện tại,
+             // nên ta không cần mở rộng range theo ngày gốc của kỳ so sánh.
+        }
+
+        let tickValues = [];
+        let tickLabels = [];
+        let tickAngle = -45;
+        let tickFont = { size: 10 };
+        let showGrid = true; // Luôn hiện grid
+        let xAxisRange = [];
+        
+        // Buffer an toàn: Thêm khoảng trống 2 đầu để điểm không bị sát mép
+        let bufferDuration = 1; 
+        let bufferUnit = 'day';
 
         switch (aggregationType) {
             case 'month':
-                xRange = [startFilterDate.startOf('month').subtract(1, 'month').toDate(), endFilterDate.endOf('month').add(1, 'month').toDate()];
-                tickFormat = '%b %Y';
-                dtickValue = 'M1';
-                const monthTick0 = startFilterDate.startOf('month').toDate();
-                
-                return { 
-                    tickmode: 'linear', 
-                    tick0: monthTick0, 
-                    dtick: dtickValue, 
-                    tickformat: tickFormat, 
-                    range: xRange, 
-                    tickangle: -45,
-                };
+                ({ ticks: tickValues, tickTexts: tickLabels } = generateXAxisTicks(safeStart, safeEnd, 'month', 'MMM'));
+                bufferDuration = 15; bufferUnit = 'day';
+                break;
 
             case 'week': 
-                xRange = [startFilterDate.startOf('week').subtract(3, 'day').toDate(), endFilterDate.endOf('week').add(3, 'day').toDate()];
-                tickFormat = 'Tuần %W';
-                dtickValue = 7 * 24 * 60 * 60 * 1000;
-                const weekTick0 = startFilterDate.startOf('week').toDate();
-                
-                return {
-                    tickmode: 'linear',
-                    tick0: weekTick0,
-                    dtick: dtickValue,
-                    tickformat: tickFormat,
-                    range: xRange,
-                    tickangle: -45,
-                };
+                ({ ticks: tickValues, tickTexts: tickLabels } = generateXAxisTicks(safeStart, safeEnd, 'week', '[W]w'));
+                bufferDuration = 4; bufferUnit = 'day';
+                // FIX: Dùng isoWeek để khớp với logic xử lý data
+                // xAxisRange = [safeStart.startOf('isoWeek').subtract(7, 'day').toDate(), safeEnd.endOf('isoWeek').add(7, 'day').toDate()];
+                break;
 
             case 'day': default:
-                const dailyTickVals = [];
-                const dailyTickText = [];
-                let currentDay = startFilterDate.clone().startOf('day');
-                const finalDay = endFilterDate.clone().endOf('day');
-                
-                while (currentDay.isBefore(finalDay) || currentDay.isSame(finalDay, 'day')) {
-                    dailyTickVals.push(currentDay.valueOf());
-                    dailyTickText.push(currentDay.format('DD'));
-                    currentDay = currentDay.add(1, 'day');
-                }
-                xRange = [startFilterDate.subtract(12, 'hour').toDate(), endFilterDate.add(12, 'hour').toDate()];
-                return {
-                    tickmode: 'array',
-                    tickvals: dailyTickVals,
-                    ticktext: dailyTickText,
-                    range: xRange,
-                    tickangle: -45,
-                    tickfont: { size: 10 },
-                    showgrid: true,
-                    gridwidth: 1,
-                };
+                ({ ticks: tickValues, tickTexts: tickLabels } = generateXAxisTicks(safeStart, safeEnd, 'day', 'DD/MM'));
+                bufferDuration = 12; bufferUnit = 'hour';
+                break;
         }
+        
+        // Set range bao trọn minDate -> maxDate + buffer
+        xAxisRange = [
+            minDate.subtract(bufferDuration, bufferUnit).toDate(), 
+            maxDate.add(bufferDuration, bufferUnit).toDate()
+        ];
+
+        return {
+            tickmode: 'array',
+            tickvals: tickValues,
+            ticktext: tickLabels,
+            range: xAxisRange, // Manual range dựa trên data thực
+            tickangle: tickAngle,
+            tickfont: tickFont,
+            showgrid: showGrid,
+            gridcolor: 'rgba(255, 255, 255, 0.1)',
+            griddash: 'dot',
+            showspikes: true,
+            spikethickness: 1,
+            spikecolor: theme.palette.text.secondary,
+            spikemode: 'across',
+            autorange: false, // Tắt auto để dùng manual range chính xác
+            fixedrange: false,
+        };
     };
 
     const layout = {
@@ -335,7 +407,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
     return (
         <Box ref={chartContainerRef} sx={{ height: '100%', width: '100%' }}>
             <Plot
-                key={chartRevision}
+                key={chartKey}
                 data={animatedData}
                 layout={layout}
                 useResizeHandler={true}
