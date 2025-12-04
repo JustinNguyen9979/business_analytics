@@ -309,32 +309,34 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
         let xAxisRange = [];
         
         // Buffer an toàn: Thêm khoảng trống 2 đầu để điểm không bị sát mép
-        let bufferDuration = 1; 
+        // FIX: Giảm buffer bên phải (End) để tránh khoảng trắng quá lớn
+        let bufferStart = 1; 
+        let bufferEnd = 1;
         let bufferUnit = 'day';
 
         switch (aggregationType) {
             case 'month':
                 ({ ticks: tickValues, tickTexts: tickLabels } = generateXAxisTicks(safeStart, safeEnd, 'month', 'MMM'));
-                bufferDuration = 15; bufferUnit = 'day';
+                bufferStart = 15; bufferEnd = 5; bufferUnit = 'day'; // Giảm End từ 15 -> 5
                 break;
 
             case 'week': 
                 ({ ticks: tickValues, tickTexts: tickLabels } = generateXAxisTicks(safeStart, safeEnd, 'week', '[W]w'));
-                bufferDuration = 4; bufferUnit = 'day';
+                bufferStart = 4; bufferEnd = 2; bufferUnit = 'day'; // Giảm End từ 4 -> 2
                 // FIX: Dùng isoWeek để khớp với logic xử lý data
                 // xAxisRange = [safeStart.startOf('isoWeek').subtract(7, 'day').toDate(), safeEnd.endOf('isoWeek').add(7, 'day').toDate()];
                 break;
 
             case 'day': default:
                 ({ ticks: tickValues, tickTexts: tickLabels } = generateXAxisTicks(safeStart, safeEnd, 'day', 'DD/MM'));
-                bufferDuration = 12; bufferUnit = 'hour';
+                bufferStart = 12; bufferEnd = 6; bufferUnit = 'hour'; // Giảm End
                 break;
         }
         
         // Set range bao trọn minDate -> maxDate + buffer
         xAxisRange = [
-            minDate.subtract(bufferDuration, bufferUnit).toDate(), 
-            maxDate.add(bufferDuration, bufferUnit).toDate()
+            minDate.subtract(bufferStart, bufferUnit).toDate(), 
+            maxDate.add(bufferEnd, bufferUnit).toDate()
         ];
 
         return {
@@ -353,6 +355,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             spikemode: 'across',
             autorange: false, // Tắt auto để dùng manual range chính xác
             fixedrange: false,
+            automargin: true, // FIX: Tự động căn lề
         };
     };
 
