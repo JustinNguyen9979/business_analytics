@@ -227,17 +227,17 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
         let xRange;
         let tickFormat;
         let dtickValue;
-        let tick0Value = startFilterDate.toDate();
 
         switch (aggregationType) {
             case 'month':
                 xRange = [startFilterDate.startOf('month').subtract(1, 'month').toDate(), endFilterDate.endOf('month').add(1, 'month').toDate()];
                 tickFormat = '%b %Y';
                 dtickValue = 'M1';
+                const monthTick0 = startFilterDate.startOf('month').toDate();
                 
                 return { 
                     tickmode: 'linear', 
-                    tick0: tick0Value, 
+                    tick0: monthTick0, 
                     dtick: dtickValue, 
                     tickformat: tickFormat, 
                     range: xRange, 
@@ -248,10 +248,11 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
                 xRange = [startFilterDate.startOf('week').subtract(3, 'day').toDate(), endFilterDate.endOf('week').add(3, 'day').toDate()];
                 tickFormat = 'Tuần %W';
                 dtickValue = 7 * 24 * 60 * 60 * 1000;
+                const weekTick0 = startFilterDate.startOf('week').toDate();
                 
                 return {
                     tickmode: 'linear',
-                    tick0: tick0Value,
+                    tick0: weekTick0,
                     dtick: dtickValue,
                     tickformat: tickFormat,
                     range: xRange,
@@ -259,55 +260,27 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
                 };
 
             case 'day': default:
-                const allDays = [];
-
-                let runner = startFilterDate.clone().startOf('day');
-                const endRunner = endFilterDate.clone().endOf('day');
-
-                while (runner.isBefore(endRunner)) {
-                    allDays.push(runner.toDate());
-                    runner = runner.add(1, 'day');
-                }
-
-                return {
-                    type: 'date',
-                    tickmode: 'array',
-                    tickvals: allDays,
-                    ticktext: allDays.map(d => dayjs(d).format('DD')),
-
-                    range: [
-                        startFilterDate.subtract(12, 'hour').toDate(),
-                        endFilterDate.add(12, 'hour').toDate()
-                    ],
-
-                    tickangle: 0,
-                    showgrid: true,
-                    gridcolor: theme.palette.divider,
-                    tickangle: -45,
-                };
-
-            // case 'day': default:
-            //     const dailyTickVals = [];
-            //     const dailyTickText = [];
-            //     let currentDay = startFilterDate.clone().startOf('day');
-            //     const finalDay = endFilterDate.clone().endOf('day');
+                const dailyTickVals = [];
+                const dailyTickText = [];
+                let currentDay = startFilterDate.clone().startOf('day');
+                const finalDay = endFilterDate.clone().endOf('day');
                 
-            //     while (currentDay.isBefore(finalDay) || currentDay.isSame(finalDay, 'day')) {
-            //         dailyTickVals.push(currentDay.valueOf());
-            //         dailyTickText.push(currentDay.format('DD'));
-            //         currentDay = currentDay.add(1, 'day');
-            //     }
-            //     xRange = [startFilterDate.subtract(12, 'hour').toDate(), endFilterDate.add(12, 'hour').toDate()];
-            //     return {
-            //         tickmode: 'array',
-            //         tickvals: dailyTickVals,
-            //         ticktext: dailyTickText,
-            //         range: xRange,
-            //         tickangle: -45,
-            //         tickfont: { size: 10 },
-            //         showgrid: true,
-            //         gridwidth: 1,
-            //     };
+                while (currentDay.isBefore(finalDay) || currentDay.isSame(finalDay, 'day')) {
+                    dailyTickVals.push(currentDay.valueOf());
+                    dailyTickText.push(currentDay.format('DD'));
+                    currentDay = currentDay.add(1, 'day');
+                }
+                xRange = [startFilterDate.subtract(12, 'hour').toDate(), endFilterDate.add(12, 'hour').toDate()];
+                return {
+                    tickmode: 'array',
+                    tickvals: dailyTickVals,
+                    ticktext: dailyTickText,
+                    range: xRange,
+                    tickangle: -45,
+                    tickfont: { size: 10 },
+                    showgrid: true,
+                    gridwidth: 1,
+                };
         }
     };
 

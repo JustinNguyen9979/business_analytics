@@ -24,7 +24,7 @@ const determineAggregation = (dateRange) => {
     if (estimatedMonths >= 11.5) { // Dùng 11.5 thay vì 12 để account cho sai số nhỏ (ví dụ 11.9x vẫn tính là 12 tháng)
         return 'month'; // Từ ~12 tháng trở lên -> xem theo tháng
     }
-    if (estimatedMonths >= 1.5) { // Dùng 1.5 thay vì 2 để account cho sai số nhỏ (ví dụ 1.9x vẫn tính là 2 tháng)
+    if (estimatedMonths > 2.2) { // Dùng 1.5 thay vì 2 để account cho sai số nhỏ (ví dụ 1.9x vẫn tính là 2 tháng)
         return 'week';  // Từ ~2 tháng đến dưới ~12 tháng -> xem theo tuần
     }
     return 'day';       // Dưới ~2 tháng -> xem theo ngày
