@@ -15,6 +15,7 @@ import { useDashboardData } from '../hooks/useDashboardData';
 import { useDateFilter } from '../hooks/useDateFilter';
 import { useTheme } from '@mui/material/styles';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
+import ChartPlaceholder from '../components/common/ChartPlaceholder';
 import FinanceTable from '../components/finance/FinanceTable';
 import KpiCard from '../components/dashboard/KpiCard';
 import { useFinanceData } from '../hooks/useFinanceData';

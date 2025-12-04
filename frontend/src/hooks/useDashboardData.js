@@ -133,6 +133,7 @@ export const useDashboardData = (brandSlug, filters) => {
         if (!brandSlug || !filter || !filter.range) return;
         
         const controller = new AbortController();
+        let timeoutId;
 
         const fetchLineChart = async () => {
             updateState('lineChart', { loading: true, error: null });
@@ -160,9 +161,16 @@ export const useDashboardData = (brandSlug, filters) => {
                 }
             }
         };
-        fetchLineChart();
 
-        return () => controller.abort();
+        // Debounce: Đợi 500ms sau khi filter thay đổi mới gọi API
+        timeoutId = setTimeout(() => {
+            fetchLineChart();
+        }, 500);
+
+        return () => {
+            clearTimeout(timeoutId);
+            controller.abort();
+        };
     }, [brandSlug, filters.lineChart]); // Chỉ phụ thuộc vào bộ lọc Line Chart
 
     // <<< THAY ĐỔI 4: useEffect riêng cho các biểu đồ còn lại (Donut, Top Products, Map) >>>
