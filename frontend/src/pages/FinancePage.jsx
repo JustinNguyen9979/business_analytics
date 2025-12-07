@@ -79,22 +79,36 @@ function FinancePage() {
 
     const handleToggleSource = (sourceValue) => {
         setSelectedSources(prev => {
-            const isAllSelected = prev.includes('all');
+            // Trường hợp 1: Bấm vào nút "Tất cả"
             if (sourceValue === 'all') {
+                // Nếu đang chọn tất cả rồi -> Bấm phát nữa thì bỏ chọn hết
+                if (prev.includes('all')) {
+                    return [];
+                }
+                // Nếu chưa chọn tất cả -> Chọn tất cả
                 return ['all'];
             }
 
-            if (isAllSelected) {
-                return [sourceValue];
-            }
-
-            if (prev.includes(sourceValue)) {
-                const newSelection = prev.filter(v => v !== sourceValue);
-                return newSelection.length === 0 ? ['all'] : newSelection;
-            } else {
-                return [...prev, sourceValue];
-            }
-        });
+            // Trường hợp 2: Đang ở chế độ "Tất cả" (tức là mọi source đều đang được tick)
+            if (prev.includes('all')) {
+                // Người dùng bấm vào một source cụ thể để BỎ chọn nó
+                // -> Chuyển sang chế độ chọn lẻ: Lấy tất cả source có sẵn TRỪ đi source vừa bấm
+                const allValues = sourceOptions.map(o => o.value);
+                const newSelection = allValues.filter(v => v !== sourceValue);
+                
+                                // Nếu bỏ chọn cái cuối cùng (danh sách rỗng), set về mảng rỗng [] thay vì ['all']
+                                return newSelection; 
+                            }
+                
+                            // Trường hợp 3: Đang ở chế độ chọn lẻ
+                            if (prev.includes(sourceValue)) {
+                                // Đang có -> Bấm để bỏ chọn
+                                const newSelection = prev.filter(v => v !== sourceValue);
+                                return newSelection; // Trả về mảng rỗng nếu không còn gì, không phải ['all']
+                            } else {
+                                // Chưa có -> Bấm để thêm vào
+                                return [...prev, sourceValue];
+                            }        });
     };
 
     const dashboardFilters = useMemo(() => {

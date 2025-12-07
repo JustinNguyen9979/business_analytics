@@ -37,10 +37,6 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
         // RESET LOGIC: Nếu data thay đổi, ta xóa sạch chart cũ trước để tránh "kẹt"
         setAnimatedData([]);
 
-        if (!data || data.length === 0) {
-            return;
-        }
-
         // --- HÀM TẠO CẤU TRÚC DỮ LIỆU ---
         const createChartTraces = (currentData, comparisonData, series) => {
             const currentPoints = currentData;
@@ -367,6 +363,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
         // Bỏ transition đi vì ta tự quản lý animation
         xaxis: {
             ...getXAxisConfig(),
+            type: 'date', // BẮT BUỘC: Ép kiểu Date để hiển thị đúng trục thời gian khi không có data
             color: theme.palette.text.secondary,
             gridcolor: theme.palette.divider,
             showspikes: false,

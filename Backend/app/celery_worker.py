@@ -142,7 +142,7 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
 
                 # Chuẩn hóa thành list nếu cần
                 source_list = None
-                if req_source:
+                if req_source is not None: # SỬA: Dùng is not None để chấp nhận list rỗng []
                     if isinstance(req_source, list):
                         source_list = req_source
                     else:

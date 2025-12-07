@@ -53,6 +53,12 @@ export const processChartData = (dailyData, chartDateRange) => {
     const [startDate, endDate] = range;
     const aggregationType = determineAggregation(range); // Gọi hàm đã sửa đổi
 
+    // Nếu dữ liệu rỗng (do lọc không ra kết quả), trả về rỗng ngay, không tự điền số 0
+    // NHƯNG vẫn phải trả về aggregationType đúng để vẽ trục X
+    if (dailyData.length === 0) {
+        return { aggregatedData: [], aggregationType };
+    }
+
     // TH1: Không cần tổng hợp, trả về dữ liệu gốc
     if (aggregationType === 'day') {
         return { aggregatedData: dailyData, aggregationType };
