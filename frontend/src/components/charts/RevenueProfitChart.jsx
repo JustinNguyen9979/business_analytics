@@ -228,7 +228,8 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             currentTick += step;
         }
         
-        return { tickVals: ticks, tickText: labels, range: [0, ticks[ticks.length-1]] };
+        // Thêm 5% buffer cho range max để đường kẻ ngang trên cùng không bị mất
+        return { tickVals: ticks, tickText: labels, range: [0, ticks[ticks.length-1] * 1.05] };
     };
 
     const { tickVals, tickText, range } = calculateSmartTicks(minY, maxY);
@@ -384,7 +385,7 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
             valign: 'top',
         },
         // Giảm margin dưới để tối ưu không gian
-        margin: { l: 80, r: 40, b: 60, t: 60 },
+        margin: { l: 80, r: 40, b: 60, t: 20 },
         hovermode: 'x unified',
         hoverlabel: { 
             bgcolor: 'rgba(10, 25, 41, 0.9)', 
@@ -401,10 +402,6 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
 
     if (isLoading) {
         return <ChartPlaceholder message="Đang tải dữ liệu biểu đồ..." />;
-    }
-
-    if (!data || data.length === 0 || !series || series.length === 0) {
-        return <ChartPlaceholder message="Không có dữ liệu để hiển thị." />;
     }
 
     return (

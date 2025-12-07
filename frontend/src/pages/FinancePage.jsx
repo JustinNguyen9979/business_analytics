@@ -71,7 +71,7 @@ function FinancePage() {
         if (brandSlug) {
             getSourcesForBrand(brandSlug)
                 .then(sources => {
-                    const options = sources.map(s => ({ value: s.charAt(0).toUpperCase() + s.slice(1), label: s.charAt(0).toUpperCase() + s.slice(1) }));
+                    const options = sources.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }));
                     setSourceOptions(options);
                 }).catch(err => console.error("Failed to load sources:", err));
         }
@@ -81,27 +81,19 @@ function FinancePage() {
         setSelectedSources(prev => {
             const isAllSelected = prev.includes('all');
             if (sourceValue === 'all') {
-                return isAllSelected ? (sourceOptions.length === 0 ? ['all'] : []) : ['all'];
-            }
-
-            let newSelection;
-            if (isAllSelected) {
-                const allValues = sourceOptions.map(o => o.value);
-                newSelection = allValues.filter(v => v !== sourceValue);
-            } else {
-                if (prev.includes(sourceValue)) {
-                    newSelection = prev.filter(v => v !== sourceValue);
-                } else {
-                    newSelection = [...prev, sourceValue];
-                }
-            }
-
-            const currentSelected = newSelection.filter(v => v !== 'all');
-            if (currentSelected.length === sourceOptions.length && sourceOptions.length > 0) {
                 return ['all'];
             }
 
-            return currentSelected.length === 0 ? [] : currentSelected;
+            if (isAllSelected) {
+                return [sourceValue];
+            }
+
+            if (prev.includes(sourceValue)) {
+                const newSelection = prev.filter(v => v !== sourceValue);
+                return newSelection.length === 0 ? ['all'] : newSelection;
+            } else {
+                return [...prev, sourceValue];
+            }
         });
     };
 
@@ -285,17 +277,15 @@ function FinancePage() {
                 <Box sx={{ pb: 3, pt: 1, height: 750, position: 'relative' }}>
                     {lineChart.loading ? <ChartSkeleton /> : (
                         <Suspense fallback={<ChartSkeleton />}>
-                            {lineChart.data.current && lineChart.data.current.length > 0 ? (
-                                <RevenueProfitChart
-                                    data={lineChart.data.current}
-                                    comparisonData={lineChart.data.previous}
-                                    series={filteredLineChartSeries}
-                                    isLoading={lineChart.loading}
-                                    chartRevision={0}
-                                    aggregationType={lineChart.data.aggregationType}
-                                    selectedDateRange={dateRange}
-                                />
-                            ): <ChartPlaceholder title="Biểu đồ xu hướng" />}
+                            <RevenueProfitChart
+                                data={lineChart.data.current}
+                                comparisonData={lineChart.data.previous}
+                                series={filteredLineChartSeries}
+                                isLoading={lineChart.loading}
+                                chartRevision={0}
+                                aggregationType={lineChart.data.aggregationType}
+                                selectedDateRange={dateRange}
+                            />
                         </Suspense>
                     )}
                 </Box>
@@ -327,7 +317,7 @@ function FinancePage() {
                         {sourceOptions.map(option => (
                             <ChartSettingItem
                                 key={option.value}
-                                label={option.value}
+                                label={option.label}
                                 checked={selectedSources.includes('all') || selectedSources.includes(option.value)}
                                 onChange={() => handleToggleSource(option.value)}
                             />

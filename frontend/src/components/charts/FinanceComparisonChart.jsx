@@ -91,7 +91,8 @@ function FinanceComparisonChart({ data, series, title }) {
             if (currentTick > targetMax) break;
             currentTick += step;
         }
-        return { tickVals: ticks, tickText: labels, range: [0, ticks[ticks.length-1]] };
+        // Thêm 5% buffer cho range max để đường kẻ ngang trên cùng không bị mất
+        return { tickVals: ticks, tickText: labels, range: [0, ticks[ticks.length-1] * 1.05] };
     };
 
     const { tickVals, tickText, range } = calculateSmartTicks(minY, maxY);
@@ -130,7 +131,7 @@ function FinanceComparisonChart({ data, series, title }) {
             zerolinecolor: theme.palette.divider,
             showspikes: false,
         },
-        margin: { l: 80, r: 40, b: 20, t: 80 },
+        margin: { l: 80, r: 40, b: 20, t: 20 },
         hovermode: 'x unified', // Hiển thị tooltip cho cả nhóm khi hover
         hoverlabel: {
             bgcolor: 'rgba(10, 25, 41, 0.9)',
@@ -144,17 +145,15 @@ function FinanceComparisonChart({ data, series, title }) {
     };
 
     return (
-        <Paper variant="glass" elevation={0} sx={{ height: '100%', p: 2 }}>
-            <Box sx={{ height: '100%', width: '100%' }}>
-                <Plot
-                    data={traces}
-                    layout={layout}
-                    useResizeHandler={true}
-                    style={{ width: '100%', height: '100%' }}
-                    config={{ displayModeBar: false, responsive: true }}
-                />
-            </Box>
-        </Paper>
+        <Box sx={{ height: '100%', width: '100%' }}>
+            <Plot
+                data={traces}
+                layout={layout}
+                useResizeHandler={true}
+                style={{ width: '100%', height: '100%' }}
+                config={{ displayModeBar: false, responsive: true }}
+            />
+        </Box>
     );
 }
 

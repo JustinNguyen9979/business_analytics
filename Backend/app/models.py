@@ -238,6 +238,7 @@ class DailyAnalytics(Base):
     aov = Column(Float, default=0.0)             # Average Order Value (Giá trị đơn TB)
     upt = Column(Float, default=0.0)             # Units Per Transaction (Số SP/đơn TB)
     unique_skus_sold = Column(Integer, default=0) # Độ đa dạng SP (Mới bổ sung)
+    total_quantity_sold = Column(Integer, default=0) # Tổng số lượng sản phẩm bán ra
 
     # ==========================================
     # 5. COMPLEX ANALYTICS (Dữ liệu phức tạp - JSONB)

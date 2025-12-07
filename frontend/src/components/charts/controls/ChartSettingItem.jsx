@@ -2,7 +2,6 @@ import React from 'react';
 import { Box, Typography, Checkbox, Switch } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { itemStyles, panelStyles } from './styles';
-import { onClick } from 'plotly.js/dist/plotly-cartesian';
 
 /**
  * ChartSettingItem - Một dòng tùy chọn đơn lẻ (Checkbox hoặc Switch).

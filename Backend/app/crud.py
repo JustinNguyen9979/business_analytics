@@ -175,12 +175,18 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
     """
 
     # --- TRƯỜNG HỢP 1: LẤY TỔNG (QUERY DAILY_STAT) ---
-    # Logic: Nếu không truyền source hoặc chọn 'all', ta lấy bảng tổng hợp sẵn cho nhanh.
     is_fetching_all = False
-    if not source_list:
+    if source_list is None:
         is_fetching_all = True
-    elif isinstance(source_list, list) and any(s.lower() == 'all' for s in source_list):
-        is_fetching_all = True
+    elif isinstance(source_list, list):
+        if len(source_list) == 0:
+            # List rỗng [] -> Người dùng bỏ chọn hết -> Trả về rỗng (không phải Total)
+            is_fetching_all = False 
+        else:
+            # Nếu có chứa 'all' thì lấy tổng
+            is_containing_all_keyword = any(str(s).lower() == 'all' for s in source_list)
+            if is_containing_all_keyword:
+                is_fetching_all = True
     elif isinstance(source_list, str) and source_list.lower() == 'all':
         is_fetching_all = True
     
@@ -193,7 +199,6 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
         results = []
         stats_map = {s.date: s for s in stats}
         current_date = start_date
-
         while current_date <= end_date:
             stat = stats_map.get(current_date)
             if stat:
@@ -238,8 +243,23 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
                 results.append(_create_empty_daily_stat(current_date))
             current_date += timedelta(days=1)
         return results
-    
+
     # --- TRƯỜNG HỢP 2: LẤY CHI TIẾT (QUERY DAILY_ANALYTICS & AGGREGATE) ---
+    # Nếu chạy xuống đây nghĩa là is_fetching_all = False.
+    # Ta phải đảm bảo có lọc theo source. Nếu không có source hợp lệ nào -> Trả về rỗng.
+    
+    clean_sources = []
+    if source_list and isinstance(source_list, list):
+        clean_sources = [s.lower() for s in source_list if s.lower() != 'all']
+    elif isinstance(source_list, str) and source_list.lower() != 'all':
+        clean_sources = [source_list.lower()]
+    
+
+    # Nếu không có source nào để lọc (ví dụ list rỗng), trả về list rỗng ngay
+    # để tránh việc query không filter sẽ ra tổng toàn bộ DB
+    if not clean_sources:
+        return []
+
     # Logic: Query bảng chi tiết, lọc theo source và SUM lại.
     query = db.query(
         models.DailyAnalytics.date,
@@ -266,12 +286,9 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
         func.sum(models.DailyAnalytics.conversions).label('conversions'),
         func.sum(models.DailyAnalytics.reach).label('reach')).filter(
             models.DailyAnalytics.brand_id == brand_id,
-            models.DailyAnalytics.date.between(start_date, end_date)
+            models.DailyAnalytics.date.between(start_date, end_date),
+            models.DailyAnalytics.source.in_(clean_sources) # BẮT BUỘC PHẢI CÓ FILTER NÀY
         )
-    if source_list:
-        clean_sources = [s for s in source_list if s.lower() != 'all']
-        if clean_sources:
-            query = query.filter(models.DailyAnalytics.source.in_(clean_sources))
     
     results = query.group_by(models.DailyAnalytics.date).order_by(models.DailyAnalytics.date).all()
 
@@ -360,85 +377,6 @@ def _create_empty_daily_stat(date_obj):
         "hourlyBreakdown": {}, "topProducts": [], "locationDistribution": [],
         "paymentMethodBreakdown": {}, "cancelReasonBreakdown": {}
     }
-
-# def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_date: date) -> list:
-#     """
-#     Lấy dữ liệu KPI tổng hợp cho Dashboard.
-#     Đọc trực tiếp từ bảng DailyStat (nơi chứa dữ liệu tổng hợp đầy đủ).
-#     """
-#     # Truy vấn bảng DailyStat
-#     stats = db.query(models.DailyStat).filter(
-#         models.DailyStat.brand_id == brand_id,
-#         models.DailyStat.date.between(start_date, end_date)
-#     ).order_by(models.DailyStat.date).all()
-
-#     results = []
-#     stats_map = {s.date: s for s in stats}
-    
-#     current_date = start_date
-#     while current_date <= end_date:
-#         stat = stats_map.get(current_date)
-        
-#         if stat:
-#             # Map từ cột model (snake_case) sang format JSON frontend (camelCase)
-#             results.append({
-#                 "date": current_date.isoformat(),
-#                 "netRevenue": stat.net_revenue,
-#                 "gmv": stat.gmv,
-#                 "profit": stat.profit,
-#                 "totalCost": stat.total_cost,
-#                 "adSpend": stat.ad_spend,
-#                 "cogs": stat.cogs,
-#                 "executionCost": stat.execution_cost,
-#                 "roi": stat.roi,
-#                 # "profitMargin": stat.profit_margin,
-#                 # "takeRate": stat.take_rate,
-#                 "completedOrders": stat.completed_orders,
-#                 "cancelledOrders": stat.cancelled_orders,
-#                 "refundedOrders": stat.refunded_orders,
-#                 "aov": stat.aov,
-#                 "upt": stat.upt,
-#                 "uniqueSkusSold": stat.unique_skus_sold,
-#                 "totalQuantitySold": stat.total_quantity_sold,
-#                 "completionRate": stat.completion_rate,
-#                 "cancellationRate": stat.cancellation_rate,
-#                 "refundRate": stat.refund_rate,
-#                 "totalCustomers": stat.total_customers, # Đã có cột này trong DailyStat
-#                 "impressions": stat.impressions,
-#                 "clicks": stat.clicks,
-#                 "conversions": stat.conversions,
-#                 "cpc": stat.cpc,
-#                 "cpm": stat.cpm,
-#                 "ctr": stat.ctr,
-#                 "cpa": stat.cpa,
-#                 "reach": stat.reach,
-#                 "frequency": stat.frequency,
-                
-#                 # Các trường JSONB (Giờ đã có trong DailyStat)
-#                 "hourlyBreakdown": stat.hourly_breakdown,
-#                 "topProducts": stat.top_products,
-#                 "locationDistribution": stat.location_distribution,
-#                 "paymentMethodBreakdown": stat.payment_method_breakdown,
-#                 "cancelReasonBreakdown": stat.cancel_reason_breakdown,
-#             })
-#         else:
-#             # Trả về 0 nếu không có dữ liệu
-#             results.append({
-#                 "date": current_date.isoformat(),
-#                 "netRevenue": 0, "gmv": 0, "profit": 0, "totalCost": 0, "adSpend": 0,
-#                 "cogs": 0, "executionCost": 0, "roi": 0, 
-#                 # "profitMargin": 0, "takeRate": 0,
-#                 "completedOrders": 0, "cancelledOrders": 0, "refundedOrders": 0, "aov": 0,
-#                 "upt": 0, "uniqueSkusSold": 0, "totalQuantitySold": 0,
-#                 "completionRate": 0, "cancellationRate": 0, "refundRate": 0,
-#                 "totalCustomers": 0,
-#                 "impressions": 0, "clicks": 0, "conversions": 0, "cpc": 0,
-#                 "cpa": 0, "cpm": 0, "ctr": 0, "reach": 0, "frequency": 0,
-#                 "hourlyBreakdown": {}, "topProducts": [], "locationDistribution": [], "paymentMethodBreakdown": {}, "cancelReasonBreakdown": {}
-#             })            
-#         current_date += timedelta(days=1)
-
-#     return results
 
 def get_all_brands(db: Session):
     """Lấy danh sách tất cả các brand."""
