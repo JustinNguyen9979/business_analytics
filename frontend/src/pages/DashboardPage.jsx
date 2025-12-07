@@ -1,9 +1,8 @@
 // FILE: frontend/src/pages/DashboardPage.jsx (PHIÊN BẢN HOÀN THIỆN)
 
 import { useTheme } from '@mui/material/styles';
-import React, { useState, useCallback, useEffect, Suspense, lazy, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Typography, Box, Paper, Divider, CircularProgress, Alert, Button, Stack, Skeleton, filledInputClasses } from '@mui/material';
+import React, { useState, useEffect, Suspense, lazy, useMemo } from 'react';
+import { Typography, Box, Paper, Divider, CircularProgress, Button, Stack, Skeleton } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import dayjs from 'dayjs';
 import { useDashboardData } from '../hooks/useDashboardData';
@@ -14,6 +13,7 @@ import ChartPlaceholder from '../components/common/ChartPlaceholder';
 import { useLayout } from '../context/LayoutContext';
 import { useBrand } from '../context/BrandContext';
 import { useDateFilter } from '../hooks/useDateFilter';
+import LoadingOverlay from '../components/common/LoadingOverlay';
 
 const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
 const CostDonutChart = lazy(() => import('../components/charts/CostDonutChart'));
@@ -97,12 +97,14 @@ function DashboardPage() {
                 <Divider sx={{ mb: 3 }} />
                 
                 <Box sx={{ minHeight: 360, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                    {kpi.loading ? (
+                    {kpi.loading && !kpi.data.current ? (
                         // 1. NẾU ĐANG LOADING: Hiển thị vòng quay
                         <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', p: 4 }}>
                             <CircularProgress />
                         </Box>
                     ) : kpi.data.current ? (
+                        <>
+                        {kpi.loading && <LoadingOverlay borderRadius={2} />}
                         // 2. NẾU KHÔNG LOADING VÀ CÓ DỮ LIỆU: Hiển thị bảng
                         <Box sx={{ 
                             display: 'grid',
@@ -150,6 +152,7 @@ function DashboardPage() {
                                 </Box>
                             ))}
                         </Box>
+                        </>
                     ) : (
                         <ChartPlaceholder title="Chỉ số Hiệu suất" />
                     )}
@@ -166,18 +169,23 @@ function DashboardPage() {
                 </Box>
                 
                 <Box sx={{ pb: 3, pt: 1, height: 750, position: 'relative' }}>
-                    {lineChart.loading ? <ChartSkeleton /> : (
+                    {lineChart.loading && !lineChart.data.current ? (
+                        <ChartSkeleton />
+                    ) : (
                         <Suspense fallback={<ChartSkeleton />}>
                             {lineChart.data.current && lineChart.data.current.length > 0 ? (
-                                <RevenueProfitChart 
-                                    data={lineChart.data.current} 
-                                    comparisonData={lineChart.data.previous}
-                                    series={lineChartSeries}
-                                    isLoading={lineChart.loading}
-                                    chartRevision={chartRevision}
-                                    aggregationType={lineChart.data.aggregationType}
-                                    selectedDateRange={lineChartFilterControl.filter.range}
-                                />
+                                <>
+                                    {lineChart.loading && <LoadingOverlay borderRadius={4} />}
+                                    <RevenueProfitChart 
+                                        data={lineChart.data.current} 
+                                        comparisonData={lineChart.data.previous}
+                                        series={lineChartSeries}
+                                        isLoading={lineChart.loading}
+                                        chartRevision={chartRevision}
+                                        aggregationType={lineChart.data.aggregationType}
+                                        selectedDateRange={lineChartFilterControl.filter.range}
+                                    />
+                                </>
                             ) : <ChartPlaceholder title="Doanh thu & Lợi nhuận" />}
                         </Suspense>
                     )}
@@ -210,12 +218,17 @@ function DashboardPage() {
                                 </Box>
                             </Box>
                             <Box sx={{ flexGrow: 1, minHeight: 400, position: 'relative' }}>
-                                {donut.loading ? (
+                                {donut.loading && !donut.data ? (
                                     <Box sx={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                                         <CircularProgress />
                                     </Box>
                                 ) : (
-                                    donut.data ? <CostDonutChart {...donut.data} /> : <ChartPlaceholder title="Phân bổ Chi phí"/>
+                                    donut.data ? (
+                                        <>
+                                            {donut.loading && <LoadingOverlay borderRadius={4} />}
+                                             <CostDonutChart {...donut.data} />
+                                        </>
+                                    ) : <ChartPlaceholder title="Phân bổ Chi phí"/>
                                 )}
                             </Box>
                         </Paper>
@@ -230,12 +243,17 @@ function DashboardPage() {
                                 </Box>
                             </Box>
                             <Box sx={{ flexGrow: 1, minHeight: 600, position: 'relative' }}>
-                                {topProducts.loading ? (
+                                {topProducts.loading && !topProducts.data ? (
                                     <Box sx={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                                         <CircularProgress />
                                     </Box>
                                 ) : (
-                                    topProducts.data ? <TopProductsChart data={topProducts.data} /> : <ChartPlaceholder title="Top SKU bán chạy" />
+                                    topProducts.data ? (
+                                        <>
+                                            {topProducts.loading && <LoadingOverlay borderRadius={4} />}
+                                            <TopProductsChart data={topProducts.data} />
+                                        </>
+                                    ) : <ChartPlaceholder title="Top SKU bán chạy" />
                                 )}
                             </Box>
                         </Paper>
@@ -270,14 +288,19 @@ function DashboardPage() {
                             </Box>
                         </Box>
                         <Box sx={{ flexGrow: 1, minHeight: { xs: 500, lg: 'auto' }, position: 'relative' }}>
-                            {map.loading ? <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box> : (
+                            {map.loading && !map.data ? (
+                                <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box>
+                            ) : (
                                 map.data ? (
-                                    <GeoMapChart 
-                                        data={map.data} 
-                                        valueKey="orders" 
-                                        labelKey="city" 
-                                        unitLabel="đơn"
-                                    />
+                                    <>
+                                        {map.loading && <LoadingOverlay borderRadius={4} />}
+                                        <GeoMapChart 
+                                            data={map.data} 
+                                            valueKey="orders" 
+                                            labelKey="city" 
+                                            unitLabel="đơn"
+                                        />
+                                    </>
                                 ) : (
                                     <ChartPlaceholder title="Phân bổ Khách hàng" />
                                 )

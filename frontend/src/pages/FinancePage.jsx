@@ -152,8 +152,11 @@ function FinancePage() {
                 </Box>
 
                 <Box sx={{ pb: 3, pt: 1, height: 750, position: 'relative' }}>
-                    {lineChart.loading ? <ChartSkeleton /> : (
+                    {lineChart.loading && !lineChart.data.current ? (
+                        <ChartSkeleton />
+                    ) : (
                         <Suspense fallback={<ChartSkeleton />}>
+                            {lineChart.loading && lineChart.data.current && <LoadingOverlay borderRadius={4} />}
                             <RevenueProfitChart
                                 data={lineChart.data.current}
                                 comparisonData={lineChart.data.previous}

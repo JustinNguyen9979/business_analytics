@@ -397,10 +397,6 @@ function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationTy
         },
     };
 
-    if (isLoading) {
-        return <ChartPlaceholder message="Đang tải dữ liệu biểu đồ..." />;
-    }
-
     return (
         <Box ref={chartContainerRef} sx={{ height: '100%', width: '100%' }}>
             <Plot
