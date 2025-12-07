@@ -113,15 +113,19 @@ export const useFinancePageLogic = () => {
 
     // --- CHART CONFIGS ---
     const comparisonChartSeries = useMemo(() => [
+        { key: 'gmv', name: 'GMV', color: theme.palette.warning.main },
         { key: 'netRevenue', name: 'Doanh thu', color: theme.palette.primary.light },
-        { key: 'cogs', name: 'Giá vốn', color: theme.palette.warning.light },
-        { key: 'profit', name: 'Lợi nhuận', color: theme.palette.success.light },
+        { key: 'cogs', name: 'Giá vốn', color: '#e17e1b' },
+        { key: 'profit', name: 'Lợi nhuận', color: '#28a545' },
+        { key: 'totalCost', name: 'Tổng Chi phí', color: theme.palette.error.main },
+        { key: 'executionCost', name: 'Chi phí thực thi', color: '#9C27B0' },
+        { key: 'adSpend', name: 'Chi phí Ads', color: '#1f1fddcc' },
     ], [theme.palette]);
 
     const allAvailableSeries = useMemo(() => [
+        { key: 'gmv', name: 'GMV', color: theme.palette.warning.main },
         { key: 'netRevenue', name: 'Doanh thu ròng', color: theme.palette.primary.main },
         { key: 'profit', name: 'Lợi nhuận', color: '#28a545' },
-        { key: 'gmv', name: 'GMV', color: theme.palette.warning.main },
         { key: 'totalCost', name: 'Tổng Chi phí', color: theme.palette.error.main },
         { key: 'cogs', name: 'Giá vốn', color: '#e17e1b' },
         { key: 'adSpend', name: 'Chi phí Ads', color: '#1f1fddcc' },

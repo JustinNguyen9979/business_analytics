@@ -98,7 +98,19 @@ function FinanceComparisonChart({ data, series, title }) {
     const { tickVals, tickText, range } = calculateSmartTicks(minY, maxY);
 
     const layout = {
-        showlegend: false,
+        showlegend: true,
+        legend: {
+            x: 1.02,
+            y: 1,
+            xanchor: 'left',
+            yanchor: 'top',
+            font: {
+                color: theme.palette.text.secondary,
+                size: 14,
+            },
+            bgcolor: 'transparent',
+        },
+
         title: {
             text: title,
             font: {
@@ -116,6 +128,13 @@ function FinanceComparisonChart({ data, series, title }) {
             gridcolor: 'transparent', // Bỏ grid dọc
             type: 'category', // BẮT BUỘC: Ép kiểu Category để không bị hiển thị số âm vô nghĩa khi rỗng
             fixedrange: true, // Không cho zoom trục X
+            ticks: 'outside',
+            ticklen: 20,
+            tickcolor: 'transparent',
+            tickfont: {
+                size: 17, // Tăng cỡ chữ tên Source
+            },
+            showspikes: false,
         },
         yaxis: {
             color: theme.palette.text.secondary,
@@ -131,7 +150,7 @@ function FinanceComparisonChart({ data, series, title }) {
             zerolinecolor: theme.palette.divider,
             showspikes: false,
         },
-        margin: { l: 80, r: 40, b: 20, t: 20 },
+        margin: { l: 80, r: 40, b: 47, t: 20 }, // Tăng margin bottom (b) từ 20 lên 50
         hovermode: 'x unified', // Hiển thị tooltip cho cả nhóm khi hover
         hoverlabel: {
             bgcolor: 'rgba(10, 25, 41, 0.9)',
