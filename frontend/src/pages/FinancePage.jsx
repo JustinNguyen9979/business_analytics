@@ -1,37 +1,20 @@
-import React, { useMemo, useState, lazy, Suspense, useCallback, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { lazy, Suspense } from 'react';
 import { Box, Typography, Paper, Button, Skeleton, IconButton, Tooltip } from '@mui/material';
 import {
     CalendarToday as CalendarTodayIcon,
-    MonetizationOn as MonetizationOnIcon,
-    TrendingUp as TrendingUpIcon,
-    AccountBalanceWallet as AccountBalanceWalletIcon,
-    StackedLineChart as StackedLineChartIcon,
-    AttachMoney as AttachMoneyIcon,
     Settings as SettingsIcon
 } from '@mui/icons-material';
-import dayjs from 'dayjs';
-import { useDashboardData } from '../hooks/useDashboardData';
-import { useDateFilter } from '../hooks/useDateFilter';
-import { useTheme } from '@mui/material/styles';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
-import ChartPlaceholder from '../components/common/ChartPlaceholder';
 import FinanceTable from '../components/finance/FinanceTable';
 import KpiCard from '../components/dashboard/KpiCard';
-import { useFinanceData } from '../hooks/useFinanceData';
-import { dateShortcuts } from '../config/dashboardConfig';
-import { formatCurrency, formatPercentage } from '../utils/formatters';
-import { useBrand } from '../context/BrandContext';
 import SourceDistributionChart from '../components/charts/SourceDistributionChart';
 import FinanceComparisonChart from '../components/charts/FinanceComparisonChart';
-import { getSourcesForBrand } from '../services/api';
 import ChartSettingsPanel from '../components/charts/controls/ChartSettingsPanel';
 import ChartSettingSection from '../components/charts/controls/ChartSettingSection';
 import ChartSettingItem from '../components/charts/controls/ChartSettingItem';
+import { useFinancePageLogic } from '../hooks/useFinancePageLogic'; // Import Hook (JSX)
+import { useTheme } from '@mui/material/styles'; // Need to import useTheme for styling
 
-// Lấy giá trị mặc định là "Tháng này"
-const defaultDateRange = dateShortcuts.find(s => s.type === 'this_month').getValue();
-const defaultDateLabel = dateShortcuts.find(s => s.type === 'this_month').label;
 const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
 
 const ChartSkeleton = () => (
@@ -42,7 +25,7 @@ const ChartSkeleton = () => (
         sx={{ borderRadius: 2, bgcolor: 'rgba(255, 255, 255, 0.05)' }}
     />
 );
-// Component cho KpiCard khi đang tải
+
 const KpiCardSkeleton = () => (
     <Paper variant="glass" sx={{ p: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <Box>
@@ -54,147 +37,23 @@ const KpiCardSkeleton = () => (
 );
 
 function FinancePage() {
-    const theme = useTheme();
-    const { slug: brandSlug } = useBrand();
-    const lineChartFilterControl = useDateFilter({ defaultType: 'this_month' });
+    const theme = useTheme(); // Use theme here for consistency
+    const {
+        // State
+        sourceOptions, selectedSources, isConfigOpen, setIsConfigOpen,
+        dateRange, dateLabel, anchorEl, visibleSeriesKeys,
+        
+        // Handlers
+        handleToggleSource, handleOpenFilter, handleCloseFilter, 
+        handleApplyDateRange, handleToggleSeries,
 
-    const [sourceOptions, setSourceOptions] = useState([]);
-    const [selectedSources, setSelectedSources] = useState(['all']);
-    const [isConfigOpen, setIsConfigOpen] = useState(false);
-    const [filterType, setFilterType] = useState('this_month');
+        // Data
+        lineChart, platformData, kpiCards,
+        loading, error,
 
-    const [dateRange, setDateRange] = useState(defaultDateRange);
-    const [dateLabel, setDateLabel] = useState(defaultDateLabel);
-    const [anchorEl, setAnchorEl] = useState(null);
-
-    useEffect(() => {
-        if (brandSlug) {
-            getSourcesForBrand(brandSlug)
-                .then(sources => {
-                    const options = sources.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }));
-                    setSourceOptions(options);
-                }).catch(err => console.error("Failed to load sources:", err));
-        }
-    }, [brandSlug]);
-
-    const handleToggleSource = (sourceValue) => {
-        setSelectedSources(prev => {
-            // Trường hợp 1: Bấm vào nút "Tất cả"
-            if (sourceValue === 'all') {
-                // Nếu đang chọn tất cả rồi -> Bấm phát nữa thì bỏ chọn hết
-                if (prev.includes('all')) {
-                    return [];
-                }
-                // Nếu chưa chọn tất cả -> Chọn tất cả
-                return ['all'];
-            }
-
-            // Trường hợp 2: Đang ở chế độ "Tất cả" (tức là mọi source đều đang được tick)
-            if (prev.includes('all')) {
-                // Người dùng bấm vào một source cụ thể để BỎ chọn nó
-                // -> Chuyển sang chế độ chọn lẻ: Lấy tất cả source có sẵn TRỪ đi source vừa bấm
-                const allValues = sourceOptions.map(o => o.value);
-                const newSelection = allValues.filter(v => v !== sourceValue);
-                
-                                // Nếu bỏ chọn cái cuối cùng (danh sách rỗng), set về mảng rỗng [] thay vì ['all']
-                                return newSelection; 
-                            }
-                
-                            // Trường hợp 3: Đang ở chế độ chọn lẻ
-                            if (prev.includes(sourceValue)) {
-                                // Đang có -> Bấm để bỏ chọn
-                                const newSelection = prev.filter(v => v !== sourceValue);
-                                return newSelection; // Trả về mảng rỗng nếu không còn gì, không phải ['all']
-                            } else {
-                                // Chưa có -> Bấm để thêm vào
-                                return [...prev, sourceValue];
-                            }        });
-    };
-
-    const dashboardFilters = useMemo(() => {
-        return {
-            lineChart: {
-                range: dateRange,
-                type: filterType,
-                source: selectedSources.includes('all') ? null : selectedSources,
-            },
-            kpi: null, donut: null, topProducts: null, map: null,
-        };
-    }, [dateRange, selectedSources, filterType]);
-
-    const { lineChart } = useDashboardData(brandSlug, dashboardFilters);
-
-    const comparisonChartSeries = useMemo(() => [
-        { key: 'netRevenue', name: 'Doanh thu', color: theme.palette.primary.light },
-        { key: 'cogs', name: 'Giá vốn', color: theme.palette.warning.light },
-        { key: 'profit', name: 'Lợi nhuận', color: theme.palette.success.light },
-    ], [theme.palette]);
-
-    const allAvailableSeries = useMemo(() => [
-        { key: 'netRevenue', name: 'Doanh thu ròng', color: theme.palette.primary.main },
-        { key: 'profit', name: 'Lợi nhuận', color: '#28a545' },
-        { key: 'gmv', name: 'GMV', color: theme.palette.warning.main },
-        { key: 'totalCost', name: 'Tổng Chi phí', color: theme.palette.error.main },
-        { key: 'cogs', name: 'Giá vốn', color: '#e17e1b' },
-        { key: 'adSpend', name: 'Chi phí Ads', color: '#1f1fddcc' },
-        { key: 'executionCost', name: 'Chi phí thực thi', color: '#9C27B0' },
-    ], [theme]);
-
-    const [visibleSeriesKeys, setVisibleSeriesKeys] = useState(['netRevenue', 'profit']);
-
-    const handleToggleSeries = useCallback((key) => {
-        setVisibleSeriesKeys(prevKeys => {
-            if (prevKeys.includes(key)) {
-                return prevKeys.filter(k => k !== key);
-            } else {
-                return [...prevKeys, key];
-            }
-        });
-    }, []);
-
-    const filteredLineChartSeries = useMemo(() => {
-        return allAvailableSeries.filter(s => visibleSeriesKeys.includes(s.key));
-    }, [allAvailableSeries, visibleSeriesKeys]);
-    
-    const { currentData, previousData, loading, error } = useFinanceData(brandSlug, dateRange);
-
-    const handleOpenFilter = (event) => setAnchorEl(event.currentTarget);
-    const handleCloseFilter = () => setAnchorEl(null);
-
-    const handleApplyDateRange = (newRange, newLabelType) => {
-        const newLabel = dateShortcuts.find(s => s.type === newLabelType)?.label || 
-                         `${newRange[0].format('DD/MM')} - ${newRange[1].format('DD/MM/YYYY')}`;
-        setDateRange(newRange);
-        setDateLabel(newLabel);
-        setFilterType(newLabelType || 'custom');
-        handleCloseFilter();
-    };
-
-    // Tách dữ liệu tổng và chi tiết
-    const summaryData = currentData?.find(item => item.platform === 'Tổng cộng') || {};
-    const prevSummaryData = previousData?.find(item => item.platform === 'Tổng cộng') || {};
-    
-    // Sắp xếp dữ liệu theo GMV giảm dần. Đây sẽ là thứ tự chuẩn cho tất cả các chart.
-    const platformData = currentData
-        ?.filter(item => item.platform !== 'Tổng cộng')
-        .sort((a, b) => (b.gmv || 0) - (a.gmv || 0)) || [];
-
-    const cardConfigs = [
-        { key: 'profit', title: 'Tổng Lợi nhuận', icon: <MonetizationOnIcon />, color: 'success.main' },
-        { key: 'gmv', title: 'Tổng GMV', icon: <AccountBalanceWalletIcon />, color: 'primary.main' },
-        { key: 'netRevenue', title: 'Tổng Doanh thu thuần', icon: <TrendingUpIcon />, color: 'info.main' },
-        { key: 'totalCost', title: 'Tổng Chi phí', icon: <AttachMoneyIcon />, color: 'error.main', direction: 'down' }, // Chi phí giảm là tốt
-        { key: 'roi', title: 'ROI Tổng', icon: <StackedLineChartIcon />, color: 'secondary.main', format: 'percent' },
-    ];
-
-    // 2. Tạo danh sách kpiCards bằng cách map qua cấu hình và gán dữ liệu động
-    const kpiCards = cardConfigs.map(config => ({
-        ...config, // Kế thừa toàn bộ thuộc tính static (title, icon, color...)
-        value: summaryData[config.key],
-        previousValue: prevSummaryData[config.key],
-        format: config.format || 'currency', // Mặc định là 'currency' nếu không khai báo
-        direction: config.direction || 'up',   // Mặc định là 'up' nếu không khai báo
-    }));
+        // Configs
+        comparisonChartSeries, allAvailableSeries, filteredLineChartSeries, cardConfigs
+    } = useFinancePageLogic();
 
     return (
         <Box sx={{ px: 4, py: 3 }}>
@@ -209,8 +68,8 @@ function FinancePage() {
                         startIcon={<CalendarTodayIcon />}
                         onClick={handleOpenFilter}
                         sx={{ 
-                            color: (theme) => theme.palette.primary.main,
-                            borderColor: (theme) => theme.palette.primary.main,
+                            color: theme.palette.primary.main, // Sử dụng theme
+                            borderColor: theme.palette.primary.main, // Sử dụng theme
                             borderRadius: 2
                          }}
                     >
@@ -218,7 +77,6 @@ function FinancePage() {
                     </Button>
                 </Box>
                     
-                
                 <DateRangeFilterMenu
                     open={Boolean(anchorEl)}
                     anchorEl={anchorEl}
@@ -273,10 +131,10 @@ function FinancePage() {
                         <IconButton 
                             onClick={() => setIsConfigOpen(true)}
                             sx={{ 
-                                border: `1px solid ${theme.palette.divider}`,
+                                border: `1px solid ${theme.palette.divider}`, // Sử dụng theme
                                 borderRadius: 2,
-                                color: isConfigOpen ? theme.palette.primary.main : theme.palette.text.secondary,
-                                bgcolor: isConfigOpen ? 'rgba(0, 229, 255, 0.1)' : 'transparent',
+                                color: isConfigOpen ? theme.palette.primary.main : theme.palette.text.secondary, // Sử dụng theme
+                                bgcolor: isConfigOpen ? theme.palette.primary.main + '20' : 'transparent', // Sử dụng theme (thêm 20 cho độ mờ)
                                 '&:hover': {
                                     color: theme.palette.primary.main,
                                     borderColor: theme.palette.primary.main,
