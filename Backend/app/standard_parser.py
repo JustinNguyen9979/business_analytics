@@ -28,7 +28,7 @@ def parse_date(date_str: str) -> Union[date, None]:
 
     try:
         # Nếu là format ISO (chứa dấu gạch ngang -), parse chuẩn quốc tế (Year-Month-Day)
-        if '-' in s:
+        if re.match(r'^\d{4}', s):
             dt_object = date_parser.parse(s, yearfirst=True, dayfirst=False)
         else:
             # Nếu là format VN (chứa dấu gạch chéo /), parse theo kiểu VN (Day/Month/Year)
@@ -55,7 +55,7 @@ def parse_datetime(date_str: str) -> Union[datetime, None]:
     if not s: return None
 
     try:
-        if '-' in s:
+        if re.match(r'^\d{4}', s):
             dt_object = date_parser.parse(s, yearfirst=True, dayfirst=False)
         else:
             dt_object = date_parser.parse(s, dayfirst=True)
@@ -300,6 +300,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     # Chuẩn hóa dữ liệu từ file excel
                     order_code = row.get('order_id')
                     transaction_date = parse_date(row.get('transaction_date'))
+                    order_date = parse_date(row.get('order_date'))
                     net_revenue = to_float(row.get('net_revenue'))
                     gmv = to_float(row.get('gmv'))
                     total_fees = to_float(row.get('total_fees'))
@@ -321,6 +322,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                         revenues_to_insert.append({
                             "order_code": order_code,
                             "transaction_date": transaction_date,
+                            "order_date": order_date,
                             "net_revenue": net_revenue,
                             "gmv": gmv,
                             "total_fees": total_fees,

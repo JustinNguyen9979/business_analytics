@@ -73,21 +73,21 @@ class Order(Base):
 
 class Revenue(Base):
     __tablename__ = "revenues"
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True, index=True)  
 
     # --- Các cột cốt lõi ---
     order_code = Column(String, index=True)
+    order_date = Column(Date, nullable=True) 
     transaction_date = Column(Date, nullable=True)
     net_revenue = Column(Float, default=0.0)
     gmv = Column(Float, default=0.0)
     
-    # === THAY ĐỔI 2: THÊM CÁC CỘT MỚI TỪ TEMPLATE ===
-    total_fees = Column(Float, default=0.0) # Thêm cột để lưu "Tổng Chi Phí"
-    refund = Column(Float, default=0.0)     # Thêm cột để lưu "Hoàn Tiền"
+    total_fees = Column(Float, default=0.0) 
+    refund = Column(Float, default=0.0)     
 
     source = Column(String, nullable=False, index=True)
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
-    details = Column(JSONB, nullable=True) # Vẫn giữ lại để lưu các thông tin phụ khác
+    details = Column(JSONB, nullable=True) 
 
     __table_args__ = (
         Index('ix_revenue_brand_id_transaction_date', 'brand_id', 'transaction_date'),

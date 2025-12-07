@@ -12,8 +12,8 @@ import FinanceComparisonChart from '../components/charts/FinanceComparisonChart'
 import ChartSettingsPanel from '../components/charts/controls/ChartSettingsPanel';
 import ChartSettingSection from '../components/charts/controls/ChartSettingSection';
 import ChartSettingItem from '../components/charts/controls/ChartSettingItem';
-import { useFinancePageLogic } from '../hooks/useFinancePageLogic'; // Import Hook (JSX)
-import { useTheme } from '@mui/material/styles'; // Need to import useTheme for styling
+import { useFinancePageLogic } from '../hooks/useFinancePageLogic'; 
+import { useTheme } from '@mui/material/styles'; 
 
 const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
 

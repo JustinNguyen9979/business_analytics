@@ -33,7 +33,7 @@ class Order(OrderBase):
     id: int; brand_id: int; source: str; model_config = ConfigDict(from_attributes=True)
 
 class RevenueBase(BaseModel):
-    order_code: Optional[str]; transaction_date: Optional[date]; net_revenue: float = 0.0
+    order_code: Optional[str]; order_date: Optional[date] = None; transaction_date: Optional[date]; net_revenue: float = 0.0
     gmv: float = 0.0; details: Optional[Dict[str, Any]] = None
     
 class Revenue(RevenueBase):
