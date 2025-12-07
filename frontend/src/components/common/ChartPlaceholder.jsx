@@ -9,27 +9,31 @@ import { Paper, Typography, Box } from '@mui/material';
  * @param {string} props.title - Tiêu đề chính của placeholder.
  * @param {string} [props.message] - Một thông điệp phụ, mặc định là "(Không có dữ liệu)".
  */
-function ChartPlaceholder({ title, message = "(Không có dữ liệu)" }) {
+function ChartPlaceholder({ title, message = "" }) {
     return (
         // Sử dụng variant="placeholder" đã được định nghĩa sẵn trong theme
         // và các style bổ sung để đảm bảo chiều cao và căn chỉnh
         <Paper 
-            variant="placeholder" 
             sx={{ 
-                height: '450px', 
+                height: '100%', 
                 display: 'flex', 
+                flexDirection: 'column',
                 alignItems: 'center', 
-                justifyContent: 'center' 
+                textAlign: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'transparent',
+                border: 'none',
+                boxShadow: 'none',
             }}
         >
-            {/* <Box>
+            <Box>
                 <Typography variant="h6" color="text.secondary">
                     {title}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                     {message}
                 </Typography>
-            </Box> */}
+            </Box>
         </Paper>
     );
 }

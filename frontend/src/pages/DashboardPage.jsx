@@ -104,16 +104,16 @@ function DashboardPage() {
                         </Box>
                     ) : kpi.data.current ? (
                         <>
-                        {kpi.loading && <LoadingOverlay borderRadius={2} />}
-                        // 2. NẾU KHÔNG LOADING VÀ CÓ DỮ LIỆU: Hiển thị bảng
-                        <Box sx={{ 
-                            display: 'grid',
-                            gridTemplateColumns: {
-                                xs: '1fr',
-                                md: 'repeat(2, 1fr)',
-                                lg: 'repeat(4, 1fr)',
-                            }
-                        }}>
+                            {kpi.loading && <LoadingOverlay borderRadius={2} />}
+                        
+                            <Box sx={{ 
+                                display: 'grid',
+                                gridTemplateColumns: {
+                                    xs: '1fr',
+                                    md: 'repeat(2, 1fr)',
+                                    lg: 'repeat(4, 1fr)',
+                                }
+                            }}>
                             {kpiGroups.map((group, groupIndex) => (
                                 <Box 
                                     key={group.groupTitle} 
@@ -151,7 +151,7 @@ function DashboardPage() {
                                     </Box>
                                 </Box>
                             ))}
-                        </Box>
+                            </Box>
                         </>
                     ) : (
                         <ChartPlaceholder title="Chỉ số Hiệu suất" />
