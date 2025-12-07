@@ -179,7 +179,7 @@ def generate_cache_key(brand_id: int, request_type: str, params: Dict[str, Any])
     return f"data_req:{brand_id}:{request_type}:{param_string}"
 
 @app.post("/data-requests", status_code=status.HTTP_202_ACCEPTED)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute")
 def request_data_processing(
     request: Request,
     request_body: schemas.DataRequest, # Sử dụng Pydantic model để xác thực payload

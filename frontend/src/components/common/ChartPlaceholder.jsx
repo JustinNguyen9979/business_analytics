@@ -22,14 +22,14 @@ function ChartPlaceholder({ title, message = "(Không có dữ liệu)" }) {
                 justifyContent: 'center' 
             }}
         >
-            <Box>
+            {/* <Box>
                 <Typography variant="h6" color="text.secondary">
                     {title}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                     {message}
                 </Typography>
-            </Box>
+            </Box> */}
         </Paper>
     );
 }
