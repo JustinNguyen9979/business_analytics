@@ -9,7 +9,6 @@ function TopProductsChart({ data }) {
     const theme = useTheme();
     const chartContainerRef = useRef(null);
 
-    // <<< THAY ĐỔI 2: State chỉ cần lưu mảng giá trị X đang được animate >>>
     const [animatedXValues, setAnimatedXValues] = useState([]);
 
     // Sắp xếp dữ liệu và chuẩn bị các thông số không đổi, đưa ra ngoài useEffect
@@ -17,7 +16,6 @@ function TopProductsChart({ data }) {
     const highlightColor = theme.palette.secondary.main;
     const normalColor = theme.palette.primary.main;
 
-    // <<< THAY ĐỔI 3: Thay thế logic animation cũ bằng lời gọi hàm tập trung >>>
     useEffect(() => {
         if (!data || data.length === 0) {
             setAnimatedXValues([]);
@@ -54,7 +52,6 @@ function TopProductsChart({ data }) {
     }, [data]);
 
     // --- TOÀN BỘ PHẦN TÍNH TOÁN LAYOUT VÀ RENDER GIỮ NGUYÊN ---
-    // Đoạn code này không thay đổi vì nó chỉ định dạng và sắp xếp giao diện
     const finalXValuesForLayout = reversedData.map(p => p.total_quantity);
     const maxXValue = finalXValuesForLayout.length > 0 ? Math.max(...finalXValuesForLayout) : 1000;
     const desiredTicks = 7;

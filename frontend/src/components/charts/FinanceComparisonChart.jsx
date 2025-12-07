@@ -1,8 +1,10 @@
-import React from 'react';
+import React, {useState, useEffect, useRef, useMemo} from 'react';
 import Plot from 'react-plotly.js';
 import { useTheme } from '@mui/material/styles';
-import { Box, Paper, Typography } from '@mui/material';
+import { Box } from '@mui/material';
 import ChartPlaceholder from '../common/ChartPlaceholder';
+import { startAnimation } from '../../utils/animationUtils';
+import { readUInt16BE } from 'plotly.js/dist/plotly-cartesian';
 
 /**
  * Biểu đồ cột nhóm để so sánh các chỉ số tài chính giữa các nền tảng.
@@ -14,31 +16,55 @@ import ChartPlaceholder from '../common/ChartPlaceholder';
 function FinanceComparisonChart({ data, series, title }) {
     const theme = useTheme();
 
+    const [animatedTraces, setAnimatedTraces] = useState([]);
+
     const platforms = data && data.length > 0 ? data.map(item => item.platform) : [];
 
-    // Chuyển đổi dữ liệu thành "traces" mà Plotly yêu cầu
-    const traces = series && series.length > 0 && data && data.length > 0
-        ? series.map((s, i) => {
-            // Logic tính offset và width chỉ khi có dữ liệu để vẽ bar
-            const nTraces = series.length;
-            const groupWidth = 0.1; // Độ rộng của một nhóm bar
-            const barWidth = groupWidth / nTraces;
-            const offset = -groupWidth / 2 + barWidth / 2 + i * barWidth;
+    // Animation effect cho các cột
+    useEffect(() => {
+        if (!data || data.length === 0 || !series || series.length === 0) {
+            setAnimatedTraces([]);
+            return;
+        }
 
-            return {
-                x: platforms,
-                y: data.map(item => item[s.key] || 0),
-                name: s.name,
-                type: 'bar',
-                width: barWidth,
-                offset: offset,
-                marker: {
-                    color: s.color,
-                },
-                hovertemplate: `<span style="color: ${theme.palette.text.secondary};">${s.name}: </span><b style="color: ${s.color} ;">%{y:,.0f} đ</b><extra></extra>`,
-            };
-        })
-        : []; // Trả về mảng rỗng nếu không có dữ liệu hoặc series
+        const platforms = data.map(item => item.platform);
+        const nTraces = series.length;
+        const groupWidth = 0.7; // Độ rộng của một nhóm bar
+        const gap = 0.02;
+        const slotWidth = groupWidth / nTraces;
+        const barWidth = Math.max(0, slotWidth - gap);
+
+        const createTracesAtProgress = (progress) => {
+            return series.map((s, i) => {
+                const offset = -groupWidth / 2 + slotWidth / 2 + i * slotWidth;
+                const finalYValues = data.map(item => item[s.key] || 0);
+                const currentYValues = finalYValues.map(y => y * progress);
+
+                return {
+                    x: platforms,
+                    y: currentYValues,
+                    name: s.name,
+                    type: 'bar',
+                    width: barWidth,
+                    offset: offset,
+                    marker: { color: s.color },
+                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">${s.name}: </span><b style="color: ${s.color} ;">%{y:,.0f} đ</b><extra></extra>`,
+                };
+            });
+        };
+
+        const cleanup = startAnimation({
+            duration: 1500,
+            onFrame: (progress) => {
+                setAnimatedTraces(createTracesAtProgress(progress));
+            },
+            onDone: () => {
+                setAnimatedTraces(createTracesAtProgress(1));
+            },
+        });
+
+        return cleanup;
+    }, [data, series, theme]);
 
     // --- LOGIC TÍNH TOÁN TRỤC Y (Smart Ticks) ---
     // Lấy tất cả giá trị Y để tính min/max
@@ -97,7 +123,7 @@ function FinanceComparisonChart({ data, series, title }) {
 
     const { tickVals, tickText, range } = calculateSmartTicks(minY, maxY);
 
-    const layout = {
+    const layout = useMemo(() => ({
         showlegend: true,
         legend: {
             x: 1.02,
@@ -161,12 +187,12 @@ function FinanceComparisonChart({ data, series, title }) {
                 color: '#e8d283ff'
             },
         },
-    };
+    }), [theme, title, tickVals, tickText, range]);
 
     return (
         <Box sx={{ height: '100%', width: '100%' }}>
             <Plot
-                data={traces}
+                data={animatedTraces}
                 layout={layout}
                 useResizeHandler={true}
                 style={{ width: '100%', height: '100%' }}

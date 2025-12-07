@@ -104,20 +104,27 @@ export const useFinancePageLogic = () => {
     const { currentData, previousData, loading, error } = useFinanceData(brandSlug, dateRange);
 
     // Xử lý dữ liệu bảng và biểu đồ so sánh
-    const summaryData = currentData?.find(item => item.platform === 'Tổng cộng') || {};
-    const prevSummaryData = previousData?.find(item => item.platform === 'Tổng cộng') || {};
+    const summaryData = useMemo(() => {
+        return currentData?.find(item => item.platform === 'Tổng cộng') || {};
+    }, [currentData]);
+
+    const prevSummaryData = useMemo(() => {
+        return previousData?.find(item => item.platform === 'Tổng cộng') || {};
+    }, [previousData]);
     
-    const platformData = currentData
-        ?.filter(item => item.platform !== 'Tổng cộng')
-        .sort((a, b) => (b.gmv || 0) - (a.gmv || 0)) || [];
+    const platformData = useMemo(() => {
+        return currentData
+            ?.filter(item => item.platform !== 'Tổng cộng')
+            .sort((a, b) => (b.gmv || 0) - (a.gmv || 0)) || [];
+    }, [currentData]);
 
     // --- CHART CONFIGS ---
     const comparisonChartSeries = useMemo(() => [
         { key: 'gmv', name: 'GMV', color: theme.palette.warning.main },
         { key: 'netRevenue', name: 'Doanh thu', color: theme.palette.primary.light },
-        { key: 'cogs', name: 'Giá vốn', color: '#e17e1b' },
         { key: 'profit', name: 'Lợi nhuận', color: '#28a545' },
         { key: 'totalCost', name: 'Tổng Chi phí', color: theme.palette.error.main },
+        { key: 'cogs', name: 'Giá vốn', color: '#e17e1b' },
         { key: 'executionCost', name: 'Chi phí thực thi', color: '#9C27B0' },
         { key: 'adSpend', name: 'Chi phí Ads', color: '#1f1fddcc' },
     ], [theme.palette]);

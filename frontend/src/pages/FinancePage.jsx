@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from 'react';
-import { Box, Typography, Paper, Button, Skeleton, IconButton, Tooltip } from '@mui/material';
+import { Box, Typography, Paper, Button, Skeleton, IconButton, Tooltip, CircularProgress } from '@mui/material';
 import {
     CalendarToday as CalendarTodayIcon,
     Settings as SettingsIcon
@@ -14,6 +14,7 @@ import ChartSettingSection from '../components/charts/controls/ChartSettingSecti
 import ChartSettingItem from '../components/charts/controls/ChartSettingItem';
 import { useFinancePageLogic } from '../hooks/useFinancePageLogic'; 
 import { useTheme } from '@mui/material/styles'; 
+import LoadingOverlay from '../components/common/LoadingOverlay';
 
 const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
 
@@ -113,13 +114,17 @@ function FinancePage() {
             <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4 }}>
                 <Typography sx={{ fontWeight: 600, mb: 2 }} variant="h6" noWrap>So sánh Tài chính giữa các Nền tảng</Typography>
                 <Box sx={{ height: 600, mb: 4 }}>
-                    {loading ? (
+                    {loading && platformData.length === 0 ? (
                         <Skeleton variant="rectangular" width="100%" height="100%" sx={{ borderRadius: 4 }} />
                     ) : (
-                        <FinanceComparisonChart
-                            data={platformData}
-                            series={comparisonChartSeries}
-                        />
+                        <>
+                            {loading && platformData.length > 0 && <LoadingOverlay borderRadius={4} />}
+                            
+                            <FinanceComparisonChart
+                                data={platformData}
+                                series={comparisonChartSeries}
+                            />
+                        </>
                     )}
                 </Box>
             </Paper>
