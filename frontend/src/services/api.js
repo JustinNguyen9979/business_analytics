@@ -258,3 +258,17 @@ export const fetchAsyncData = async (requestType, brandSlug, dateRange, params =
         throw error;
     }
 };
+
+export const fetchOperationKpisAPI = async (brandSlug, startDate, endDate) => {
+    try {
+        const params = {
+            start_date: startDate,
+            end_date: endDate
+        };
+        const response = await apiClient.get(`/brands/${brandSlug}/kpis/operation`, { params });
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching operation KPIs for brand ${brandSlug}:`, error);
+        throw error;
+    }
+};

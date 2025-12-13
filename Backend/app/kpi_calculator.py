@@ -314,41 +314,37 @@ def _calculate_core_kpis(
     unique_skus_sold_set = set()
     
     # Biến tính thời gian giao hàng
-    total_fulfillment_time_hours = 0
-    fulfillment_count = 0
+    total_processing_hours = 0
+    processing_count = 0
+    total_shipping_days = 0
+    shipping_count = 0
 
     for code in completed_today_codes:
         order = orders_map.get(code)
         if order:
             totalQuantitySold_op += (order.total_quantity or 0)
-            if order.details and isinstance(order.details, dict):
-                # Đếm SKU
-                items = order.details.get('items')
-                if isinstance(items, list):
-                    for item in items:
-                        if item.get('sku'):
-                            unique_skus_sold_set.add(item['sku'])
+            
+            # --- TÍNH PROCESSING TIME (Giờ) ---
+            # Logic: shipped_time - order_date
+            if order.shipped_time and order.order_date:
+                diff_proc = order.shipped_time - order.order_date
+                proc_hours = diff_proc.total_seconds() / 3600
+                if proc_hours > 0:
+                    total_processing_hours += proc_hours
+                    processing_count += 1
                 
-                # Tính thời gian giao hàng (nếu có delivered_date)
-                delivered_str = order.details.get('delivered_date')
-                if delivered_str and order.order_date:
-                    try:
-                        # delivered_date trong DB là chuỗi ISO (do ta lưu .isoformat())
-                        delivered_at = datetime.fromisoformat(delivered_str)
-                        # order_date là datetime object (do ta đã query bằng SQLAlchemy models)
-                        created_at = order.order_date
-                        
-                        # Tính khoảng cách (giờ)
-                        diff = delivered_at - created_at
-                        hours = diff.total_seconds() / 3600
-                        if hours > 0:
-                            total_fulfillment_time_hours += hours
-                            fulfillment_count += 1
-                    except (ValueError, TypeError):
-                        pass
+            # --- TÍNH SHIPPING TIME (Ngày) ---
+            # Logic: delivered_date - shipped_time
+            if order.delivered_date and order.shipped_time:
+                diff_ship = order.delivered_date - order.shipped_time
+                ship_days = diff_ship.total_seconds() / 86400
+                if ship_days > 0:
+                    total_shipping_days += ship_days
+                    shipping_count += 1
 
     uniqueSkusSold_op = len(unique_skus_sold_set)
-    avg_fulfillment_time = (total_fulfillment_time_hours / fulfillment_count) if fulfillment_count > 0 else 0
+    avg_processing_time = (total_processing_hours / processing_count) if processing_count > 0 else 0
+    avg_shipping_time = (total_shipping_days / shipping_count) if shipping_count > 0 else 0
 
     total_financial_transaction_orders = len(financial_completed_codes) + refunded_transactions_count
     
@@ -401,7 +397,8 @@ def _calculate_core_kpis(
         "completion_rate": completionRate_op, 
         "cancellation_rate": cancellationRate_op, 
         "refund_rate": refundRate_op,
-        "avg_fulfillment_time": avg_fulfillment_time,
+        "avg_processing_time": avg_processing_time,
+        "avg_shipping_time": avg_shipping_time,
 
         # Marketing
         "cpm": cpm, 

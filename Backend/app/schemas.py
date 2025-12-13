@@ -153,3 +153,13 @@ class CustomerMapDistributionItem(BaseModel):
     longitude: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+class OperationKpisResponse(BaseModel):
+    avg_processing_time: float
+    avg_shipping_time: float
+    completion_rate: float
+    cancellation_rate: float
+    avg_daily_orders: float
+
+    class config:
+        from_attributes = True

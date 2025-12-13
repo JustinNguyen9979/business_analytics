@@ -220,9 +220,9 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
                     "upt": stat.upt,
                     "uniqueSkusSold": stat.unique_skus_sold,
                     "totalQuantitySold": stat.total_quantity_sold,
-                    "completionRate": stat.completion_rate,
-                    "cancellationRate": stat.cancellation_rate,
-                    "refundRate": stat.refund_rate,
+                    "completionRate": stat.completion_rate or 0,
+                    "cancellationRate": stat.cancellation_rate or 0,
+                    "refundRate": stat.refund_rate or 0,
                     "totalCustomers": stat.total_customers,
                     "impressions": stat.impressions,
                     "clicks": stat.clicks,
@@ -238,6 +238,8 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
                     "locationDistribution": stat.location_distribution,
                     "paymentMethodBreakdown": stat.payment_method_breakdown,
                     "cancelReasonBreakdown": stat.cancel_reason_breakdown,
+                    "avgProcessingTime": stat.avg_processing_time or 0,
+                    "avgShippingTime": stat.avg_shipping_time or 0,
                 })
             else:
                 results.append(_create_empty_daily_stat(current_date))
@@ -326,6 +328,8 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
             "refundedOrders": row.refundedOrders or 0,
             "totalOrders": total_orders,
 
+            "avgProcessingTime": row.avgProcessingTime or 0,
+            "avgShippingTime": row.avgShippingTime or 0,
             "uniqueSkusSold": row.uniqueSkusSold or 0,
             "totalQuantitySold": row.totalQuantitySold or 0,
             "totalCustomers": row.totalCustomers or 0,
@@ -374,6 +378,7 @@ def _create_empty_daily_stat(date_obj):
         "completionRate": 0, "cancellationRate": 0, "refundRate": 0, "totalCustomers": 0,
         "impressions": 0, "clicks": 0, "conversions": 0, "cpc": 0,
         "cpa": 0, "cpm": 0, "ctr": 0, "reach": 0, "frequency": 0,
+        "avgProcessingTime": 0, "avgShippingTime": 0,
         "hourlyBreakdown": {}, "topProducts": [], "locationDistribution": [],
         "paymentMethodBreakdown": {}, "cancelReasonBreakdown": {}
     }
@@ -726,6 +731,8 @@ def get_kpis_by_platform(db: Session, brand_id: int, start_date: date, end_date:
             func.sum(models.DailyAnalytics.total_orders).label('totalOrders'),
             func.sum(models.DailyAnalytics.cancelled_orders).label('cancelledOrders'),
             func.sum(models.DailyAnalytics.refunded_orders).label('refundedOrders'),
+            func.avg(models.DailyAnalytics.avg_processing_time).label('avgProcessingTime'),
+            func.avg(models.DailyAnalytics.avg_shipping_time).label('avgShippingTime'),
         ).filter(
             models.DailyAnalytics.brand_id == brand_id,
             models.DailyAnalytics.date.between(start_date, end_date)

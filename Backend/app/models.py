@@ -52,8 +52,13 @@ class Order(Base):
 
     # --- Các cột cốt lõi giữ nguyên, đã rất chuẩn ---
     order_code = Column(String, index=True)
-    order_date = Column(DateTime, nullable=True) # Đã chuyển từ Date -> DateTime
+    order_date = Column(DateTime, nullable=True) 
+    
+    # === THÊM CÁC CỘT VẬN HÀNH MỚI ===
+    shipped_time = Column(DateTime, nullable=True) # Thời gian bàn giao cho ĐVVC
+    tracking_id = Column(String, nullable=True)    # Mã vận đơn
     delivered_date = Column(DateTime, nullable=True) # Ngày giao hàng thực tế
+    
     status = Column(String, nullable=True, index=True)
     username = Column(String, index=True, nullable=True)
     total_quantity = Column(Integer, default=0)
@@ -130,6 +135,10 @@ class DailyStat(Base):
     completion_rate = Column(Float, default=0.0)
     cancellation_rate = Column(Float, default=0.0)
     refund_rate = Column(Float, default=0.0)
+    
+    # === KPI VẬN HÀNH ===
+    avg_processing_time = Column(Float, default=0.0) # Thời gian xử lý TB (Giờ)
+    avg_shipping_time = Column(Float, default=0.0)   # Thời gian giao hàng TB (Ngày)
     
     completed_orders = Column(Integer, default=0)
     cancelled_orders = Column(Integer, default=0)
@@ -225,7 +234,11 @@ class DailyAnalytics(Base):
     
     cancellation_rate = Column(Float, default=0.0) # Tỷ lệ hủy (%)
     refund_rate = Column(Float, default=0.0)       # Tỷ lệ hoàn (%) (Đổi từ return_rate)
-    avg_fulfillment_time = Column(Float, default=0.0) # Thời gian xử lý đơn trung bình (giờ)
+    
+    # === KPI VẬN HÀNH (THÊM MỚI / CHỈNH SỬA) ===
+    avg_processing_time = Column(Float, default=0.0)  # Thời gian xử lý TB (Giờ)
+    avg_shipping_time = Column(Float, default=0.0)    # Thời gian giao hàng TB (Ngày)
+    avg_fulfillment_time = Column(Float, default=0.0) # (Legacy) Giữ lại nếu chưa muốn xóa ngay, hoặc xóa luôn cũng được. Em cứ để tạm.
 
     # ==========================================
     # 4. CUSTOMER INSIGHTS (Chân dung khách hàng)

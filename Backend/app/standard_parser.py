@@ -44,7 +44,7 @@ def parse_date(date_str: str) -> Union[date, None]:
         print(f"CẢNH BÁO: Không thể đọc định dạng ngày: '{date_str}'.")
         return None
 
-def parse_datetime(date_str: str) -> Union[datetime, None]:
+def parse_datetime(date_str: str, source_type: str = None) -> Union[datetime, None]:
     """
     Hàm chuẩn hóa ngày giờ.
     """
@@ -54,16 +54,33 @@ def parse_datetime(date_str: str) -> Union[datetime, None]:
     s = str(date_str).strip()
     if not s: return None
 
-    try:
-        if re.match(r'^\d{4}', s):
-            dt_object = date_parser.parse(s, yearfirst=True, dayfirst=False)
-        else:
-            dt_object = date_parser.parse(s, dayfirst=True)
+    # try:
+    #     if re.match(r'^\d{4}', s):
+    #         dt_object = date_parser.parse(s, yearfirst=True, dayfirst=False)
+    #     else:
+    #         dt_object = date_parser.parse(s, dayfirst=True)
 
-        return dt_object.replace(microsecond=0)
-    except (ValueError, TypeError):
-        print(f"CẢNH BÁO: Không thể đọc định dạng ngày giờ: '{date_str}'.")
-        return None
+    #     return dt_object.replace(microsecond=0)
+    try:
+        if source_type == 'shopee':
+            dt = date_parser.parse(s, yearfirst=True, dayfirst=False)
+            return dt
+        elif source_type == 'tiktok':
+            dt = date_parser.parse(s, dayfirst=True)
+            return dt 
+        else:
+            if re.match(r'^\d{4}', s):
+                dt = date_parser.parse(s, yearfirst=True, dayfirst=False)
+            else:
+                dt = date_parser.parse(s, dayfirst=True)
+            return dt.replace(microsecond=0)
+    
+    except (ValueError, TypeError, OverflowError):
+        try:
+            return pd.to_datetime(s).to_pydatetime()
+        except:
+            print(f"CẢNH BÁO: Không thể đọc định dạngày giờ: '{date_str}' cho nguồn '{source_type}'.")
+            return None
 
 def to_float(value) -> float:
     """
@@ -231,6 +248,8 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                             
                         items_list.append(item_dict)
 
+                    shipped_time_val = parse_datetime(first_row.get('shipped_time'), source_type=source)
+                    tracking_id_val = str(first_row.get('tracking_id')) if not pd.isna(first_row.get('tracking_id')) else None
                     delivered_date_val = parse_datetime(first_row.get('delivered_date'))
                     payment_method_val = str(first_row.get('payment_method', ''))
                     cancel_reason_val = str(first_row.get('cancel_reason', '')) # Đọc lý do hủy
@@ -248,8 +267,10 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
 
                     orders_to_insert.append({ 
                         "order_code": order_code, 
-                        "order_date": parse_datetime(first_row.get('order_date')), 
-                        "delivered_date": delivered_date_val, # Lưu vào cột riêng mới tạo
+                        "tracking_id": tracking_id_val,
+                        "order_date": parse_datetime(first_row.get('order_date')),
+                        "shipped_time": shipped_time_val, 
+                        "delivered_date": delivered_date_val,
                         "status": first_row.get('order_status'), 
                         "username": username, 
                         "total_quantity": total_quantity, 
