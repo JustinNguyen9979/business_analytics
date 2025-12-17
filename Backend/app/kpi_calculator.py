@@ -10,14 +10,16 @@ from province_centroids import PROVINCE_CENTROIDS
 
 CANCELLED_STATUSES = {'hủy', 'cancel', 'đã hủy', 'cancelled'}
 
-# ==============================================================================
-# CÁC HÀM HELPER TÍNH TOÁN CHI TIẾT (JSONB)
-# ==============================================================================
+ORDER_STATUS_KEYWORDS = {
+    "bomb_status": ["fail", "return", "tra hang", "chuyen hoan", "that bai", "khong thanh cong", "khong nhan", "tu choi"],
+    "cancel_status": ["huy", "cancel"],
+    "success_status": ["hoan thanh", "complete", "deliver", "success", "da nhan", "thanh cong"]
+}
 
 # Danh sách keyword để phân loại lý do hủy (Đã chuẩn hóa về không dấu, chữ thường)
 CANCEL_REASON_MAPPING = {
     "Giao thất bại (Bom hàng)": [
-        "giao that bai", "khong thanh cong", "khach khong nhan", "khong lien lac", 
+        "that bai", "khong thanh cong", "khach khong nhan", "khong lien lac", "tu choi nhan",
         "thue bao", "tu choi", "delivery failed", "unreachable", "refused", 
         "khong nghe may", "boom hang", "bom hang", "contact failed"
     ],
@@ -50,6 +52,8 @@ CANCEL_REASON_MAPPING = {
     "Lý do khác": [] # Mặc định nếu không khớp
 }
 
+BOMB_REASON_KEYWORDS = CANCEL_REASON_MAPPING.get("Giao thất bại (Bom hàng)", [])
+
 # Mapping phương thức thanh toán (Chuẩn hóa unidecode)
 PAYMENT_METHOD_MAPPING = {
     "COD (Thanh toán khi nhận hàng)": [
@@ -73,6 +77,45 @@ PAYMENT_METHOD_MAPPING = {
         "thanh toan duoc mien", "free", "zero cost", "0d"
     ]
 }
+
+# --- HÀM HELPER KIỂM TRA TỪ KHÓA ---
+def _matches_keywords(text: str, keywords: List[str]) -> bool:
+    if not text: return False
+    normalized_text = unidecode(str(text)).lower()
+    return any(kw in normalized_text for kw in keywords)
+
+def _classify_order_status(order: models.Order, total_refund: float) -> str:
+    """
+    Phân loại trạng thái đơn hàng dựa trên status text và tổng refund.
+    Trả về: 'refunded', 'bomb', 'cancelled', 'completed', hoặc None
+    """
+    # Check Refund
+    if total_refund < 0:
+        return 'refunded'
+    
+    status = order.status or ""
+    reason = ""
+    if order.details and isinstance(order.details, dict):
+        reason = order.details.get('cancel_reason', '')
+
+    # Check Bom (Rule 2)
+    # Bom = (Status Hủy/Fail) và (Reason chứa từ khóa bom hàng)
+    is_cancel_group = _matches_keywords(status, ORDER_STATUS_KEYWORDS["cancel_status"])
+    is_bomb_status_specific = _matches_keywords(status, ORDER_STATUS_KEYWORDS["bomb_status"])
+    is_bomb_reason = _matches_keywords(reason, BOMB_REASON_KEYWORDS)
+
+    if (is_cancel_group and is_bomb_reason) or is_bomb_status_specific:
+        return 'bomb'
+    
+    # Check Hủy thường
+    if is_cancel_group:
+        return 'cancelled'
+    
+    # Check Thành công
+    if _matches_keywords(status, ORDER_STATUS_KEYWORDS["success_status"]):
+        return 'completed'
+    
+    return 'other'
 
 def _calculate_cancel_reason_breakdown(orders: List[models.Order]) -> Dict[str, int]:
     """
@@ -253,31 +296,59 @@ def _calculate_core_kpis(
     marketing_spends: List[models.MarketingSpend],
     creation_date_order_codes: Set[str]
 ) -> dict:
+
+    counters = {
+        "completed": 0,
+        "cancelled": 0,
+        "bomb": 0,
+        "refunded": 0,
+        "other": 0
+    }
+
+    order_has_refund = defaultdict(bool)
+
+    for r in revenues:
+        if r.refund < 0:
+            order_has_refund[r.order_code] = True
+    
+    target_orders = [o for o in orders if o.order_code in creation_date_order_codes]
+
+    for order in target_orders:
+        has_refund_tx = order_has_refund[order.order_code]
+        category = _classify_order_status(order, has_refund_tx)
+        counters[category] += 1
+
+    completedOrders_op = counters['completed']
+    cancelledOrders_op = counters['cancelled']
+    refunded_transactions_count = counters['refunded']
+    bomb_orders = counters['bomb']
+
+    totalOrders_op = len(target_orders)
     
     # === KHỐI 1: PHÂN LOẠI TRẠNG THÁI ĐƠN HÀNG ===
     
-    revenue_refunded_codes = set()
-    revenue_cancelled_codes = set()
-    all_revenue_codes = {r.order_code for r in revenues} # Đơn có hoạt động tài chính hôm nay
+    # revenue_refunded_codes = set()
+    # revenue_cancelled_codes = set()
+    # all_revenue_codes = {r.order_code for r in revenues} # Đơn có hoạt động tài chính hôm nay
 
-    for r in revenues:
-        if r.source == 'tiktok' and r.refund < 0 and r.net_revenue == 0:
-            revenue_cancelled_codes.add(r.order_code)
-        elif r.refund < 0 and r.net_revenue != 0:
-            revenue_refunded_codes.add(r.order_code)
-        else:
-            pass
+    # for r in revenues:
+    #     if r.source == 'tiktok' and r.refund < 0 and r.net_revenue == 0:
+    #         revenue_cancelled_codes.add(r.order_code)
+    #     elif r.refund < 0 and r.net_revenue != 0:
+    #         revenue_refunded_codes.add(r.order_code)
+    #     else:
+    #         pass
     
-    status_cancelled_codes = {
-        o.order_code for o in orders
-        if o.status and o.status.lower().strip() in CANCELLED_STATUSES
-    }
+    # status_cancelled_codes = {
+    #     o.order_code for o in orders
+    #     if o.status and o.status.lower().strip() in CANCELLED_STATUSES
+    # }
 
-    globally_cancelled_codes = status_cancelled_codes.union(revenue_cancelled_codes)
+    # globally_cancelled_codes = status_cancelled_codes.union(revenue_cancelled_codes)
     
     # === KHỐI 2: TÍNH TOÁN CÁC CHỈ SỐ TÀI CHÍNH ===
     
-    financial_completed_codes = all_revenue_codes - globally_cancelled_codes
+    financial_completed_codes = {o.order_code for o in target_orders if _classify_order_status(o, order_has_refund[o.order_code]) == 'completed'}
     valid_revenues = [r for r in revenues if r.order_code in financial_completed_codes]
 
     netRevenue = sum(r.net_revenue for r in valid_revenues)
@@ -301,15 +372,6 @@ def _calculate_core_kpis(
     orders_map = {o.order_code: o for o in orders}
 
     # === KHỐI 3: TÍNH TOÁN CÁC CHỈ SỐ VẬN HÀNH ===
-
-    totalOrders_op = len(creation_date_order_codes)
-    cancelled_today_codes = creation_date_order_codes.intersection(globally_cancelled_codes)
-    cancelledOrders_op = len(cancelled_today_codes)
-    
-    refunded_transactions_count = len(revenue_refunded_codes)
-    completedOrders_op = totalOrders_op - cancelledOrders_op
-    completed_today_codes = creation_date_order_codes - cancelled_today_codes
-
     totalQuantitySold_op = 0
     unique_skus_sold_set = set()
     
@@ -319,7 +381,7 @@ def _calculate_core_kpis(
     total_shipping_days = 0
     shipping_count = 0
 
-    for code in completed_today_codes:
+    for code in target_orders:
         order = orders_map.get(code)
         if order:
             totalQuantitySold_op += (order.total_quantity or 0)
@@ -352,6 +414,7 @@ def _calculate_core_kpis(
     cancellationRate_op = (cancelledOrders_op / totalOrders_op) if totalOrders_op > 0 else 0
     refundRate_op = (refunded_transactions_count / total_financial_transaction_orders) if total_financial_transaction_orders > 0 else 0
     upt = (totalQuantitySold_op / completedOrders_op) if completedOrders_op > 0 else 0
+    bombRate_op = (bomb_orders / totalOrders_op) if totalOrders_op > 0 else 0
 
     # === KHỐI 4: KHỐI MARKETING ===
     impressions = sum(m.impressions for m in marketing_spends)
@@ -392,6 +455,7 @@ def _calculate_core_kpis(
         "completed_orders": completedOrders_op, 
         "cancelled_orders": cancelledOrders_op,
         "refunded_orders": refunded_transactions_count, 
+        "bomb_orders": bomb_orders,
         
         # Rates
         "completion_rate": completionRate_op, 
@@ -399,6 +463,7 @@ def _calculate_core_kpis(
         "refund_rate": refundRate_op,
         "avg_processing_time": avg_processing_time,
         "avg_shipping_time": avg_shipping_time,
+        "bomb_rate": bombRate_op,
 
         # Marketing
         "cpm": cpm, 

@@ -8,7 +8,7 @@ from datetime import date, timedelta
 from cache import redis_client
 from models import DailyStat
 
-def _clear_brand_cache(brand_id: int):
+def clear_brand_cache(brand_id: int):
     """Xóa các cache liên quan đến dashboard của một brand bằng cách dùng SCAN để không block Redis."""
     print(f"INFO: Clearing dashboard cache for brand_id: {brand_id}")
     # Dùng SCAN thay cho KEYS để an toàn hơn trên production
@@ -123,10 +123,10 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
     
     stat_entry_for_card = stat_entry
 
-    db.commit()
+    # db.commit() REMOVED FOR BATCH PROCESSING
     
-    # 5. Xóa cache
-    _clear_brand_cache(brand_id)
+    # 5. Xóa cache REMOVED FOR BATCH PROCESSING
+    # _clear_brand_cache(brand_id)
 
     return stat_entry_for_card
 
@@ -927,7 +927,7 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
                 if remaining_count == 0:
                     fully_deleted_sources.append(src)
 
-        _clear_brand_cache(brand_id)
+        clear_brand_cache(brand_id)
         return fully_deleted_sources
 
     except Exception as e:

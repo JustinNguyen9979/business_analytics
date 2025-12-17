@@ -210,13 +210,21 @@ def recalculate_all_brand_data(brand_id: int):
             if not all_activity_dates:
                 print(f"WORKER: Brand {brand_id} không có dữ liệu.")
                 # Xóa cache lần cuối rồi kết thúc
-                crud._clear_brand_cache(brand_id)
+                crud.clear_brand_cache(brand_id)
                 return
             
             # 2. Tính toán và lưu vào DailyStat từng ngày
             print(f"WORKER: Đang cập nhật {len(all_activity_dates)} ngày vào DailyStat...")
             for target_date in all_activity_dates:
                 crud.update_daily_stats(db, brand_id, target_date)
+            
+            # 3. Commit MỘT LẦN DUY NHẤT sau khi tính toán xong tất cả
+            print("WORKER: Đang commit transaction...")
+            db.commit()
+            print("WORKER: Commit thành công.")
+
+            # 4. Xóa cache MỘT LẦN DUY NHẤT
+            crud.clear_brand_cache(brand_id)
                 
     except Exception as e:
         print(f"WORKER RECALCULATE ERROR: {e}")

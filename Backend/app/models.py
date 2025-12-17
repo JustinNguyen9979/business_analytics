@@ -143,6 +143,8 @@ class DailyStat(Base):
     completed_orders = Column(Integer, default=0)
     cancelled_orders = Column(Integer, default=0)
     refunded_orders = Column(Integer, default=0)
+    bomb_orders = Column(Integer, default=0)     # Số đơn bom hàng
+    bomb_rate = Column(Float, default=0.0)       # Tỷ lệ bom hàng (%)
     unique_skus_sold = Column(Integer, default=0)
     total_quantity_sold = Column(Integer, default=0)
     total_customers = Column(Integer, default=0)
@@ -231,6 +233,8 @@ class DailyAnalytics(Base):
     completed_orders = Column(Integer, default=0) # Số đơn thành công
     cancelled_orders = Column(Integer, default=0) # Số đơn bị hủy
     refunded_orders = Column(Integer, default=0)  # Số đơn bị hoàn trả (Đổi từ returned_orders)
+    bomb_orders = Column(Integer, default=0)     # Số đơn bom hàng
+    bomb_rate = Column(Float, default=0.0)       # Tỷ lệ bom hàng (%)
     
     cancellation_rate = Column(Float, default=0.0) # Tỷ lệ hủy (%)
     refund_rate = Column(Float, default=0.0)       # Tỷ lệ hoàn (%) (Đổi từ return_rate)

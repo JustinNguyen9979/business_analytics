@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { useDateFilter } from './useDateFilter'; 
 import { fetchOperationKpisAPI } from '../services/api';
@@ -6,12 +6,9 @@ import { useBrand } from '../context/BrandContext';
 
 export const useOperationPageLogic = () => {
     const theme = useTheme();
-    
-    // <--- 2. LẤY BRAND INFO TỪ CONTEXT (SỬA LỖI DESTRUCTURING)
-    // useBrand() trả về object { id, name, slug, ... } chứ không phải { selectedBrand: ... }
     const selectedBrand = useBrand(); 
 
-    // 1. Logic lọc ngày
+    // Logic lọc ngày
     const { filter, buttonProps, menuProps } = useDateFilter({ defaultType: 'this_month' });
 
     const dateRange = filter.range;
@@ -22,13 +19,50 @@ export const useOperationPageLogic = () => {
     const handleApplyDateRange = menuProps.onApply;
 
     // 3. Config (Đưa lên trước useState để dùng làm giá trị khởi tạo)
-    const kpiConfig = [
-        { key: 'avg_processing_time', title: "Thời gian xử lý TB", max: 48, unit: "giờ", color: theme.palette.success.main },
-        { key: 'avg_shipping_time', title: "Thời gian giao hàng TB", max: 7, unit: "ngày", color: theme.palette.primary.main },
-        { key: 'completion_rate', title: "Tỷ lệ hoàn thành", max: 100, unit: "%", color: theme.palette.success.main },
-        { key: 'cancellation_rate', title: "Tỷ lệ hủy", max: 100, unit: "%", color: theme.palette.error.main },
-        { key: 'refund_rate', title: "Tỷ lệ Hoàn/Bom", max: 100, unit: "%", color: theme.palette.warning.main }
-    ];
+    const kpiConfig = useMemo(() => [
+        { 
+            key: 'avg_processing_time', 
+            title: "Thời gian xử lý TB", 
+            max: 48, 
+            unit: " giờ", 
+            thresholds: [24, 36],           // Xanh < 24, Vàng < 36, Đỏ > 36
+            reversecolors: true,
+            color: theme.palette.success.main 
+        },
+        { 
+            key: 'avg_shipping_time', 
+            title: "Thời gian giao hàng TB", 
+            max: 7, 
+            unit: " ngày", 
+            thresholds: [2, 4],             // Xanh < 2, Vàng < 4, Đỏ > 4
+            reversecolors: true,
+            color: theme.palette.primary.main 
+        },
+        { 
+            key: 'completion_rate', 
+            title: "Tỷ lệ hoàn thành", 
+            max: 100, 
+            unit: "%", 
+            thresholds: [90, 80],           // Xanh > 90, Vàng > 80, Đỏ < 80
+            reversecolors: false,
+            color: theme.palette.success.main },
+        { 
+            key: 'cancellation_rate', 
+            title: "Tỷ lệ hủy", max: 100, 
+            unit: "%", 
+            thresholds: [5, 10],            // Xanh < 5, Vàng < 10, Đỏ > 10
+            reversecolors: true,
+            color: theme.palette.error.main 
+        },
+        { 
+            key: 'post_shipment_issues_rate', 
+            title: "Tỷ lệ Hoàn/Bom", 
+            max: 100, unit: "%", 
+            isStacked: true,
+            colorBom: theme.palette.warning.main,
+            colorRefund: theme.palette.error.main
+        }
+    ], [theme]);
 
     // 2. State quản lý dữ liệu (Khởi tạo default data ngay lập tức)
     const [kpiData, setKpiData] = useState(() => kpiConfig.map(config => ({
@@ -60,7 +94,16 @@ export const useOperationPageLogic = () => {
                 } catch (apiErr) {
                     console.warn("API Error, mocking:", apiErr);
                     // Mock data dự phòng để không crash UI
-                    apiResponse = { avg_processing_time: 0, avg_shipping_time: 0, completion_rate: 0, cancellation_rate: 0 };
+                    apiResponse = { 
+                        avg_processing_time: 0, 
+                        avg_shipping_time: 0, 
+                        completion_rate: 0, 
+                        cancellation_rate: 0, 
+                        total_orders: 0, 
+                        refund_rate: 0, 
+                        cancelled_orders: 0,
+                        refunded_orders: 0
+                    };
                 }
 
                 const mappedData = kpiConfig.map(config => {
@@ -69,6 +112,31 @@ export const useOperationPageLogic = () => {
                     // Nếu đơn vị là %, nhân 100 để hiển thị đúng trên Gauge
                     if (config.unit === '%') {
                         val = val * 100;
+                    }
+
+                    if (config.isStacked) {
+                        const bombRate = (apiResponse.bomb_rate || 0) * 100;
+                        const refundRate = (apiResponse.refund_rate || 0) * 100;
+
+                        const segmentsData = [
+                            {
+                                label: "Bom hàng",
+                                value: parseFloat(bombRate.toFixed(1)),
+                                color: config.colorBom
+                            },
+                            {
+                                label: "Hoàn tiền",
+                                value: parseFloat(refundRate.toFixed(1)),
+                                color: config.colorRefund
+                            }
+                        ]
+                        const combinedRate = parseFloat((bombRate + refundRate).toFixed(1));
+                        return {
+                            ...config,
+                            value: combinedRate,
+                            segments: segmentsData,
+                            previousValue: null
+                        };
                     }
 
                     return {
@@ -89,7 +157,7 @@ export const useOperationPageLogic = () => {
         };
 
         fetchOperationKpis();
-    }, [dateRange, selectedBrand]); // Dependency array phải chứa selectedBrand để re-run khi context update
+    }, [dateRange, selectedBrand, kpiConfig]); // Dependency array phải chứa selectedBrand để re-run khi context update
 
     return {
         dateRange,
