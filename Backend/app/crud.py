@@ -34,58 +34,49 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
     Nhiệm vụ: Lấy dữ liệu thô -> Gọi Calculator -> Lưu kết quả vào DailyStat (Tổng) và DailyAnalytics (Từng Source).
     """
     import kpi_calculator # Import local
-
-    # 1. Lấy TOÀN BỘ dữ liệu thô trong ngày
-    revenues = db.query(models.Revenue).filter(
-        models.Revenue.brand_id == brand_id,
-        models.Revenue.transaction_date == target_date
-    ).all()
     
+    # Marketing spends
     marketing_spends = db.query(models.MarketingSpend).filter(
         models.MarketingSpend.brand_id == brand_id,
         models.MarketingSpend.date == target_date
     ).all()
 
-    # Lấy orders cho revenue (cogs)
-    revenue_order_codes = {r.order_code for r in revenues if r.order_code}
-    orders_for_cogs = []
-    if revenue_order_codes:
-        orders_for_cogs = db.query(models.Order).filter(
-            models.Order.brand_id == brand_id,
-            models.Order.order_code.in_(revenue_order_codes)
-        ).all()
-
+    # Orders được tạo trong ngày
     orders_created_today = db.query(models.Order).filter(
         models.Order.brand_id == brand_id, 
         func.date(models.Order.order_date) == target_date
     ).all()
 
-    # Gộp danh sách tất cả orders liên quan trong ngày
-    all_orders_map = {o.order_code: o for o in orders_for_cogs}
-    all_orders_map.update({o.order_code: o for o in orders_created_today})
-    final_orders_list = list(all_orders_map.values())
+    # Lấy danh sách mã đơn để tìm Revenue tương ứng
+    created_today_codes = {o.order_code for o in orders_created_today}
 
-    # --- BƯỚC 2: XÁC ĐỊNH CÁC SOURCE CÓ HOẠT ĐỘNG TRONG NGÀY ---
+    revenues = []
+    if created_today_codes:
+        revenues = db.query(models.Revenue).filter(
+            models.Revenue.brand_id == brand_id,
+            models.Revenue.order_code.in_(created_today_codes)
+        ).all()
+
+    final_orders_list = orders_created_today
+
+    # Xác định các source có hoạt động trong ngày
     active_sources = set()
-    active_sources.update({r.source for r in revenues if r.source})
     active_sources.update({o.source for o in orders_created_today if o.source})
     active_sources.update({m.source for m in marketing_spends if m.source})
-    
+
     stat_entry_for_card = None
 
-    # --- BƯỚC 3: TÍNH TOÁN VÀ LƯU CHO TỪNG SOURCE (Vào DailyAnalytics) ---
+    # Tính toán và lưu cho từng source vào DailyAnalytics
     for current_source in active_sources:
-        # Lọc dữ liệu theo source
+        # Lọc data theo source
         filtered_revenues = [r for r in revenues if r.source == current_source]
         filtered_marketing = [m for m in marketing_spends if m.source == current_source]
         filtered_orders = [o for o in final_orders_list if o.source == current_source]
-        filtered_created_orders = [o for o in orders_created_today if o.source == current_source]
 
-        # Gọi Calculator tính toán
-        created_today_codes = {o.order_code for o in filtered_created_orders}
-        kpis = kpi_calculator.calculate_daily_kpis(filtered_orders, filtered_revenues, filtered_marketing, created_today_codes, db_session=db)
+        filtered_created_codes = {o.order_code for o in filtered_orders}
 
-        # Lưu vào DailyAnalytics (Chia theo Source)
+        kpis = kpi_calculator.calculate_daily_kpis(filtered_orders, filtered_revenues, filtered_marketing, filtered_created_codes, target_date, db_session=db)
+
         analytics_entry = db.query(models.DailyAnalytics).filter(
             models.DailyAnalytics.brand_id == brand_id,
             models.DailyAnalytics.date == target_date,
@@ -95,16 +86,15 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
         if not analytics_entry:
             analytics_entry = models.DailyAnalytics(brand_id=brand_id, date=target_date, source=current_source)
             db.add(analytics_entry)
-        
+
+        # Map data vào Model
         if kpis:
             for key, value in kpis.items():
                 if hasattr(analytics_entry, key):
                     setattr(analytics_entry, key, value)
 
-    # --- BƯỚC 4: TÍNH TOÁN TỔNG HỢP (Vào DailyStat) ---
-    # Tính cho 'all' nhưng CHỈ lưu vào DailyStat
-    all_created_codes = {o.order_code for o in orders_created_today}
-    total_kpis = kpi_calculator.calculate_daily_kpis(final_orders_list, revenues, marketing_spends, all_created_codes, db_session=db)
+    # Tính toán tổng hợp vào DailyStat
+    total_kpis = kpi_calculator.calculate_daily_kpis(final_orders_list, revenues, marketing_spends, created_today_codes, target_date, db_session=db)
 
     stat_entry = db.query(models.DailyStat).filter(
         models.DailyStat.brand_id == brand_id,
@@ -114,19 +104,13 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
     if not stat_entry:
         stat_entry = models.DailyStat(brand_id=brand_id, date=target_date)
         db.add(stat_entry)
-    
+
     if total_kpis:
         for key, value in total_kpis.items():
-            # Map vào DailyStat (Giờ đã có đủ cột JSONB để lưu full data)
             if hasattr(stat_entry, key):
                 setattr(stat_entry, key, value)
-    
-    stat_entry_for_card = stat_entry
 
-    # db.commit() REMOVED FOR BATCH PROCESSING
-    
-    # 5. Xóa cache REMOVED FOR BATCH PROCESSING
-    # _clear_brand_cache(brand_id)
+    stat_entry_for_card = stat_entry
 
     return stat_entry_for_card
 
@@ -592,7 +576,7 @@ def _calculate_and_cache_single_day(db: Session, brand_id: int, target_date: dat
     # Tạo set chứa mã đơn hàng được tạo hôm nay để truyền vào calculator
     created_today_codes = {o.order_code for o in orders_created_today}
 
-    daily_kpis = kpi_calculator.calculate_daily_kpis(orders, revenues, marketing_spends, created_today_codes, db_session=db)
+    daily_kpis = kpi_calculator.calculate_daily_kpis(orders, revenues, marketing_spends, created_today_codes, target_date, db_session=db)
 
     cache_key = f"kpi_daily:{brand_id}:{target_date.isoformat()}"
     redis_client.setex(cache_key, timedelta(days=90), json.dumps(daily_kpis, default=str))

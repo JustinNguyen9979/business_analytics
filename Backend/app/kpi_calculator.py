@@ -251,6 +251,64 @@ def _calculate_location_distribution(orders: List[models.Order], db_session: Ses
     except Exception as e:
         print(f"Warning: Could not calculate location distribution: {e}")
         return []
+    
+def _calculate_customer_retention(orders: List[models.Order], current_date: date, db_session: Session) -> Dict:
+    """
+    Phân loại khách hàng Mới vs Cũ và tính doanh thu tương ứng.
+    - Khách cũ: Đã từng có đơn hàng thành công/phát sinh trước ngày hiện tại.
+    - Khách mới: Lần đầu tiên phát sinh đơn hàng vào ngày hiện tại.
+    """
+
+    stats = {
+        "new_customers": 0,
+        "returning_customers": 0,
+        "new_customer_revenue": 0.0,
+        "returning_customer_revenue": 0.0
+    }
+
+    if not orders or not db_session:
+        return stats
+    
+    # Lấy danh sách username mua hàng trong ngày
+    usernames_today = {o.username for o in orders if o.username}
+    if not usernames_today:
+        return stats
+    
+    # Tìm những username đã từng mua hàng TRƯỚC ngày hôm nay (Returning Customer)
+    try:
+        existing_customers_query = db_session.query(models.Order.username).filter(
+            models.Order.username.in_(usernames_today),
+            models.Order.order_date < datetime.combine(current_date, datetime.min.time())
+        ).distinct()
+
+        existing_usernames = {row[0] for row in existing_customers_query.all()}
+
+        # Phân loại và tính toán
+        counted_new_users = set()
+        counted_returning_users = set()
+
+        for order in orders:
+            if not order.username:
+                continue
+
+            gmv = order.gmv or 0
+
+            if order.username in existing_usernames:
+                stats["returning_customer_revenue"] += gmv
+                if order.username not in counted_returning_users:
+                    stats["returning_customers"] += 1
+                    counted_returning_users.add(order.username)
+
+            else:
+                stats["new_customer_revenue"] += gmv
+                if order.username not in counted_new_users:
+                    stats["new_customers"] += 1
+                    counted_new_users.add(order.username)
+
+    except Exception as e:
+        print(f"Error calculating customer retention: {e}")
+
+    return stats
 
 def _calculate_payment_method_breakdown(orders: List[models.Order]) -> Dict[str, int]:
     """
@@ -286,196 +344,200 @@ def _calculate_payment_method_breakdown(orders: List[models.Order]) -> Dict[str,
     return dict(method_counts)
 
 
-# ==============================================================================
-# HÀM LOGIC CỐT LÕI (CORE)
-# ==============================================================================
-
 def _calculate_core_kpis(
     orders: List[models.Order],
     revenues: List[models.Revenue],
     marketing_spends: List[models.MarketingSpend],
     creation_date_order_codes: Set[str]
 ) -> dict:
+    
+    # --- 1. SÀNG LỌC ORDER MỤC TIÊU (Theo ngày tạo) ---
+    target_orders = [o for o in orders if o.order_code in creation_date_order_codes]
+    orders_map = {o.order_code: o for o in orders}
 
+    # --- 2. TÍNH TOÁN METRICS TỪ ORDER (Real-time / Tạm tính) ---
+    # GMV & Doanh thu tạm tính lấy trực tiếp từ Order vừa đặt
+    gmv = sum((o.gmv or 0) for o in target_orders)
+    provisional_revenue = sum((o.selling_price or 0) for o in target_orders)
+    subsidy_amount = sum((o.subsidy_amount or 0) for o in target_orders)
+    
+    # --- 3. XỬ LÝ TRẠNG THÁI VẬN HÀNH ---
     counters = {
-        "completed": 0,
-        "cancelled": 0,
-        "bomb": 0,
-        "refunded": 0,
-        "other": 0
+        "completed": 0, "cancelled": 0, "bomb": 0, "refunded": 0, "other": 0
     }
-
+    
+    # Xác định đơn nào có hoàn tiền từ Revenue để phân loại trạng thái chính xác
     order_has_refund = defaultdict(bool)
-
     for r in revenues:
         if r.refund < 0:
             order_has_refund[r.order_code] = True
-    
-    target_orders = [o for o in orders if o.order_code in creation_date_order_codes]
 
     for order in target_orders:
         has_refund_tx = order_has_refund[order.order_code]
-        category = _classify_order_status(order, has_refund_tx)
+        category = _classify_order_status(order, total_refund=-1 if has_refund_tx else 0)
         counters[category] += 1
 
-    completedOrders_op = counters['completed']
-    cancelledOrders_op = counters['cancelled']
-    refunded_transactions_count = counters['refunded']
+    total_orders = len(target_orders)
+    completed_orders = counters['completed']
+    cancelled_orders = counters['cancelled']
+    refunded_orders = counters['refunded']
     bomb_orders = counters['bomb']
 
-    totalOrders_op = len(target_orders)
+    # --- 4. TÍNH TOÁN TÀI CHÍNH THỰC TẾ (Từ Revenue) ---
+    # Chỉ tính tiền của những đơn hàng nằm trong target_orders
+    # (Tức là Revenue ngày 24/12 vẫn được cộng vào KPI ngày 17/12 nếu đơn đó tạo ngày 17)
     
-    # === KHỐI 1: PHÂN LOẠI TRẠNG THÁI ĐƠN HÀNG ===
+    valid_revenues = [r for r in revenues if r.order_code in creation_date_order_codes]
     
-    # revenue_refunded_codes = set()
-    # revenue_cancelled_codes = set()
-    # all_revenue_codes = {r.order_code for r in revenues} # Đơn có hoạt động tài chính hôm nay
+    net_revenue = sum(r.net_revenue for r in valid_revenues)
+    execution_cost = abs(sum(r.total_fees for r in valid_revenues)) # Phí sàn thực tế
+    
+    # Tạo Financial Logs (Nhật ký giao dịch)
+    financial_events = []
+    for r in valid_revenues:
+        # Logic phân loại Log: Dựa vào cột refund
+        evt_type = "income"
+        if r.refund < 0: # Hoàn tiền
+            evt_type = "refund"
+        elif r.net_revenue < 0: # Các khoản trừ khác không phải hoàn tiền trực tiếp
+            evt_type = "deduction"
+        elif r.total_fees > 0: # Các loại phí
+             evt_type = "fee"
+        
+        # Nếu net_revenue khác 0 hoặc là refund thì mới ghi log (để tránh rác)
+        if r.net_revenue != 0 or evt_type == "refund": # Keep refunds even if net_revenue is 0
+            financial_events.append({
+                "date": str(r.transaction_date),
+                "type": evt_type,
+                "amount": r.net_revenue, # Use net_revenue as the value for the event
+                "order_code": r.order_code,
+                "note": f"Source: {r.source}"
+            })
 
-    # for r in revenues:
-    #     if r.source == 'tiktok' and r.refund < 0 and r.net_revenue == 0:
-    #         revenue_cancelled_codes.add(r.order_code)
-    #     elif r.refund < 0 and r.net_revenue != 0:
-    #         revenue_refunded_codes.add(r.order_code)
-    #     else:
-    #         pass
+    # --- 5. TÍNH CHI PHÍ & LỢI NHUẬN ---
+    # Giá vốn: Chỉ tính cho các đơn đã hoàn thành (hoặc tùy logic shop, ở đây tính theo đơn completed)
+    # Tuy nhiên để xem lãi lỗ tạm tính, ta có thể tính COGS của toàn bộ đơn đã đặt.
+    # Logic hiện tại: Tính COGS của đơn completed (thận trọng)
     
-    # status_cancelled_codes = {
-    #     o.order_code for o in orders
-    #     if o.status and o.status.lower().strip() in CANCELLED_STATUSES
-    # }
+    invalid_order_codes = {o.order_code for o in target_orders if _classify_order_status(o, order_has_refund[o.order_code]) in ['cancelled', 'bomb', 'refunded']}
+    cogs = sum((o.cogs or 0) for o in target_orders if o.order_code not in invalid_order_codes)
 
-    # globally_cancelled_codes = status_cancelled_codes.union(revenue_cancelled_codes)
+    ad_spend = sum(m.ad_spend for m in marketing_spends)
     
-    # === KHỐI 2: TÍNH TOÁN CÁC CHỈ SỐ TÀI CHÍNH ===
+    # Tổng chi phí = Giá vốn + Phí sàn + Ads
+    total_cost = cogs + execution_cost + ad_spend
     
-    financial_completed_codes = {o.order_code for o in target_orders if _classify_order_status(o, order_has_refund[o.order_code]) == 'completed'}
-    valid_revenues = [r for r in revenues if r.order_code in financial_completed_codes]
+    # Lợi nhuận = Doanh thu thực - Tổng chi phí
+    # (Nếu chưa có net_revenue thì profit sẽ âm ad_spend, phản ánh đúng thực tế dòng tiền)
+    profit = net_revenue - cogs - ad_spend
 
-    netRevenue = sum(r.net_revenue for r in valid_revenues)
-    gmv = sum(r.gmv for r in valid_revenues)
-    executionCost = abs(sum(r.total_fees for r in valid_revenues))
+    # --- 6. TÍNH CÁC CHỈ SỐ VẬN HÀNH KHÁC ---
+    total_quantity_sold = sum((o.total_quantity or 0) for o in target_orders)
+    unique_skus_sold = len(set(item['sku'] for o in target_orders if o.details and o.details.get('items') for item in o.details['items'] if item.get('sku'))) # Tính unique SKUs
 
-    cogs_map = {o.order_code: o.cogs for o in orders if o.cogs is not None}
-    cogs_for_finance = sum(cogs_map.get(code, 0) for code in financial_completed_codes)
-    
-    adSpend = sum(m.ad_spend for m in marketing_spends)
-    totalCost = cogs_for_finance + executionCost + adSpend
-    profit = gmv - totalCost
+    # Thời gian xử lý & Giao hàng
+    total_processing_hours = 0; processing_count = 0
+    total_shipping_days = 0; shipping_count = 0
+    total_fulfillment_days = 0; fulfillment_count = 0
 
-    roi = (profit / totalCost) if totalCost > 0 else 0
-    profitMargin = (profit / netRevenue) if netRevenue != 0 else 0
-    takeRate = (executionCost / gmv) if gmv > 0 else 0
-    
-    financial_completed_count = len(financial_completed_codes)
-    aov = (gmv / financial_completed_count) if financial_completed_count > 0 else 0
-    
-    orders_map = {o.order_code: o for o in orders}
-
-    # === KHỐI 3: TÍNH TOÁN CÁC CHỈ SỐ VẬN HÀNH ===
-    totalQuantitySold_op = 0
-    unique_skus_sold_set = set()
-    
-    # Biến tính thời gian giao hàng
-    total_processing_hours = 0
-    processing_count = 0
-    total_shipping_days = 0
-    shipping_count = 0
-
-    for code in target_orders:
-        order = orders_map.get(code)
-        if order:
-            totalQuantitySold_op += (order.total_quantity or 0)
-            
-            # --- TÍNH PROCESSING TIME (Giờ) ---
-            # Logic: shipped_time - order_date
-            if order.shipped_time and order.order_date:
-                diff_proc = order.shipped_time - order.order_date
-                proc_hours = diff_proc.total_seconds() / 3600
-                if proc_hours > 0:
-                    total_processing_hours += proc_hours
-                    processing_count += 1
+    for order in target_orders:
+        # 1. Processing Time (Order -> Shipped)
+        if order.shipped_time and order.order_date:
+            diff = (order.shipped_time - order.order_date).total_seconds() / 3600
+            if diff > 0:
+                total_processing_hours += diff
+                processing_count += 1
+        
+        # 2. Shipping Time (Shipped -> Delivered)
+        if order.delivered_date and order.shipped_time:
+            diff = (order.delivered_date - order.shipped_time).total_seconds() / 86400
+            if diff > 0:
+                total_shipping_days += diff
+                shipping_count += 1
+        
+        # 3. Fulfillment Time (Order -> Delivered)
+        if order.delivered_date and order.order_date:
+            diff = (order.delivered_date - order.order_date).total_seconds() / 86400
+            if diff > 0:
+                total_fulfillment_days += diff
+                fulfillment_count += 1
                 
-            # --- TÍNH SHIPPING TIME (Ngày) ---
-            # Logic: delivered_date - shipped_time
-            if order.delivered_date and order.shipped_time:
-                diff_ship = order.delivered_date - order.shipped_time
-                ship_days = diff_ship.total_seconds() / 86400
-                if ship_days > 0:
-                    total_shipping_days += ship_days
-                    shipping_count += 1
-
-    uniqueSkusSold_op = len(unique_skus_sold_set)
     avg_processing_time = (total_processing_hours / processing_count) if processing_count > 0 else 0
     avg_shipping_time = (total_shipping_days / shipping_count) if shipping_count > 0 else 0
+    avg_fulfillment_time = (total_fulfillment_days / fulfillment_count) if fulfillment_count > 0 else 0
 
-    total_financial_transaction_orders = len(financial_completed_codes) + refunded_transactions_count
+    # --- 7. TÍNH TỶ LỆ (RATIOS) ---
+    roi = (profit / total_cost) if total_cost > 0 else 0
+    profit_margin = (profit / net_revenue) if net_revenue != 0 else 0
+    take_rate = (execution_cost / gmv) if gmv > 0 else 0
     
-    completionRate_op = (completedOrders_op / totalOrders_op) if totalOrders_op > 0 else 0
-    cancellationRate_op = (cancelledOrders_op / totalOrders_op) if totalOrders_op > 0 else 0
-    refundRate_op = (refunded_transactions_count / total_financial_transaction_orders) if total_financial_transaction_orders > 0 else 0
-    upt = (totalQuantitySold_op / completedOrders_op) if completedOrders_op > 0 else 0
-    bombRate_op = (bomb_orders / totalOrders_op) if totalOrders_op > 0 else 0
+    aov = (gmv / completed_orders) if completed_orders > 0 else 0
+    upt = (total_quantity_sold / completed_orders) if completed_orders > 0 else 0
+    
+    completion_rate = (completed_orders / total_orders) if total_orders > 0 else 0
+    cancellation_rate = (cancelled_orders / total_orders) if total_orders > 0 else 0
+    refund_rate = (refunded_orders / total_orders) if total_orders > 0 else 0
+    bomb_rate = (bomb_orders / total_orders) if total_orders > 0 else 0
 
-    # === KHỐI 4: KHỐI MARKETING ===
+    # --- 8. MARKETING METRICS ---
     impressions = sum(m.impressions for m in marketing_spends)
     clicks = sum(m.clicks for m in marketing_spends)
     conversions = sum(m.conversions for m in marketing_spends)
     reach = sum(m.reach for m in marketing_spends)
 
-    cpm = (adSpend / impressions) * 1000 if impressions > 0 else 0
-    cpc = (adSpend / clicks) if clicks > 0 else 0
+    cpm = (ad_spend / impressions) * 1000 if impressions > 0 else 0
+    cpc = (ad_spend / clicks) if clicks > 0 else 0
     ctr = (clicks / impressions) * 100 if impressions > 0 else 0
-    cpa = (adSpend / conversions) if conversions > 0 else 0
+    cpa = (ad_spend / conversions) if conversions > 0 else 0
     frequency = (impressions / reach) if reach > 0 else 0
-    
     conversion_rate = (conversions / clicks) if clicks > 0 else 0
 
-    # === KHỐI 5: TỔNG HỢP KẾT QUẢ (Snake case cho Model) ===
+    # --- TRẢ VỀ KẾT QUẢ (SNAKE CASE) ---
     return {
         # Finance
-        "gmv": gmv, 
-        "net_revenue": netRevenue, 
+        "net_revenue": net_revenue,
+        "provisional_revenue": provisional_revenue,
+        "gmv": gmv,
+        "total_cost": total_cost,
+        "cogs": cogs,
+        "execution_cost": execution_cost,
+        "subsidy_amount": subsidy_amount,
         "profit": profit,
-        "cogs": cogs_for_finance, 
-        "execution_cost": executionCost,
-        "ad_spend": adSpend, 
-        "total_cost": totalCost, 
-        
-        # Ratios
-        "roi": roi, 
-        "profit_margin": profitMargin, 
-        "take_rate": takeRate, 
-        "aov": aov, 
-        "upt": upt, 
-
-        # Ops & Product
-        "unique_skus_sold": uniqueSkusSold_op,
-        "total_quantity_sold": totalQuantitySold_op,
-        "total_orders": totalOrders_op, 
-        "completed_orders": completedOrders_op, 
-        "cancelled_orders": cancelledOrders_op,
-        "refunded_orders": refunded_transactions_count, 
-        "bomb_orders": bomb_orders,
-        
-        # Rates
-        "completion_rate": completionRate_op, 
-        "cancellation_rate": cancellationRate_op, 
-        "refund_rate": refundRate_op,
-        "avg_processing_time": avg_processing_time,
-        "avg_shipping_time": avg_shipping_time,
-        "bomb_rate": bombRate_op,
+        "roi": roi,
+        "profit_margin": profit_margin,
+        "take_rate": take_rate,
 
         # Marketing
-        "cpm": cpm, 
-        "cpa": cpa, 
-        "cpc": cpc, 
-        "ctr": ctr, 
-        "impressions": impressions, 
-        "clicks": clicks,
-        "conversions": conversions,
-        "reach": reach, 
-        "frequency": frequency,
-        "conversion_rate": conversion_rate
+        "ad_spend": ad_spend,
+        "roas": (gmv / ad_spend) if ad_spend > 0 else 0, # Tính ROAS nhanh dựa trên GMV
+        "cpo": (ad_spend / total_orders) if total_orders > 0 else 0,
+        "cpm": cpm, "cpc": cpc, "ctr": ctr, "cpa": cpa,
+        "impressions": impressions, "clicks": clicks, 
+        "conversions": conversions, "reach": reach,
+        "frequency": frequency, "conversion_rate": conversion_rate,
+
+        # Ops
+        "total_orders": total_orders,
+        "completed_orders": completed_orders,
+        "cancelled_orders": cancelled_orders,
+        "refunded_orders": refunded_orders,
+        "bomb_orders": bomb_orders,
+        
+        "aov": aov, "upt": upt,
+        "unique_skus_sold": unique_skus_sold, 
+        "total_quantity_sold": total_quantity_sold,
+        
+        "completion_rate": completion_rate,
+        "cancellation_rate": cancellation_rate,
+        "refund_rate": refund_rate,
+        "bomb_rate": bomb_rate,
+        
+        "avg_processing_time": avg_processing_time,
+        "avg_shipping_time": avg_shipping_time,
+        "avg_fulfillment_time": avg_fulfillment_time,
+        
+        # Logs
+        "financial_events": financial_events
     }
 
 # ==============================================================================
@@ -486,6 +548,7 @@ def calculate_daily_kpis(
     revenues_in_day: List[models.Revenue], 
     marketing_spends: List[models.MarketingSpend],
     creation_date_order_codes: Set[str],
+    date_to_calculate: date,
     db_session: Session = None
 ) -> dict:
     """
@@ -497,26 +560,28 @@ def calculate_daily_kpis(
         
         # 2. Tính các chỉ số bổ sung cho ngày (JSONB, Customer)
         usernames_today = {o.username for o in orders_in_day if o.username}
-        kpis["total_customers"] = len(usernames_today)
+        kpis["total_customers"] = len(usernames_today) # snake_case
         
         # Lọc ra các order thực sự được TẠO trong ngày để phân tích hành vi
-        # (orders_in_day bao gồm cả order cũ nhưng có phát sinh doanh thu hôm nay)
         created_orders = [o for o in orders_in_day if o.order_code in creation_date_order_codes]
         
-        # 3. Tính các trường JSONB
+        # 3. Tính các trường JSONB (Đổi key sang snake_case)
         kpis["hourly_breakdown"] = _calculate_hourly_breakdown(created_orders)
         kpis["top_products"] = _calculate_top_products(created_orders)
         kpis["payment_method_breakdown"] = _calculate_payment_method_breakdown(created_orders)
         kpis["cancel_reason_breakdown"] = _calculate_cancel_reason_breakdown(created_orders)
         
-        # Tính phân bổ địa lý (truyền db_session vào)
+        # Tính phân bổ địa lý
         kpis["location_distribution"] = _calculate_location_distribution(created_orders, db_session)
         
+        if db_session:
+            customer_retention = _calculate_customer_retention(created_orders, date_to_calculate, db_session)
+            kpis.update(customer_retention)
+
         return kpis
     except Exception as e:
         print(f"CALCULATOR ERROR (daily): {e}")
         return {}
-
 # ==============================================================================
 # HÀM 2: TÍNH TOÁN KPI TỔNG HỢP (Cho API Range, Chart...)
 # ==============================================================================

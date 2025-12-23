@@ -60,7 +60,7 @@ class MarketingSpend(MarketingSpendBase):
     source: str
     model_config = ConfigDict(from_attributes=True)
 
-# --- CÁC SCHEMA LIÊN QUAN ĐẾN BRAND (Không thay đổi) ---
+# --- CÁC SCHEMA LIÊN QUAN ĐẾN BRAND ---
 class BrandBase(BaseModel):
     name: str
 class BrandInfo(BrandBase):
@@ -78,47 +78,94 @@ class Brand(BrandBase):
     revenues: List[Revenue] = []
     model_config = ConfigDict(from_attributes=True)
 
-# === SỬA LỖI Ở ĐÂY: ĐỒNG BỘ HÓA TÊN KEY SANG camelCase ===
+class ProductItem(BaseModel):
+    sku: str
+    name: Optional[str] = ""
+    quantity: int
+    revenue: float = 0.0
+
+class LocationItem(BaseModel):
+    city: str
+    orders: int
+    revenue: float = 0.0
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class FinancialEventItem(BaseModel):
+    date: str
+    type: str # 'income' | 'refund' | 'fee' | 'deduction'
+    amount: float
+    order_code: Optional[str] = None
+    note: Optional[str] = None
 
 class KpiSet(BaseModel):
-    # Tài chính
-    netRevenue: float = 0
+    # --- 1. TÀI CHÍNH (Finance) ---
+    net_revenue: float = 0
+    provisional_revenue: float = 0
     gmv: float = 0
-    totalCost: float = 0
+    total_cost: float = 0
     cogs: float = 0
-    executionCost: float = 0
+    execution_cost: float = 0
+    subsidy_amount: float = 0       
     profit: float = 0
     roi: float = 0
-    profitMargin: float = 0
-    takeRate: float = 0
-    # Marketing
-    adSpend: float = 0
+    profit_margin: float = 0
+    take_rate: float = 0
+    
+    # --- 2. MARKETING ---
+    ad_spend: float = 0
     roas: float = 0
-    cpo: float = 0
+    cpo: float = 0 
     ctr: float = 0
     cpc: float = 0
-    conversionRate: float = 0
-    # Vận hành
-    totalOrders: int = 0
-    completedOrders: int = 0
-    cancelledOrders: int = 0
-    refundedOrders: int = 0
+    cpm: float = 0        
+    cpa: float = 0        
+    impressions: int = 0  
+    clicks: int = 0       
+    conversions: int = 0  
+    reach: int = 0        
+    frequency: float = 0  
+    conversion_rate: float = 0
+    
+    # --- 3. VẬN HÀNH (Operations) ---
+    total_orders: int = 0
+    completed_orders: int = 0
+    cancelled_orders: int = 0
+    refunded_orders: int = 0
+    bomb_orders: int = 0   
+    
     aov: float = 0
     upt: float = 0
-    uniqueSkusSold: int = 0
-    completionRate: float = 0
-    refundRate: float = 0
-    cancellationRate: float = 0
-    totalQuantitySold: int = 0
+    unique_skus_sold: int = 0
+    total_quantity_sold: int = 0
+    
+    completion_rate: float = 0
+    refund_rate: float = 0
+    cancellation_rate: float = 0
+    bomb_rate: float = 0   
+    
+    avg_processing_time: float = 0 
+    avg_shipping_time: float = 0   
 
-    # Khách hàng
-    totalCustomers: int = 0
-    newCustomers: int = 0
-    returningCustomers: int = 0
+    # --- 4. KHÁCH HÀNG (Customer) ---
+    total_customers: int = 0
+    new_customers: int = 0
+    returning_customers: int = 0
     cac: float = 0
-    retentionRate: float = 0
+    retention_rate: float = 0
     ltv: float = 0
+    
+    # --- 5. BREAKDOWNS (Biểu đồ chi tiết - JSONB) ---
+    hourly_breakdown: Optional[Dict[str, int]] = {}             
+    payment_method_breakdown: Optional[Dict[str, int]] = {}      
+    cancel_reason_breakdown: Optional[Dict[str, int]] = {}       
+    location_distribution: Optional[List[LocationItem]] = []    
+    top_products: Optional[List[ProductItem]] = []              
+    
+    # --- 6. LOG TÀI CHÍNH (Chỉ có ở DailyAnalytics) ---
+    financial_events: Optional[List[FinancialEventItem]] = []
 
+    model_config = ConfigDict(from_attributes=True)
 class BrandWithKpis(BrandInfo):
     kpis: KpiSet
     model_config = ConfigDict(from_attributes=True)

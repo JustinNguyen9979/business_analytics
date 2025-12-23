@@ -63,6 +63,12 @@ class Order(Base):
     username = Column(String, index=True, nullable=True)
     total_quantity = Column(Integer, default=0)
     cogs = Column(Float, default=0.0) # Vẫn giữ lại để lưu giá vốn tại thời điểm bán
+    
+    # === CÁC CỘT TÀI CHÍNH TẠI THỜI ĐIỂM ĐẶT HÀNG (ESTIMATED) ===
+    gmv = Column(Float, default=0.0)            # Giá gốc (Giá trị đơn hàng trước KM)
+    selling_price = Column(Float, default=0.0)  # Giá bán (Khách phải trả)
+    subsidy_amount = Column(Float, default=0.0) # Tổng tiền trợ giá (Sàn + Shop)
+
     source = Column(String, nullable=False, index=True) # Nguồn (shopee, tiktok, ...)
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
     
@@ -108,7 +114,8 @@ class DailyStat(Base):
     date = Column(Date, index=True)
     
     # Các chỉ số quan trọng đã được tính toán sẵn
-    net_revenue = Column(Float, default=0.0)  # Doanh thu ròng
+    net_revenue = Column(Float, default=0.0)  # Doanh thu ròng (Thực nhận từ Revenue)
+    provisional_revenue = Column(Float, default=0.0) # Doanh thu tạm tính (Từ Order selling_price)
     gmv = Column(Float, default=0.0)          # Tổng GMV
     profit = Column(Float, default=0.0)       # Lợi nhuận
     total_cost = Column(Float, default=0.0)   # Tổng chi phí
@@ -198,6 +205,7 @@ class DailyAnalytics(Base):
     # ==========================================
     gmv = Column(Float, default=0.0)             # Tổng giá trị đơn hàng (chưa trừ gì hết)
     net_revenue = Column(Float, default=0.0)     # Doanh thu thực (GMV - Phí sàn)
+    provisional_revenue = Column(Float, default=0.0) # Doanh thu tạm tính (Từ Order selling_price)
     profit = Column(Float, default=0.0)          # Lợi nhuận gộp (Net Revenue - Giá vốn) - Đổi từ gross_profit
     # net_profit = Column(Float, default=0.0)      # Lợi nhuận ròng (Trừ hết sạch chi phí) - Tạm thời chưa dùng
     
@@ -274,6 +282,10 @@ class DailyAnalytics(Base):
     
     # Top sản phẩm bán chạy (Top SKU): [{"sku": "ABC", "name": "Áo thun", "quantity": 10, "revenue": 2000000}, ...]
     top_products = Column(JSONB, nullable=True)
+
+    # Nhật ký tài chính chi tiết (Log tiền về/hoàn tiền theo ngày thực tế):
+    # [{"date": "2023-12-18", "type": "income", "amount": 150000, "order_code": "A"}, ...]
+    financial_events = Column(JSONB, nullable=True)
 
     # Ràng buộc duy nhất: Một Brand, một Ngày, một Nguồn chỉ có 1 dòng dữ liệu
     __table_args__ = (

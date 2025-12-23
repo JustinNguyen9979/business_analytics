@@ -225,8 +225,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                         total_quantity += quantity
                         
                         # Lấy giá bán (SKU Price) từ file import
-                        # Ưu tiên cột 'sku_price', nếu không có thì thử 'price'
-                        raw_price = row.get('sku_price') if 'sku_price' in row else row.get('price')
+                        raw_price = row.get('sku_price')
                         price = to_float(raw_price)
 
                         # Tạo item dict chuẩn hóa
@@ -268,6 +267,9 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     orders_to_insert.append({ 
                         "order_code": order_code, 
                         "tracking_id": tracking_id_val,
+                        "gmv": to_float(first_row.get('gmv')),
+                        "selling_price": to_float(first_row.get('selling_price')),
+                        "subsidy_amount": to_float(first_row.get('subsidy_amount')),
                         "order_date": parse_datetime(first_row.get('order_date')),
                         "shipped_time": shipped_time_val, 
                         "delivered_date": delivered_date_val,
