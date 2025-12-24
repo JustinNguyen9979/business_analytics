@@ -31,9 +31,18 @@ export const formatNumber = (value) => {
  * @param {number} value - Số cần định dạng (ví dụ: 0.15 cho 15%).
  * @returns {string} Chuỗi đã định dạng, ví dụ: "15.00%".
  */
-export const formatPercentage = (value) => {
+export const formatPercentage = (value, options = {}) => {
     if (typeof value !== 'number' || !isFinite(value)) {
         return '0.00%';
     }
-    return (value * 100).toFixed(2) + '%';
+    
+    let finalValue = value * 100;
+
+    // Nếu includeSign = false, ta lấy trị tuyệt đối để không hiện dấu âm
+    // (Thường dùng khi đã có icon mũi tên chỉ hướng tăng/giảm)
+    if (options.includeSign === false) {
+        finalValue = Math.abs(finalValue);
+    }
+
+    return finalValue.toFixed(2) + '%';
 };

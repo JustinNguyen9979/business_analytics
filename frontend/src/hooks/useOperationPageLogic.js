@@ -42,14 +42,14 @@ export const useOperationPageLogic = () => {
             key: 'completion_rate', 
             title: "Tỷ lệ hoàn thành", 
             max: 100, 
-            unit: "%", 
+            unit: " %", 
             thresholds: [90, 80],           // Xanh > 90, Vàng > 80, Đỏ < 80
             reversecolors: false,
             color: theme.palette.success.main },
         { 
             key: 'cancellation_rate', 
             title: "Tỷ lệ hủy", max: 100, 
-            unit: "%", 
+            unit: " %", 
             thresholds: [5, 10],            // Xanh < 5, Vàng < 10, Đỏ > 10
             reversecolors: true,
             color: theme.palette.error.main 
@@ -57,8 +57,9 @@ export const useOperationPageLogic = () => {
         { 
             key: 'post_shipment_issues_rate', 
             title: "Tỷ lệ Hoàn/Bom", 
-            max: 100, unit: "%", 
+            max: 100, unit: " %", 
             isStacked: true,
+            color: theme.palette.warning.main,
             colorBom: theme.palette.warning.main,
             colorRefund: theme.palette.error.main
         }
@@ -95,15 +96,15 @@ export const useOperationPageLogic = () => {
                     console.warn("API Error, mocking:", apiErr);
                     // Mock data dự phòng để không crash UI
                     apiResponse = { 
-                        avgProcessingTime: 0, 
-                        avgShippingTime: 0, 
-                        completionRate: 0, 
-                        cancellationRate: 0, 
-                        totalOrders: 0, 
-                        refundRate: 0, 
-                        bombRate: 0,
-                        cancelledOrders: 0,
-                        refundedOrders: 0
+                        avg_processing_time: 0, 
+                        avg_shipping_time: 0, 
+                        completion_rate: 0, 
+                        cancellation_rate: 0, 
+                        total_orders: 0, 
+                        refund_rate: 0, 
+                        bomb_rate: 0,
+                        cancelled_orders: 0,
+                        refunded_orders: 0
                     };
                 }
 
@@ -111,13 +112,13 @@ export const useOperationPageLogic = () => {
                     let val = apiResponse[config.key] !== undefined ? apiResponse[config.key] : 0;
                     
                     // Nếu đơn vị là %, nhân 100 để hiển thị đúng trên Gauge
-                    if (config.unit === '%') {
+                    if (config.unit.trim() === '%') {
                         val = val * 100;
                     }
 
                     if (config.isStacked) {
-                        const bombRate = (apiResponse.bombRate || 0) * 100;
-                        const refundRate = (apiResponse.refundRate || 0) * 100;
+                        const bombRate = (apiResponse.bomb_rate || 0) * 100;
+                        const refundRate = (apiResponse.refund_rate || 0) * 100;
 
                         const segmentsData = [
                             {
@@ -132,9 +133,23 @@ export const useOperationPageLogic = () => {
                             }
                         ]
                         const combinedRate = parseFloat((bombRate + refundRate).toFixed(1));
+                        
+                        // Logic scale Max thông minh:
+                        let dynamicMax = 100;
+                        if (combinedRate <= 5) {
+                            dynamicMax = 10;
+                        } else if (combinedRate <= 10) {
+                            dynamicMax = 20;
+                        } else if (combinedRate <= 25) {
+                            dynamicMax = 50;
+                        } else {
+                            dynamicMax = 100;
+                        }
+
                         return {
                             ...config,
                             value: combinedRate,
+                            max: dynamicMax,
                             segments: segmentsData,
                             previousValue: null
                         };
@@ -142,7 +157,7 @@ export const useOperationPageLogic = () => {
 
                     return {
                         ...config,
-                        value: val,
+                        value: parseFloat(Number(val).toFixed(1)),
                         previousValue: null
                     };
                 });

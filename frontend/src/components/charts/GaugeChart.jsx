@@ -9,9 +9,9 @@ const GaugeChart = ({
     max = 100,
     title = "Metric",
     unit = "",
-    previousValue = null, // Giữ lại tính năng so sánh cũ
-    segments = null,      // Mới: Cho Stacked (Bom/Hoàn)
-    thresholds = null,    // Mới: Cho Dynamic Color
+    previousValue = null, 
+    segments = null,      
+    thresholds = null,    
     reverseColors = false,
     height = 220,
     color = null
@@ -62,7 +62,6 @@ const GaugeChart = ({
     }
 
     // --- 2. LOGIC SO SÁNH (PREVIOUS VALUE) ---
-    // Giữ lại tính năng này để không ảnh hưởng các chart cũ
     let delta = 0;
     let isIncrease = false;
     let showDelta = false;
@@ -98,7 +97,6 @@ const GaugeChart = ({
                             <Cell key={`cell-${index}`} fill={customColors[index]} />
                         ))}
                     </Pie>
-                    <Tooltip formatter={(val) => [val + unit]} />
                 </PieChart>
             </ResponsiveContainer>
 
@@ -108,7 +106,7 @@ const GaugeChart = ({
                     {Number(needleValue).toLocaleString()}{unit}
                 </Typography>
 
-                {/* HIỂN THỊ SO SÁNH (DELTA) - GIỐNG CHART CŨ */}
+                {/* HIỂN THỊ SO SÁNH (DELTA) */}
                 {showDelta && (
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mt: 0.5, color: isIncrease ? theme.palette.success.main : theme.palette.error.main }}>
                         {isIncrease ? <ArrowUpwardIcon fontSize="small" /> : <ArrowDownwardIcon fontSize="small" />}
