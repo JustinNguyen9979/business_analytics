@@ -288,11 +288,12 @@ def read_brand_kpis(
 def read_brand_daily_kpis(
     start_date: date, 
     end_date: date, 
+    source: List[str] = Query(None), # Thêm tham số source
     brand: models.Brand = Depends(get_brand_from_slug),
     db: Session = Depends(get_db)
 ):
-    """Lấy dữ liệu KPI hàng ngày cho việc vẽ biểu đồ."""
-    daily_data = crud.get_daily_kpis_for_range(db, brand.id, start_date, end_date)
+    """Lấy dữ liệu KPI hàng ngày cho việc vẽ biểu đồ, có hỗ trợ lọc theo nguồn."""
+    daily_data = crud.get_daily_kpis_for_range(db, brand.id, start_date, end_date, source_list=source)
     return {"data": daily_data}
 
 @app.get("/brands/{brand_slug}/top-products", response_model=List[schemas.TopProduct])
@@ -351,21 +352,27 @@ def get_operation_kpis (
     total_shipping_time = 0
     total_completion_rate = 0
     total_cancellation_rate = 0
+    total_refund_rate = 0
+    total_bomb_rate = 0
     total_orders = 0
 
     count_days = len(daily_kpis_list)
 
     for daily_kpi in daily_kpis_list:
-        total_processing_time += daily_kpi.get('avgProcessingTime', 0)
-        total_shipping_time += daily_kpi.get('avgShippingTime', 0)
-        total_completion_rate += daily_kpi.get('completionRate', 0)
-        total_cancellation_rate += daily_kpi.get('cancellationRate', 0)
-        total_orders += daily_kpi.get('totalOrders', 0) # Lấy tổng số đơn hàng
+        total_processing_time += daily_kpi.get('avg_processing_time', 0)
+        total_shipping_time += daily_kpi.get('avg_shipping_time', 0)
+        total_completion_rate += daily_kpi.get('completion_rate', 0)
+        total_cancellation_rate += daily_kpi.get('cancellation_rate', 0)
+        total_refund_rate += daily_kpi.get('refund_rate', 0)
+        total_bomb_rate += daily_kpi.get('bomb_rate', 0)
+        total_orders += daily_kpi.get('total_orders', 0) # Lấy tổng số đơn hàng
 
     avg_processing_time = (total_processing_time / count_days) if count_days > 0 else 0
     avg_shipping_time = (total_shipping_time / count_days) if count_days > 0 else 0
     avg_completion_rate = (total_completion_rate / count_days) if count_days > 0 else 0
     avg_cancellation_rate = (total_cancellation_rate / count_days) if count_days > 0 else 0
+    avg_refund_rate = (total_refund_rate / count_days) if count_days > 0 else 0
+    avg_bomb_rate = (total_bomb_rate / count_days) if count_days > 0 else 0
     avg_daily_orders = (total_orders / count_days) if count_days > 0 else 0
 
     return schemas.OperationKpisResponse(
@@ -373,5 +380,7 @@ def get_operation_kpis (
         avg_shipping_time=avg_shipping_time,
         completion_rate=avg_completion_rate,
         cancellation_rate=avg_cancellation_rate,
+        refund_rate=avg_refund_rate,
+        bomb_rate=avg_bomb_rate,
         avg_daily_orders=avg_daily_orders,
     )

@@ -95,14 +95,15 @@ export const useOperationPageLogic = () => {
                     console.warn("API Error, mocking:", apiErr);
                     // Mock data dự phòng để không crash UI
                     apiResponse = { 
-                        avg_processing_time: 0, 
-                        avg_shipping_time: 0, 
-                        completion_rate: 0, 
-                        cancellation_rate: 0, 
-                        total_orders: 0, 
-                        refund_rate: 0, 
-                        cancelled_orders: 0,
-                        refunded_orders: 0
+                        avgProcessingTime: 0, 
+                        avgShippingTime: 0, 
+                        completionRate: 0, 
+                        cancellationRate: 0, 
+                        totalOrders: 0, 
+                        refundRate: 0, 
+                        bombRate: 0,
+                        cancelledOrders: 0,
+                        refundedOrders: 0
                     };
                 }
 
@@ -115,8 +116,8 @@ export const useOperationPageLogic = () => {
                     }
 
                     if (config.isStacked) {
-                        const bombRate = (apiResponse.bomb_rate || 0) * 100;
-                        const refundRate = (apiResponse.refund_rate || 0) * 100;
+                        const bombRate = (apiResponse.bombRate || 0) * 100;
+                        const refundRate = (apiResponse.refundRate || 0) * 100;
 
                         const segmentsData = [
                             {

@@ -137,6 +137,36 @@ export const useDashboardData = (brandSlug, filters) => {
 
         const fetchLineChart = async () => {
             updateState('lineChart', { loading: true, error: null });
+            
+            // --- XỬ LÝ 1: NẾU KHÔNG CHỌN SOURCE NÀO (Empty Array) ---
+            // "Bắt event" ngay tại đây: Không gọi API, tự tạo data 0 trả về luôn.
+            if (Array.isArray(filter.source) && filter.source.length === 0) {
+                const [start, end] = filter.range;
+                const zeroData = [];
+                let curr = start.clone();
+                while (curr.isBefore(end) || curr.isSame(end, 'day')) {
+                    zeroData.push({
+                        date: curr.format('YYYY-MM-DD'),
+                        net_revenue: 0, profit: 0, gmv: 0, total_cost: 0, ad_spend: 0, cogs: 0, execution_cost: 0
+                    });
+                    curr = curr.add(1, 'day');
+                }
+                
+                // Giả lập dữ liệu kỳ trước cũng bằng 0
+                const prevZeroData = zeroData.map(d => ({ ...d })); 
+
+                updateState('lineChart', { 
+                    data: {
+                        current: zeroData,
+                        previous: prevZeroData,
+                        aggregationType: 'day',
+                    }, 
+                    loading: false 
+                });
+                return; // Dừng, không gọi API nữa
+            }
+
+            // --- XỬ LÝ 2: GỌI API BÌNH THƯỜNG ---
             const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
             try {
                 // ĐÃ SỬA: Truyền thêm filter.source vào params

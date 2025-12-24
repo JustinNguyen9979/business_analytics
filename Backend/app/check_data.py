@@ -46,17 +46,18 @@ def check_daily_logic(brand_id, target_date_str):
         rev_map = {}
         for r in revenues:
             if r.order_code not in rev_map:
-                rev_map[r.order_code] = {"net_revenue": 0, "refund": 0, "total_fees": 0}
+                rev_map[r.order_code] = {"net_revenue": 0, "refund": 0, "total_fees": 0, "gmv": 0}
             rev_map[r.order_code]["net_revenue"] += (r.net_revenue or 0)
             rev_map[r.order_code]["refund"] += (r.refund or 0)
             rev_map[r.order_code]["total_fees"] += (r.total_fees or 0) # Phí sàn/thực thi
+            rev_map[r.order_code]["gmv"] += (r.gmv or 0)
 
         calc_stats = {
             "completed": 0, "cancelled": 0, "bomb": 0, "refunded": 0, 
             "revenue": 0, "gmv": 0, "execution_cost": 0
         }
 
-        print(f"{'MÃ ĐƠN':<20} | {'STATUS GỐC':<15} | {'GMV':<10} | {'REVENUE':<10} | {'COST':<8} | {'REFUND':<8} | {'-> STATUS':<12} | {'GHI CHÚ'}")
+        print(f"{'MÃ ĐƠN':<20} | {'STATUS GỐC':<15} | {'GMV (Rev)':<10} | {'REVENUE':<10} | {'COST':<8} | {'REFUND':<8} | {'-> STATUS':<12} | {'GHI CHÚ'}")
         print("-" * 115)
 
         for order in orders:
@@ -64,14 +65,12 @@ def check_daily_logic(brand_id, target_date_str):
             status_goc = order.status or "None"
             
             # Lấy thông tin tài chính
-            fin_info = rev_map.get(code, {"net_revenue": 0, "refund": 0, "total_fees": 0})
+            fin_info = rev_map.get(code, {"net_revenue": 0, "refund": 0, "total_fees": 0, "gmv": 0})
             rev_val = fin_info["net_revenue"]
             refund_val = fin_info["refund"]
             fees_val = abs(fin_info["total_fees"]) # Cost luôn dương để dễ nhìn
+            gmv_val = fin_info["gmv"] # Lấy GMV từ Revenue
             
-            # Lấy GMV từ Order
-            gmv_val = order.gmv or 0
-
             # GIẢ LẬP LOGIC CỦA HỆ THỐNG
             # 1. Check refund để quyết định status
             has_refund = refund_val < 0

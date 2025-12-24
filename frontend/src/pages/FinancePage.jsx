@@ -38,22 +38,27 @@ const KpiCardSkeleton = () => (
 );
 
 function FinancePage() {
-    const theme = useTheme(); // Use theme here for consistency
+    const theme = useTheme(); 
     const {
         // State
-        sourceOptions, selectedSources, isConfigOpen, setIsConfigOpen,
-        dateRange, dateLabel, anchorEl, visibleSeriesKeys,
+        sourceOptions, selectedSources, barSelectedSources,
+        isLineConfigOpen, setIsLineConfigOpen,
+        isBarConfigOpen, setIsBarConfigOpen,
+        dateRange, dateLabel, anchorEl, 
+        lineVisibleKeys, barVisibleKeys,
         
         // Handlers
-        handleToggleSource, handleOpenFilter, handleCloseFilter, 
-        handleApplyDateRange, handleToggleSeries,
+        handleToggleSource, handleToggleBarSource, 
+        handleOpenFilter, handleCloseFilter, 
+        handleApplyDateRange, 
+        handleToggleLineSeries, handleToggleBarSeries,
 
         // Data
-        lineChart, platformData, kpiCards,
+        lineChart, platformData, barChartData, kpiCards,
         loading, error,
 
         // Configs
-        comparisonChartSeries, allAvailableSeries, filteredLineChartSeries, cardConfigs
+        allAvailableSeries, filteredLineChartSeries, filteredBarChartSeries, cardConfigs
     } = useFinancePageLogic();
 
     return (
@@ -69,8 +74,8 @@ function FinancePage() {
                         startIcon={<CalendarTodayIcon />}
                         onClick={handleOpenFilter}
                         sx={{ 
-                            color: theme.palette.primary.main, // Sử dụng theme
-                            borderColor: theme.palette.primary.main, // Sử dụng theme
+                            color: theme.palette.primary.main, 
+                            borderColor: theme.palette.primary.main, 
                             borderRadius: 2
                          }}
                     >
@@ -110,36 +115,97 @@ function FinancePage() {
                 ))}
             </Box>
 
-            {/* --- BIỂU ĐỒ ĐƯỜNG --- */}
-            <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4 }}>
-                <Typography sx={{ fontWeight: 600, mb: 2 }} variant="h6" noWrap>So sánh Tài chính giữa các Nền tảng</Typography>
+            {/* --- 1. BIỂU ĐỒ BAR CHART (SO SÁNH NỀN TẢNG) --- */}
+            <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4, position: 'relative', overflow: 'hidden' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, px: 2, pt: 2 }}>
+                    <Typography sx={{ fontWeight: 600 }} variant="h6" noWrap>So sánh Tài chính giữa các Nền tảng</Typography>
+                    
+                    {/* Nút Cấu hình riêng cho Bar Chart */}
+                    <Tooltip title="Cấu hình hiển thị">
+                        <IconButton 
+                            onClick={() => setIsBarConfigOpen(true)}
+                            sx={{ 
+                                border: `1px solid ${theme.palette.divider}`,
+                                borderRadius: 2,
+                                color: isBarConfigOpen ? theme.palette.primary.main : theme.palette.text.secondary,
+                                bgcolor: isBarConfigOpen ? theme.palette.primary.main + '20' : 'transparent',
+                                '&:hover': {
+                                    color: theme.palette.primary.main,
+                                    borderColor: theme.palette.primary.main,
+                                }
+                            }}
+                        >
+                            <SettingsIcon />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
+
                 <Box sx={{ height: 600, mb: 4 }}>
-                    {loading && platformData.length === 0 ? (
+                    {loading && barChartData.length === 0 ? (
                         <Skeleton variant="rectangular" width="100%" height="100%" sx={{ borderRadius: 4 }} />
                     ) : (
                         <>
-                            {loading && platformData.length > 0 && <LoadingOverlay borderRadius={4} />}
+                            {loading && barChartData.length > 0 && <LoadingOverlay borderRadius={4} />}
                             
                             <FinanceComparisonChart
-                                data={platformData}
-                                series={comparisonChartSeries}
+                                data={barChartData}
+                                series={filteredBarChartSeries}
                             />
                         </>
                     )}
                 </Box>
+
+                {/* Panel Cấu hình riêng cho Bar Chart */}
+                <ChartSettingsPanel
+                    open={isBarConfigOpen}
+                    onClose={() => setIsBarConfigOpen(false)}
+                    title="Cấu hình Biểu đồ Cột"
+                >
+                    <ChartSettingSection title="Chỉ số hiển thị">
+                        {allAvailableSeries.map(series => (
+                            <ChartSettingItem
+                                key={series.key}
+                                label={series.name}
+                                color={series.color}
+                                checked={barVisibleKeys.includes(series.key)}
+                                onChange={() => handleToggleBarSeries(series.key)}
+                                isSwitch={true}
+                            />
+                        ))}
+                    </ChartSettingSection>
+
+                    <ChartSettingSection title="Nguồn dữ liệu">
+                        <ChartSettingItem
+                            label="Tất cả nguồn"
+                            checked={barSelectedSources.includes('all')}
+                            onChange={() => handleToggleBarSource('all')}
+                        />
+                        {sourceOptions.map(option => (
+                            <ChartSettingItem
+                                key={option.value}
+                                label={option.label}
+                                checked={barSelectedSources.includes('all') || barSelectedSources.includes(option.value)}
+                                onChange={() => handleToggleBarSource(option.value)}
+                            />
+                        ))}
+                    </ChartSettingSection>
+                </ChartSettingsPanel>
             </Paper>
 
+            {/* --- 2. BIỂU ĐỒ LINE CHART (XU HƯỚNG) --- */}
             <Paper variant="glass" elevation={0} sx={{ p: 1, mb: 4, position: 'relative', overflow: 'hidden' }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, px: 2, pt: 2 }}>
                     <Typography variant="h6" sx={{ fontWeight: 600 }}>Biểu đồ xu hướng</Typography>
+                    
+                    {/* Nút Cấu hình riêng cho Line Chart */}
                     <Tooltip title="Cấu hình hiển thị">
                         <IconButton 
-                            onClick={() => setIsConfigOpen(true)}
+                            onClick={() => setIsLineConfigOpen(true)}
                             sx={{ 
-                                border: `1px solid ${theme.palette.divider}`, // Sử dụng theme
+                                border: `1px solid ${theme.palette.divider}`,
                                 borderRadius: 2,
-                                color: isConfigOpen ? theme.palette.primary.main : theme.palette.text.secondary, // Sử dụng theme
-                                bgcolor: isConfigOpen ? theme.palette.primary.main + '20' : 'transparent', // Sử dụng theme (thêm 20 cho độ mờ)
+                                color: isLineConfigOpen ? theme.palette.primary.main : theme.palette.text.secondary,
+                                bgcolor: isLineConfigOpen ? theme.palette.primary.main + '20' : 'transparent',
                                 '&:hover': {
                                     color: theme.palette.primary.main,
                                     borderColor: theme.palette.primary.main,
@@ -170,10 +236,11 @@ function FinancePage() {
                     )}
                 </Box>
 
+                {/* Panel Cấu hình riêng cho Line Chart */}
                 <ChartSettingsPanel
-                    open={isConfigOpen}
-                    onClose={() => setIsConfigOpen(false)}
-                    title="Cấu hình biểu đồ"
+                    open={isLineConfigOpen}
+                    onClose={() => setIsLineConfigOpen(false)}
+                    title="Cấu hình Biểu đồ Đường"
                 >
                     <ChartSettingSection title="Chỉ số hiển thị">
                         {allAvailableSeries.map(series => (
@@ -181,8 +248,8 @@ function FinancePage() {
                                 key={series.key}
                                 label={series.name}
                                 color={series.color}
-                                checked={visibleSeriesKeys.includes(series.key)}
-                                onChange={() => handleToggleSeries(series.key)}
+                                checked={lineVisibleKeys.includes(series.key)}
+                                onChange={() => handleToggleLineSeries(series.key)}
                                 isSwitch={true}
                             />
                         ))}
@@ -211,8 +278,8 @@ function FinancePage() {
                 {(() => {
                     const isExpanded = platformData.length > 5;
                     const chartBoxSx = isExpanded
-                        ? { width: 'calc(33.333% - 16px)' } // ~3 cột mỗi hàng
-                        : { flex: '1 1 300px' };             // Co giãn linh hoạt
+                        ? { width: 'calc(33.333% - 16px)', height: 350 }
+                        : { flex: '1 1 300px', height: 350 };             
 
                     if (loading) {
                         return Array.from(new Array(5)).map((_, index) => (

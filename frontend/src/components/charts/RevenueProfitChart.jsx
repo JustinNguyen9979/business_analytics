@@ -1,413 +1,222 @@
-// FILE: frontend/src/components/charts/RevenueProfitChart.jsx (PHIÊN BẢN ANIMATION "CHẠY TỪ DƯỚI LÊN")
-
-import React, { useState, useEffect, useRef } from 'react';
-import Plot from 'react-plotly.js';
-import Plotly from 'plotly.js/dist/plotly-cartesian';
+import React, { useMemo } from 'react';
+import {
+    ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area
+} from 'recharts';
 import { useTheme } from '@mui/material/styles';
-import { Paper, Typography, Box } from '@mui/material';
-import isoWeek from 'dayjs/plugin/isoWeek';
-import weekOfYear from 'dayjs/plugin/weekOfYear';
-import advancedFormat from 'dayjs/plugin/advancedFormat';
+import { Box, Typography, Paper } from '@mui/material';
 import dayjs from 'dayjs';
-import ChartPlaceholder from '../common/ChartPlaceholder';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import { formatCurrency } from '../../utils/formatters';
 
 dayjs.extend(isoWeek);
-dayjs.extend(weekOfYear);
-dayjs.extend(advancedFormat);
 
-// Hàm "Easing" để animation mượt hơn (bắt đầu chậm, tăng tốc rồi chậm lại ở cuối)
-const easeInOutCubic = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+function RevenueProfitChart({ data, comparisonData, series = [], aggregationType, isLoading }) {
+    const theme = useTheme();
 
-function RevenueProfitChart({ data, comparisonData, chartRevision, aggregationType, series = [], isLoading, selectedDateRange }) {
-    
-        const theme = useTheme();
-        const [animatedData, setAnimatedData] = useState([]);
-        const animationFrameId = useRef(null);
-        const chartContainerRef = useRef(null);
-        
-        // Tạo key duy nhất dựa trên ngày bắt đầu để force re-mount
-        const chartKey = `${chartRevision}-${selectedDateRange?.[0]?.toString() || 'init'}-${aggregationType}`;
+    // 1. CHUẨN BỊ DỮ LIỆU
+    const chartData = useMemo(() => {
+        if (!data || data.length === 0) return [];
 
-    useEffect(() => {
-        // Hủy animation cũ nếu có
-        if (animationFrameId.current) {
-            cancelAnimationFrame(animationFrameId.current);
-        }
-        
-        // RESET LOGIC: Nếu data thay đổi, ta xóa sạch chart cũ trước để tránh "kẹt"
-        setAnimatedData([]);
+        // Map dữ liệu hiện tại
+        return data.map((item, index) => {
+            const dateStr = item.date;
+            const dataPoint = {
+                date: dateStr,
+                // Format ngày hiển thị cho trục X
+                displayDate: aggregationType === 'month' 
+                    ? dayjs(dateStr).format('MM/YYYY') 
+                    : aggregationType === 'week' 
+                        ? `W${dayjs(dateStr).isoWeek()}` 
+                        : dayjs(dateStr).format('DD/MM'),
+                originalDate: dayjs(dateStr), // Dùng để sort nếu cần
+            };
 
-        // --- HÀM TẠO CẤU TRÚC DỮ LIỆU ---
-        const createChartTraces = (currentData, comparisonData, series) => {
-            const currentPoints = currentData;
-            const currentDates = currentData.map(d => dayjs(d.date).toDate());
-
-            const comparisonPoints = comparisonData || [];
-            let dateOffset = 0;
-            if (currentData.length > 0 && comparisonData && comparisonData.length > 0) {
-                dateOffset = dayjs(currentData[0].date).diff(dayjs(comparisonData[0].date), 'milliseconds');
-            }
-            const comparisonDates = comparisonPoints.map(d => dayjs(d.date).add(dateOffset, 'milliseconds').toDate());
-
-            return series.flatMap ( s => {
-                // SANITIZE: Ép kiểu số an toàn, loại bỏ NaN/null/undefined
-                const currentValues = currentPoints.map(d => {
-                    const val = Number(d[s.key]);
-                    return Number.isFinite(val) ? val : 0;
-                });
-                
-                const comparisonValues = comparisonPoints.map(d => {
-                     const val = Number(d[s.key]);
-                     return Number.isFinite(val) ? val : 0;
-                });
-
-                const comparisonTrace = {
-                    x: comparisonDates,
-                    y: comparisonValues,
-                    type: 'scatter',
-                    mode: 'lines',
-                    name: `${s.name} (Kỳ trước)`,
-                    line: {color: s.color, width: 2, dash: 'dot'},
-                    opacity: 0.6,
-                    connectgaps: false,
-                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">${s.name} (Kỳ trước): </span><b style="color: ${s.color};">%{y:,.0f} đ</b><extra></extra>`, 
-                };
-
-                const currentTrace = {
-                    x: currentDates,
-                    y: currentValues,
-                    type: 'scatter',
-                    mode: 'lines+markers',
-                    name: s.name,
-                    line: { color: s.color, width: 2 },
-                    marker: { color: s.color, size: 5 },
-                    connectgaps: false,
-                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">${s.name}: </span><b style="color: ${s.color};">%{y:,.0f} đ</b><extra></extra>`,
-                };
-                
-                // Chỉ ẩn comparison nếu toàn bộ giá trị thực sự là 0 hoặc null
-                if (comparisonValues.every(v => v === 0)) {
-                    return [currentTrace];
-                }
-
-                return [comparisonTrace, currentTrace];
+            // Map các chỉ số chính (Current)
+            series.forEach(s => {
+                dataPoint[s.key] = Number(item[s.key]) || 0;
             });
-        };
 
-        // --- LOGIC ANIMATION MỚI SỬ DỤNG requestAnimationFrame ---
-        const finalTraces = createChartTraces(data, comparisonData, series);
-        
-        // DEBUG: Kiểm tra dữ liệu trace cuối cùng
-        // console.log("Final Traces Prepared:", finalTraces);
-
-        const duration = 1200;
-        let startTime = null;
-
-        const animate = (timestamp) => {
-            if (!startTime) startTime = timestamp;
-            const elapsed = timestamp - startTime;
-            const rawProgress = Math.min(elapsed / duration, 1);
-            const progress = easeInOutCubic(rawProgress);
-
-            const currentFrameData = finalTraces.map(trace => ({
-                ...trace,
-                y: trace.y.map(endValue => endValue * progress),
-            }));
-            
-            setAnimatedData(currentFrameData);
-
-            if (rawProgress < 1) {
-                animationFrameId.current = requestAnimationFrame(animate);
+            // Map dữ liệu so sánh (Previous) - Ghép theo index
+            // Lưu ý: Cách ghép này giả định số lượng điểm dữ liệu tương đương nhau
+            if (comparisonData && comparisonData[index]) {
+                series.forEach(s => {
+                    dataPoint[`${s.key}_prev`] = Number(comparisonData[index][s.key]) || 0;
+                });
             }
-        };
 
-        // FIX: Dùng setTimeout để đẩy việc bắt đầu animation sang frame tiếp theo,
-        // đảm bảo state setAnimatedData([]) đã được thực thi và UI đã clear.
-        const timer = setTimeout(() => {
-             animationFrameId.current = requestAnimationFrame(animate);
-        }, 50);
+            return dataPoint;
+        });
+    }, [data, comparisonData, series, aggregationType]);
 
-        return () => {
-            clearTimeout(timer); // Clear timeout
-            if (animationFrameId.current) {
-                cancelAnimationFrame(animationFrameId.current);
-            }
-        };
+    // 1.5 TÍNH TOÁN MAX VALUE ĐỂ SCALE TRỤC Y THỦ CÔNG (An toàn hơn callback của Recharts)
+    const maxYValue = useMemo(() => {
+        if (!chartData || chartData.length === 0) return 0;
+        let max = 0;
+        chartData.forEach(point => {
+            series.forEach(s => {
+                const val = point[s.key] || 0;
+                const prevVal = point[`${s.key}_prev`] || 0;
+                max = Math.max(max, val, prevVal);
+            });
+        });
+        return max;
+    }, [chartData, series]);
 
-    }, [data, comparisonData, theme, series, isLoading, selectedDateRange]); // Thêm selectedDateRange vào dependency
+    // 2. CONFIG FORMAT TRỤC
+    const formatYAxis = (value) => {
+        if (value >= 1000000000) return (value / 1000000000).toFixed(1) + 'B';
+        if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+        if (value >= 1000) return (value / 1000).toFixed(0) + 'k';
+        return value;
+    };
 
+    // 3. CUSTOM TOOLTIP
+    const CustomTooltip = ({ active, payload, label }) => {
+        if (active && payload && payload.length) {
+            // Lấy ngày đầy đủ từ payload đầu tiên
+            const fullDate = payload[0].payload.date;
+            const dateLabel = aggregationType === 'month' 
+                ? dayjs(fullDate).format('Tháng MM, YYYY')
+                : dayjs(fullDate).format('DD/MM/YYYY');
 
-    // --- PHẦN LAYOUT ---
-
-    const allYValues = series.flatMap(s => [
-        ...(data?.map(d => d[s.key]) || []),
-        ...(comparisonData?.map(d => d[s.key]) || [])
-    ]).filter(v => typeof v === 'number');
-
-    // 2. Tìm giá trị LỚN NHẤT và NHỎ NHẤT
-    let maxY = 0;
-    let minY = 0;
-    
-    if (allYValues.length > 0) {
-        const safeValues = allYValues.filter(v => Number.isFinite(v));
-        if (safeValues.length > 0) {
-            maxY = Math.max(...safeValues);
-            minY = Math.min(...safeValues);
+            return (
+                <Box sx={{ 
+                    bgcolor: 'rgba(22, 27, 34, 0.95)', 
+                    border: `1px solid ${theme.palette.divider}`,
+                    borderRadius: 2, 
+                    p: 2, 
+                    boxShadow: theme.shadows[4],
+                    minWidth: 200
+                }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, color: theme.palette.text.primary, borderBottom: `1px solid ${theme.palette.divider}`, pb: 1 }}>
+                        {dateLabel}
+                    </Typography>
+                    {payload.map((entry, index) => {
+                        // Bỏ qua các dòng ẩn (nếu có)
+                        if (entry.value === undefined || entry.value === null) return null;
+                        
+                        const isComparison = entry.dataKey.endsWith('_prev');
+                        const baseKey = isComparison ? entry.dataKey.replace('_prev', '') : entry.dataKey;
+                        const seriesConfig = series.find(s => s.key === baseKey);
+                        const name = seriesConfig ? seriesConfig.name : entry.name;
+                        
+                        return (
+                            <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, gap: 2 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Box sx={{ 
+                                        width: 12, height: 4, 
+                                        borderRadius: 1, 
+                                        bgcolor: entry.color,
+                                        opacity: isComparison ? 0.6 : 1 
+                                    }} />
+                                    <Typography variant="body2" sx={{ color: isComparison ? theme.palette.text.secondary : theme.palette.text.primary, fontStyle: isComparison ? 'italic' : 'normal' }}>
+                                        {name} {isComparison ? '(Kỳ trước)' : ''}:
+                                    </Typography>
+                                </Box>
+                                <Typography variant="body2" sx={{ fontWeight: 600, color: entry.color }}>
+                                    {formatCurrency(entry.value)}
+                                </Typography>
+                            </Box>
+                        );
+                    })}
+                </Box>
+            );
         }
+        return null;
+    };
+
+    if (isLoading && (!chartData || chartData.length === 0)) {
+        return null; // Skeleton handled by parent
     }
 
-    // --- LOGIC QUAN TRỌNG: ĐỊNH HÌNH QUY MÔ TIỀN TỆ ---
-    // Nếu doanh thu < 10 Triệu (hoặc bằng 0), ta ép biểu đồ hiển thị khung 0 - 10 Triệu.
-    // Điều này giúp biểu đồ luôn "ra dáng" tiền tệ, không bị hiển thị lèo tèo 1, 2 đồng.
-    const MIN_MONETARY_SCALE = 10000000; // 10 Triệu
-    if (maxY < MIN_MONETARY_SCALE) {
-        maxY = MIN_MONETARY_SCALE;
-    }
-
-    // 3. Tính toán khoảng đệm (padding) để biểu đồ không bị sát lề
-    // ... (Giữ nguyên logic cũ) ...
-    const padding = maxY * 0.1; // Padding đơn giản 10%
-
-    // --- THUẬT TOÁN CHIA VẠCH THÔNG MINH (SMART TICKS) ---
-    // Giúp biểu đồ tự động co giãn nhưng vẫn giữ được mốc số đẹp và format chuẩn Việt Nam (B, M, k)
-    
-    const calculateSmartTicks = (minVal, maxVal) => {
-        // 1. Xác định đỉnh mong muốn của biểu đồ (Target Max)
-        // Phải lớn hơn dữ liệu thật ít nhất 10% để thoáng mắt (tránh mất chóp)
-        // Và tối thiểu phải là 10 Triệu (khi dữ liệu nhỏ)
-        const MIN_MONETARY_SCALE_FOR_DISPLAY = 10000000; // 10 Triệu
-        let targetMax = Math.max(maxVal * 1.1, MIN_MONETARY_SCALE_FOR_DISPLAY);
-        const effectiveMin = Math.max(0, minVal); 
-        
-        // 2. Tính khoảng cách sơ bộ (chia làm 5-6 khoảng)
-        const targetTickCount = 5;
-        const rawStep = (targetMax - effectiveMin) / targetTickCount;
-        
-        // 3. Làm tròn bước nhảy (step) về các số đẹp
-        const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
-        const normalizedStep = rawStep / magnitude;
-        
-        let niceStep;
-        if (normalizedStep < 1.5) niceStep = 1;
-        else if (normalizedStep < 3) niceStep = 2;
-        else if (normalizedStep < 7) niceStep = 5;
-        else niceStep = 10;
-        
-        const step = niceStep * magnitude;
-        
-        // 4. Sinh ra các tick
-        let ticks = [];
-        let labels = [];
-        
-        // Bắt đầu từ 0 (hoặc làm tròn xuống)
-        // Ví dụ: min=0 -> start=0. min=100 -> start=0.
-        let currentTick = Math.floor(effectiveMin / step) * step;
-        
-        // Chạy cho đến khi vượt qua targetMax
-        // Điều kiện này đảm bảo tick cuối cùng luôn cao hơn dữ liệu thật -> Không bao giờ mất chóp
-        while (currentTick <= targetMax + step) { 
-            ticks.push(currentTick);
-            
-            // Format label
-            let label = '';
-            if (currentTick === 0) label = '0';
-            else if (currentTick >= 1000000000) label = (currentTick / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
-            else if (currentTick >= 1000000) label = (currentTick / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-            else if (currentTick >= 1000) label = (currentTick / 1000).toFixed(0) + 'k';
-            else label = currentTick.toString();
-            
-            labels.push(label);
-            
-            // Nếu tick này đã bao trọn dữ liệu (lớn hơn maxVal + padding), ta có thể dừng sớm
-            if (currentTick > targetMax) break;
-            
-            currentTick += step;
-        }
-        
-        // Thêm 5% buffer cho range max để đường kẻ ngang trên cùng không bị mất
-        return { tickVals: ticks, tickText: labels, range: [0, ticks[ticks.length-1] * 1.05] };
-    };
-
-    const { tickVals, tickText, range } = calculateSmartTicks(minY, maxY);
-
-    const generateXAxisTicks = (startDate, endDate, unit, format, step = 1) => {
-        const ticks = [];
-        const tickTexts = [];
-        
-        // FIX: Dùng isoWeek nếu unit là week để khớp trục thời gian
-        let current = unit === 'week' ? startDate.clone().startOf('isoWeek') : startDate.clone().startOf(unit);
-
-        const endOfRange = unit === 'week' ? endDate.clone().endOf('isoWeek') : endDate.clone().endOf(unit);
-
-        let safety = 0;
-
-        while ((current.isBefore(endOfRange) || current.isSame(endOfRange, unit)) && safety < 1000) {
-            ticks.push(current.toDate());
-            tickTexts.push(current.format(format));
-            current = current.add(step, unit);
-            safety++;
-        }
-
-        return { ticks, tickTexts };
-    };
-
-    let yAxisConfig = {
-        color: theme.palette.text.secondary,
-        gridcolor: theme.palette.divider,
-        hoverformat: ',.0f đ',
-        showspikes: false, zeroline: true,
-        zerolinecolor: theme.palette.divider, zerolinewidth: 2,
-        rangeslider: { visible: false },
-        
-        // Áp dụng Smart Ticks
-        tickmode: 'array',
-        tickvals: tickVals,
-        ticktext: tickText,
-        range: range, // Set range cứng theo ticks đã tính toán để đảm bảo khớp
-        autorange: false 
-    };
-
-    const getXAxisConfig = () => { 
-        // Lấy range từ filter để sinh tick cho đẹp
-        if (!selectedDateRange || selectedDateRange.length < 2) {
-            return {};
-        }
-        const [startFilterDate, endFilterDate] = selectedDateRange;
-        const safeStart = dayjs(startFilterDate);
-        const safeEnd = dayjs(endFilterDate);
-
-        // --- FIX QUAN TRỌNG: Tính Range là HỢP (UNION) của Filter và Data ---
-        // 1. Khởi tạo Range bằng Filter (để đảm bảo luôn bao trọn khoảng thời gian người dùng chọn)
-        let minDate = safeStart;
-        let maxDate = safeEnd;
-        
-        // 2. Nếu Data thực tế rộng hơn Filter (ví dụ: tuần bắt đầu trước ngày mùng 1), mở rộng Range ra
-        if (data && data.length > 0) {
-             const dataDates = data.map(d => dayjs(d.date).valueOf());
-             const minDataVal = Math.min(...dataDates);
-             const maxDataVal = Math.max(...dataDates);
-             
-             if (minDataVal < minDate.valueOf()) minDate = dayjs(minDataVal);
-             if (maxDataVal > maxDate.valueOf()) maxDate = dayjs(maxDataVal);
-        }
-        // Gom cả data so sánh (nếu có)
-        if (comparisonData && comparisonData.length > 0) {
-             // Lưu ý: comparisonData đã được shift ngày trong createChartTraces,
-             // nhưng ở đây ta chỉ quan tâm range hiển thị của trục X chính.
-             // Với logic so sánh hiện tại, trục X hiển thị ngày của kỳ hiện tại,
-             // nên ta không cần mở rộng range theo ngày gốc của kỳ so sánh.
-        }
-
-        let tickValues = [];
-        let tickLabels = [];
-        let tickAngle = -45;
-        let tickFont = { size: 10 };
-        let showGrid = true; // Luôn hiện grid
-        let xAxisRange = [];
-        
-        // Buffer an toàn: Thêm khoảng trống 2 đầu để điểm không bị sát mép
-        // FIX: Giảm buffer bên phải (End) để tránh khoảng trắng quá lớn
-        let bufferStart = 1; 
-        let bufferEnd = 1;
-        let bufferUnit = 'day';
-
-        switch (aggregationType) {
-            case 'month':
-                ({ ticks: tickValues, tickTexts: tickLabels } = generateXAxisTicks(safeStart, safeEnd, 'month', 'MMM'));
-                bufferStart = 15; bufferEnd = 5; bufferUnit = 'day'; // Giảm End từ 15 -> 5
-                break;
-
-            case 'week': 
-                ({ ticks: tickValues, tickTexts: tickLabels } = generateXAxisTicks(safeStart, safeEnd, 'week', '[W]w'));
-                bufferStart = 4; bufferEnd = 2; bufferUnit = 'day'; // Giảm End từ 4 -> 2
-                // FIX: Dùng isoWeek để khớp với logic xử lý data
-                // xAxisRange = [safeStart.startOf('isoWeek').subtract(7, 'day').toDate(), safeEnd.endOf('isoWeek').add(7, 'day').toDate()];
-                break;
-
-            case 'day': default:
-                ({ ticks: tickValues, tickTexts: tickLabels } = generateXAxisTicks(safeStart, safeEnd, 'day', 'DD/MM'));
-                bufferStart = 12; bufferEnd = 6; bufferUnit = 'hour'; // Giảm End
-                break;
-        }
-        
-        // Set range bao trọn minDate -> maxDate + buffer
-        xAxisRange = [
-            minDate.subtract(bufferStart, bufferUnit).toDate(), 
-            maxDate.add(bufferEnd, bufferUnit).toDate()
-        ];
-
-        return {
-            tickmode: 'array',
-            tickvals: tickValues,
-            ticktext: tickLabels,
-            range: xAxisRange, // Manual range dựa trên data thực
-            tickangle: tickAngle,
-            tickfont: tickFont,
-            showgrid: showGrid,
-            gridcolor: 'rgba(255, 255, 255, 0.1)',
-            griddash: 'dot',
-            showspikes: true,
-            spikethickness: 1,
-            spikecolor: theme.palette.text.secondary,
-            spikemode: 'across',
-            autorange: false, // Tắt auto để dùng manual range chính xác
-            fixedrange: false,
-            automargin: true, // FIX: Tự động căn lề
-        };
-    };
-
-    const layout = {
-        autosize: true,
-        paper_bgcolor: 'transparent',
-        plot_bgcolor: 'transparent',
-        // Bỏ transition đi vì ta tự quản lý animation
-        xaxis: {
-            ...getXAxisConfig(),
-            type: 'date', // BẮT BUỘC: Ép kiểu Date để hiển thị đúng trục thời gian khi không có data
-            color: theme.palette.text.secondary,
-            gridcolor: theme.palette.divider,
-            showspikes: false,
-            autorange: false,
-            fixedrange: true,
-        },
-        yaxis: yAxisConfig, // Sử dụng config động đã tạo ở trên
-        legend: {
-            font: { color: theme.palette.text.secondary, size: 16 },
-            orientation: 'h',
-            yanchor: 'top',
-            y: -0.1, // Giảm khoảng cách từ biểu đồ xuống chú thích
-            xanchor: 'center',
-            x: 0.5,
-            traceorder: 'normal',
-            valign: 'top',
-        },
-        // Giảm margin dưới để tối ưu không gian
-        margin: { l: 80, r: 40, b: 60, t: 20 },
-        hovermode: 'x unified',
-        hoverlabel: { 
-            bgcolor: 'rgba(10, 25, 41, 0.9)', 
-            bordercolor: theme.palette.divider, 
-            font: { 
-                family: 'Inter, Roboto, sans-serif', 
-                size: 14, 
-                color: '#e8d283ff' 
-            }, 
-            namelength: -1, 
-            align: 'left',
-        },
-    };
+    // REMOVED: Block that returns empty Box when no data. 
+    // We now always render the chart structure even with zero/empty data.
 
     return (
-        <Box ref={chartContainerRef} sx={{ height: '100%', width: '100%' }}>
-            <Plot
-                key={chartKey}
-                data={animatedData}
-                layout={layout}
-                useResizeHandler={true}
-                style={{ width: '100%', height: '100%' }}
-                config={{ displayModeBar: false, responsive: true }}
-                revision={chartRevision}
-            />
+        <Box sx={{ height: '100%', width: '100%' }}>
+            <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart
+                    data={chartData}
+                    margin={{ top: 20, right: 30, left: 30, bottom: 20 }}
+                >
+                    <CartesianGrid strokeDasharray="3 3" vertical={true} stroke={theme.palette.divider} opacity={0.7} />
+                    
+                    <XAxis 
+                        dataKey="displayDate" 
+                        axisLine={{ stroke: theme.palette.text.secondary, strokeWidth: 1 }}
+                        tickLine={{ stroke: theme.palette.text.secondary }}
+                        tick={{ 
+                            fill: theme.palette.text.secondary, 
+                            fontSize: 10,
+                            angle: -45,
+                            textAnchor: 'end'
+                        }}
+                        height={60} // Tăng chiều cao để nhường chỗ cho chữ xoay nghiêng
+                        interval={0}
+                    />
+                    
+                    <YAxis 
+                        domain={[0, maxYValue === 0 ? 1000000 : 'auto']}
+                        allowDataOverflow={false}
+                        axisLine={{ stroke: theme.palette.text.secondary, strokeWidth: 1 }}
+                        tickLine={{ stroke: theme.palette.text.secondary }}
+                        tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
+                        tickFormatter={formatYAxis}
+                        width={60}
+                        tickCount={10}
+                    />
+                    
+                    <Tooltip content={<CustomTooltip />} cursor={{ stroke: theme.palette.divider, strokeWidth: 1, strokeDasharray: '4 4' }} />
+                    
+                    <Legend 
+                        verticalAlign="bottom" 
+                        height={36} 
+                        iconType="plainline"
+                        iconSize={20}
+                        wrapperStyle={{ paddingTop: '20px' }}
+                        formatter={(value, entry) => {
+                            return <span style={{ color: theme.palette.text.primary, marginRight: 20 }}>{value}</span>;
+                        }}
+                    />
+
+                    {/* Render Lines */}
+                    {series.map(s => (
+                        <React.Fragment key={s.key}>
+                            {/* Đường kỳ trước (Nét đứt, mờ hơn) */}
+                            <Line
+                                type="monotone"
+                                dataKey={`${s.key}_prev`}
+                                name={`${s.name} (Kỳ trước)`}
+                                stroke={s.color}
+                                strokeWidth={2}
+                                strokeDasharray="4 4"
+                                opacity={0.6}
+                                dot={false}
+                                activeDot={false}
+                            />
+                            
+                            {/* Đường hiện tại (Nét liền, đậm) */}
+                            <defs>
+                                <linearGradient id={`color-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor={s.color} stopOpacity={0.2}/>
+                                    <stop offset="95%" stopColor={s.color} stopOpacity={0}/>
+                                </linearGradient>
+                            </defs>
+                            
+                            <Line
+                                type="monotone"
+                                dataKey={s.key}
+                                name={s.name}
+                                stroke={s.color}
+                                strokeWidth={3}
+                                dot={{ r: 3, strokeWidth: 0, fill: s.color }}
+                                activeDot={{ r: 6, strokeWidth: 0, fill: s.color }}
+                                animationDuration={1500}
+                            />
+                        </React.Fragment>
+                    ))}
+                </ComposedChart>
+            </ResponsiveContainer>
         </Box>
     );
 }

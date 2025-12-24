@@ -357,7 +357,7 @@ def _calculate_core_kpis(
 
     # --- 2. TÍNH TOÁN METRICS TỪ ORDER (Real-time / Tạm tính) ---
     # GMV & Doanh thu tạm tính lấy trực tiếp từ Order vừa đặt
-    gmv = sum((o.gmv or 0) for o in target_orders)
+    # gmv = sum((o.gmv or 0) for o in target_orders) -> Đã chuyển xuống tính từ Revenue
     provisional_revenue = sum((o.selling_price or 0) for o in target_orders)
     subsidy_amount = sum((o.subsidy_amount or 0) for o in target_orders)
     
@@ -388,6 +388,9 @@ def _calculate_core_kpis(
     # (Tức là Revenue ngày 24/12 vẫn được cộng vào KPI ngày 17/12 nếu đơn đó tạo ngày 17)
     
     valid_revenues = [r for r in revenues if r.order_code in creation_date_order_codes]
+    
+    # CẬP NHẬT: GMV lấy từ bảng REVENUE (số liệu đã đối soát/chốt) thay vì Order
+    gmv = sum((r.gmv or 0) for r in valid_revenues)
     
     net_revenue = sum(r.net_revenue for r in valid_revenues)
     execution_cost = abs(sum(r.total_fees for r in valid_revenues)) # Phí sàn thực tế
@@ -484,11 +487,6 @@ def _calculate_core_kpis(
     clicks = sum(m.clicks for m in marketing_spends)
     conversions = sum(m.conversions for m in marketing_spends)
     reach = sum(m.reach for m in marketing_spends)
-
-    cpm = (ad_spend / impressions) * 1000 if impressions > 0 else 0
-    cpc = (ad_spend / clicks) if clicks > 0 else 0
-    ctr = (clicks / impressions) * 100 if impressions > 0 else 0
-    cpa = (ad_spend / conversions) if conversions > 0 else 0
     frequency = (impressions / reach) if reach > 0 else 0
     conversion_rate = (conversions / clicks) if clicks > 0 else 0
 
@@ -509,9 +507,13 @@ def _calculate_core_kpis(
 
         # Marketing
         "ad_spend": ad_spend,
-        "roas": (gmv / ad_spend) if ad_spend > 0 else 0, # Tính ROAS nhanh dựa trên GMV
+        "roas": (gmv / ad_spend) if ad_spend > 0 else 0, 
         "cpo": (ad_spend / total_orders) if total_orders > 0 else 0,
-        "cpm": cpm, "cpc": cpc, "ctr": ctr, "cpa": cpa,
+        "cpm": (ad_spend / impressions) * 1000 if impressions > 0 else 0, 
+        "cpc": (ad_spend / clicks) if clicks > 0 else 0, 
+        "ctr": (clicks / impressions) * 100 if impressions > 0 else 0, 
+        "cpa": (ad_spend / conversions) if conversions > 0 else 0,
+
         "impressions": impressions, "clicks": clicks, 
         "conversions": conversions, "reach": reach,
         "frequency": frequency, "conversion_rate": conversion_rate,

@@ -173,7 +173,7 @@ class BrandWithKpis(BrandInfo):
 class DailyKpi(BaseModel):
     """Định nghĩa dữ liệu KPI cho một ngày duy nhất để vẽ biểu đồ."""
     date: date
-    netRevenue: float = 0
+    net_revenue: float = 0
     profit: float = 0
 
 class DailyKpiResponse(BaseModel):
@@ -207,6 +207,8 @@ class OperationKpisResponse(BaseModel):
     completion_rate: float
     cancellation_rate: float
     avg_daily_orders: float
+    refund_rate: float
+    bomb_rate: float
 
     class config:
         from_attributes = True

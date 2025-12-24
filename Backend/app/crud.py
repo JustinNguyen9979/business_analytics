@@ -157,6 +157,16 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
     1. Nếu source_list là None hoặc chứa 'all' -> Query bảng DailyStat (Nhanh nhất, đã pre-aggregated).
     2. Nếu source_list có giá trị cụ thể -> Query bảng DailyAnalytics và SUM lại (Linh hoạt).
     """
+    
+    # --- TRƯỜNG HỢP 0: SOURCE LIST RỖNG (NGƯỜI DÙNG BỎ CHỌN HẾT) ---
+    # Trả về ngay danh sách các ngày với dữ liệu = 0 để Frontend vẽ đường thẳng (Flat Line)
+    if isinstance(source_list, list) and len(source_list) == 0:
+        empty_results = []
+        curr = start_date
+        while curr <= end_date:
+            empty_results.append(_create_empty_daily_stat(curr))
+            curr += timedelta(days=1)
+        return empty_results
 
     # --- TRƯỜNG HỢP 1: LẤY TỔNG (QUERY DAILY_STAT) ---
     is_fetching_all = False
@@ -188,26 +198,27 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
             if stat:
                 results.append({
                     "date": current_date.isoformat(),
-                    "netRevenue": stat.net_revenue,
+                    "net_revenue": stat.net_revenue,
                     "gmv": stat.gmv,
                     "profit": stat.profit,
-                    "totalCost": stat.total_cost,
-                    "adSpend": stat.ad_spend,
+                    "total_cost": stat.total_cost,
+                    "ad_spend": stat.ad_spend,
                     "cogs": stat.cogs,
-                    "executionCost": stat.execution_cost,
+                    "execution_cost": stat.execution_cost,
                     "roi": stat.roi,
-                    "completedOrders": stat.completed_orders,
-                    "cancelledOrders": stat.cancelled_orders,
-                    "refundedOrders": stat.refunded_orders,
-                    "totalOrders": stat.total_orders,
+                    "completed_orders": stat.completed_orders,
+                    "cancelled_orders": stat.cancelled_orders,
+                    "refunded_orders": stat.refunded_orders,
+                    "total_orders": stat.total_orders,
                     "aov": stat.aov,
                     "upt": stat.upt,
-                    "uniqueSkusSold": stat.unique_skus_sold,
-                    "totalQuantitySold": stat.total_quantity_sold,
-                    "completionRate": stat.completion_rate or 0,
-                    "cancellationRate": stat.cancellation_rate or 0,
-                    "refundRate": stat.refund_rate or 0,
-                    "totalCustomers": stat.total_customers,
+                    "unique_skus_sold": stat.unique_skus_sold,
+                    "total_quantity_sold": stat.total_quantity_sold,
+                    "completion_rate": stat.completion_rate or 0,
+                    "cancellation_rate": stat.cancellation_rate or 0,
+                    "refund_rate": stat.refund_rate or 0,
+                    "bomb_rate": stat.bomb_rate or 0,
+                    "total_customers": stat.total_customers,
                     "impressions": stat.impressions,
                     "clicks": stat.clicks,
                     "conversions": stat.conversions,
@@ -217,13 +228,13 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
                     "cpa": stat.cpa,
                     "reach": stat.reach,
                     "frequency": stat.frequency,
-                    "hourlyBreakdown": stat.hourly_breakdown,
-                    "topProducts": stat.top_products,
-                    "locationDistribution": stat.location_distribution,
-                    "paymentMethodBreakdown": stat.payment_method_breakdown,
-                    "cancelReasonBreakdown": stat.cancel_reason_breakdown,
-                    "avgProcessingTime": stat.avg_processing_time or 0,
-                    "avgShippingTime": stat.avg_shipping_time or 0,
+                    "hourly_breakdown": stat.hourly_breakdown,
+                    "top_products": stat.top_products,
+                    "location_distribution": stat.location_distribution,
+                    "payment_method_breakdown": stat.payment_method_breakdown,
+                    "cancel_reason_breakdown": stat.cancel_reason_breakdown,
+                    "avg_processing_time": stat.avg_processing_time or 0,
+                    "avg_shipping_time": stat.avg_shipping_time or 0,
                 })
             else:
                 results.append(_create_empty_daily_stat(current_date))
@@ -241,10 +252,15 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
         clean_sources = [source_list.lower()]
     
 
-    # Nếu không có source nào để lọc (ví dụ list rỗng), trả về list rỗng ngay
-    # để tránh việc query không filter sẽ ra tổng toàn bộ DB
+    # Nếu không có source nào để lọc (ví dụ list rỗng), ta vẫn trả về data để vẽ biểu đồ (tất cả bằng 0)
+    # thay vì trả về [] khiến Frontend hiện "No Data"
     if not clean_sources:
-        return []
+        empty_results = []
+        curr = start_date
+        while curr <= end_date:
+            empty_results.append(_create_empty_daily_stat(curr))
+            curr += timedelta(days=1)
+        return empty_results
 
     # Logic: Query bảng chi tiết, lọc theo source và SUM lại.
     query = db.query(
@@ -260,6 +276,7 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
         func.sum(models.DailyAnalytics.completed_orders).label('completedOrders'),
         func.sum(models.DailyAnalytics.cancelled_orders).label('cancelledOrders'),
         func.sum(models.DailyAnalytics.refunded_orders).label('refundedOrders'),
+        func.sum(models.DailyAnalytics.bomb_orders).label('bombOrders'),
         func.sum(models.DailyAnalytics.total_orders).label('totalOrders'),
         
         func.sum(models.DailyAnalytics.unique_skus_sold).label('uniqueSkusSold'),
@@ -270,7 +287,9 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
         func.sum(models.DailyAnalytics.impressions).label('impressions'),
         func.sum(models.DailyAnalytics.clicks).label('clicks'),
         func.sum(models.DailyAnalytics.conversions).label('conversions'),
-        func.sum(models.DailyAnalytics.reach).label('reach')).filter(
+        func.sum(models.DailyAnalytics.reach).label('reach'),
+        func.avg(models.DailyAnalytics.avg_processing_time).label('avgProcessingTime'),
+        func.avg(models.DailyAnalytics.avg_shipping_time).label('avgShippingTime')).filter(
             models.DailyAnalytics.brand_id == brand_id,
             models.DailyAnalytics.date.between(start_date, end_date),
             models.DailyAnalytics.source.in_(clean_sources) # BẮT BUỘC PHẢI CÓ FILTER NÀY
@@ -299,24 +318,24 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
          # Tính toán lại các chỉ số dẫn xuất (Derived Metrics)
         item = {
             "date": row.date.isoformat(),
-            "netRevenue": net_revenue,
+            "net_revenue": net_revenue,
             "gmv": gmv,
             "profit": profit,
-            "totalCost": total_cost,
-            "adSpend": ad_spend,
+            "total_cost": total_cost,
+            "ad_spend": ad_spend,
             "cogs": row.cogs or 0,
-            "executionCost": row.executionCost or 0,
+            "execution_cost": row.executionCost or 0,
 
-            "completedOrders": completed_orders,
-            "cancelledOrders": row.cancelledOrders or 0,
-            "refundedOrders": row.refundedOrders or 0,
-            "totalOrders": total_orders,
+            "completed_orders": completed_orders,
+            "cancelled_orders": row.cancelledOrders or 0,
+            "refunded_orders": row.refundedOrders or 0,
+            "total_orders": total_orders, # Update key to snake_case for consistency
 
-            "avgProcessingTime": row.avgProcessingTime or 0,
-            "avgShippingTime": row.avgShippingTime or 0,
-            "uniqueSkusSold": row.uniqueSkusSold or 0,
-            "totalQuantitySold": row.totalQuantitySold or 0,
-            "totalCustomers": row.totalCustomers or 0,
+            "avg_processing_time": row.avgProcessingTime or 0, # Update key
+            "avg_shipping_time": row.avgShippingTime or 0,     # Update key
+            "unique_skus_sold": row.uniqueSkusSold or 0,
+            "total_quantity_sold": row.totalQuantitySold or 0,
+            "total_customers": row.totalCustomers or 0,
 
             "impressions": impressions,
             "clicks": clicks,
@@ -326,20 +345,21 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
             "roi": (profit / total_cost) if total_cost > 0 else 0,
             "aov": (gmv / completed_orders) if completed_orders > 0 else 0,
             "upt": (row.totalQuantitySold / completed_orders) if completed_orders > 0 else 0,
-            "completionRate": (completed_orders / total_orders) if total_orders > 0 else 0,
-            "cancellationRate": (row.cancelledOrders / total_orders) if total_orders > 0 else 0,
-            "refundRate": (row.refundedOrders / total_orders) if total_orders > 0 else 0,
+            "completion_rate": (completed_orders / total_orders) if total_orders > 0 else 0,   # Update key
+            "cancellation_rate": (row.cancelledOrders / total_orders) if total_orders > 0 else 0, # Update key
+            "refund_rate": (row.refundedOrders / total_orders) if total_orders > 0 else 0,        # Update key
+            "bomb_rate": (row.bombOrders / total_orders) if total_orders > 0 else 0,              # Update key
             "ctr": (clicks / impressions) if impressions > 0 else 0,
             "cpc": (ad_spend / clicks) if clicks > 0 else 0,
             "cpm": (ad_spend / impressions * 1000) if impressions > 0 else 0,
             "cpa": (ad_spend / conversions) if conversions > 0 else 0,
             "frequency": 0,
 
-            "hourlyBreakdown": {},
-            "topProducts": [],
-            "locationDistribution": [],
-            "paymentMethodBreakdown": {},
-            "cancelReasonBreakdown": {}
+            "hourly_breakdown": {},
+            "top_products": [],
+            "location_distribution": [],
+            "payment_method_breakdown": {},
+            "cancel_reason_breakdown": {}
         }
         data_map[row.date] = item
 
@@ -350,21 +370,32 @@ def get_daily_kpis_for_range(db: Session, brand_id: int, start_date: date, end_d
         else:
             final_data.append(_create_empty_daily_stat(curr))
         curr += timedelta(days=1)
+    
+    # SAFETY FALLBACK: Nếu vì lý do nào đó mà final_data vẫn rỗng (dù rất khó xảy ra),
+    # ta return list 0 để tránh Frontend bị lỗi chart rỗng.
+    if not final_data:
+        fallback_results = []
+        curr = start_date
+        while curr <= end_date:
+            fallback_results.append(_create_empty_daily_stat(curr))
+            curr += timedelta(days=1)
+        return fallback_results
+
     return final_data
 
 def _create_empty_daily_stat(date_obj):
     return {
         "date": date_obj.isoformat(),
-        "netRevenue": 0, "gmv": 0, "profit": 0, "totalCost": 0, "adSpend": 0,
-        "cogs": 0, "executionCost": 0, "roi": 0,
-        "completedOrders": 0, "cancelledOrders": 0, "refundedOrders": 0, "totalOrders": 0,
-        "aov": 0, "upt": 0, "uniqueSkusSold": 0, "totalQuantitySold": 0,
-        "completionRate": 0, "cancellationRate": 0, "refundRate": 0, "totalCustomers": 0,
+        "net_revenue": 0, "gmv": 0, "profit": 0, "total_cost": 0, "ad_spend": 0,
+        "cogs": 0, "execution_cost": 0, "roi": 0,
+        "completed_orders": 0, "cancelled_orders": 0, "refunded_orders": 0, "bomb_orders": 0, "total_orders": 0,
+        "aov": 0, "upt": 0, "unique_skus_sold": 0, "total_quantity_sold": 0,
+        "completion_rate": 0, "cancellation_rate": 0, "refund_rate": 0, "bomb_rate": 0, "total_customers": 0,
         "impressions": 0, "clicks": 0, "conversions": 0, "cpc": 0,
         "cpa": 0, "cpm": 0, "ctr": 0, "reach": 0, "frequency": 0,
-        "avgProcessingTime": 0, "avgShippingTime": 0,
-        "hourlyBreakdown": {}, "topProducts": [], "locationDistribution": [],
-        "paymentMethodBreakdown": {}, "cancelReasonBreakdown": {}
+        "avg_processing_time": 0, "avg_shipping_time": 0,
+        "hourly_breakdown": {}, "top_products": [], "location_distribution": [],
+        "payment_method_breakdown": {}, "cancel_reason_breakdown": {}
     }
 
 def get_all_brands(db: Session):
@@ -726,30 +757,30 @@ def get_kpis_by_platform(db: Session, brand_id: int, start_date: date, end_date:
 
         total_summary = {
             'platform': 'Tổng cộng',
-            'netRevenue': 0, 'gmv': 0, 'profit': 0, 'adSpend': 0, 'totalCost': 0,
-            'cogs': 0, 'executionCost': 0, 'completedOrders': 0, 'totalOrders': 0,
-            'cancelledOrders': 0, 'refundedOrders': 0,
-            'roi': 0, 'profitMargin': 0
+            'net_revenue': 0, 'gmv': 0, 'profit': 0, 'ad_spend': 0, 'total_cost': 0,
+            'cogs': 0, 'execution_cost': 0, 'completed_orders': 0, 'total_orders': 0,
+            'cancelled_orders': 0, 'refunded_orders': 0,
+            'roi': 0, 'profit_margin': 0
         }
         for row in results:
             source = row.source
             item = {
                 'platform': source.capitalize() if source else "Unknown",
-                'netRevenue': row.netRevenue or 0,
+                'net_revenue': row.netRevenue or 0,
                 'gmv': row.gmv or 0,
                 'profit': row.profit or 0,
-                'totalCost': row.totalCost or 0,
-                'adSpend': row.adSpend or 0,
+                'total_cost': row.totalCost or 0,
+                'ad_spend': row.adSpend or 0,
                 'cogs': row.cogs or 0,
-                'executionCost': row.executionCost or 0,
-                'completedOrders': row.completedOrders or 0,
-                'totalOrders': row.totalOrders or 0,
-                'cancelledOrders': row.cancelledOrders or 0,
-                'refundedOrders': row.refundedOrders or 0,
+                'execution_cost': row.executionCost or 0,
+                'completed_orders': row.completedOrders or 0,
+                'total_orders': row.totalOrders or 0,
+                'cancelled_orders': row.cancelledOrders or 0,
+                'refunded_orders': row.refundedOrders or 0,
             }
 
-            item['roi'] = (item['profit'] / item['totalCost']) if item['totalCost'] > 0 else 0
-            item['profitMargin'] = (item['profit'] / item['netRevenue']) if item['netRevenue'] != 0 else 0
+            item['roi'] = (item['profit'] / item['total_cost']) if item['total_cost'] > 0 else 0
+            item['profit_margin'] = (item['profit'] / item['net_revenue']) if item['net_revenue'] != 0 else 0
 
             final_data.append(item)
 
@@ -757,8 +788,8 @@ def get_kpis_by_platform(db: Session, brand_id: int, start_date: date, end_date:
                 if key in item and isinstance(item[key], (int, float)):
                     total_summary[key] += item[key]
 
-        total_summary['roi'] = (total_summary['profit'] / total_summary['totalCost']) if total_summary['totalCost'] > 0 else 0
-        total_summary['profitMargin'] = (total_summary['profit'] / total_summary['netRevenue']) if total_summary['netRevenue'] != 0 else 0
+        total_summary['roi'] = (total_summary['profit'] / total_summary['total_cost']) if total_summary['total_cost'] > 0 else 0
+        total_summary['profit_margin'] = (total_summary['profit'] / total_summary['net_revenue']) if total_summary['net_revenue'] != 0 else 0
 
         if final_data:
             final_data.insert(0, total_summary)

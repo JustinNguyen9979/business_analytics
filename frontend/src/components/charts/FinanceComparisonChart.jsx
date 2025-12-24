@@ -1,205 +1,161 @@
-import React, {useState, useEffect, useRef, useMemo} from 'react';
-import Plot from 'react-plotly.js';
+import React, { useState, useMemo } from 'react';
+import { 
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer 
+} from 'recharts';
 import { useTheme } from '@mui/material/styles';
-import { Box } from '@mui/material';
-import ChartPlaceholder from '../common/ChartPlaceholder';
-import { startAnimation } from '../../utils/animationUtils';
-import { readUInt16BE } from 'plotly.js/dist/plotly-cartesian';
+import { Box, Typography, Paper } from '@mui/material';
+import { formatCurrency } from '../../utils/formatters';
 
 /**
- * Biểu đồ cột nhóm để so sánh các chỉ số tài chính giữa các nền tảng.
+ * Biểu đồ cột so sánh tài chính giữa các nền tảng (Sử dụng Recharts).
  * @param {object} props
- * @param {Array<object>} props.data - Dữ liệu đã được sắp xếp, vd: [{ platform: 'Shopee', gmv: 1000, profit: 100 }, ...]
- * @param {Array<object>} props.series - Cấu hình các cột cần vẽ, vd: [{ key: 'gmv', name: 'GMV', color: '#ff0000' }]
- * @param {string} props.title - Tiêu đề của biểu đồ.
+ * @param {Array<object>} props.data - Dữ liệu, vd: [{ platform: 'Shopee', net_revenue: 1000, profit: 100 }, ...]
+ * @param {Array<object>} props.series - Cấu hình các cột, vd: [{ key: 'net_revenue', name: 'Doanh thu', color: '#ff0000' }]
  */
-function FinanceComparisonChart({ data, series, title }) {
+function FinanceComparisonChart({ data = [], series = [], title }) {
     const theme = useTheme();
 
-    const [animatedTraces, setAnimatedTraces] = useState([]);
-
-    const platforms = data && data.length > 0 ? data.map(item => item.platform) : [];
-
-    // Animation effect cho các cột
-    useEffect(() => {
-        if (!data || data.length === 0 || !series || series.length === 0) {
-            setAnimatedTraces([]);
-            return;
+    // 2. Custom Tooltip để hiển thị đẹp hơn
+    const CustomTooltip = ({ active, payload, label }) => {
+        if (active && payload && payload.length) {
+            return (
+                <Box sx={{ 
+                    bgcolor: 'rgba(22, 27, 34, 0.95)', 
+                    border: `1px solid ${theme.palette.divider}`,
+                    borderRadius: 2, 
+                    p: 2, 
+                    boxShadow: theme.shadows[4],
+                    minWidth: 180
+                }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, color: theme.palette.text.primary, borderBottom: `1px solid ${theme.palette.divider}`, pb: 1 }}>
+                        {label}
+                    </Typography>
+                    {payload.map((entry, index) => (
+                        <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, gap: 2 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Box sx={{ width: 10, height: 10, borderRadius: '2px', bgcolor: entry.color }} />
+                                <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>{entry.name}:</Typography>
+                            </Box>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: entry.color }}>
+                                {formatCurrency(entry.value)}
+                            </Typography>
+                        </Box>
+                    ))}
+                </Box>
+            );
         }
-
-        const platforms = data.map(item => item.platform);
-        const nTraces = series.length;
-        const groupWidth = 0.7; // Độ rộng của một nhóm bar
-        const gap = 0.02;
-        const slotWidth = groupWidth / nTraces;
-        const barWidth = Math.max(0, slotWidth - gap);
-
-        const createTracesAtProgress = (progress) => {
-            return series.map((s, i) => {
-                const offset = -groupWidth / 2 + slotWidth / 2 + i * slotWidth;
-                const finalYValues = data.map(item => item[s.key] || 0);
-                const currentYValues = finalYValues.map(y => y * progress);
-
-                return {
-                    x: platforms,
-                    y: currentYValues,
-                    name: s.name,
-                    type: 'bar',
-                    width: barWidth,
-                    offset: offset,
-                    marker: { color: s.color },
-                    hovertemplate: `<span style="color: ${theme.palette.text.secondary};">${s.name}: </span><b style="color: ${s.color} ;">%{y:,.0f} đ</b><extra></extra>`,
-                };
-            });
-        };
-
-        const cleanup = startAnimation({
-            duration: 1500,
-            onFrame: (progress) => {
-                setAnimatedTraces(createTracesAtProgress(progress));
-            },
-            onDone: () => {
-                setAnimatedTraces(createTracesAtProgress(1));
-            },
-        });
-
-        return cleanup;
-    }, [data, series, theme]);
-
-    // --- LOGIC TÍNH TOÁN TRỤC Y (Smart Ticks) ---
-    // Lấy tất cả giá trị Y để tính min/max
-    const allYValues = data && data.length > 0 && series && series.length > 0
-        ? series.flatMap(s => data.map(item => item[s.key] || 0))
-        : [0];
-
-    let maxY = Math.max(...allYValues);
-    const minY = Math.min(...allYValues);
-
-    // Quy mô tối thiểu là 10 Triệu để giữ form biểu đồ đẹp
-    const MIN_MONETARY_SCALE = 10000000; 
-    if (maxY < MIN_MONETARY_SCALE) {
-        maxY = MIN_MONETARY_SCALE;
-    }
-
-    // Hàm chia vạch thông minh (copy từ RevenueProfitChart)
-    const calculateSmartTicks = (minVal, maxVal) => {
-        const MIN_MONETARY_SCALE_FOR_DISPLAY = 10000000;
-        let targetMax = Math.max(maxVal * 1.1, MIN_MONETARY_SCALE_FOR_DISPLAY);
-        const effectiveMin = Math.max(0, minVal); 
-        
-        const targetTickCount = 5;
-        const rawStep = (targetMax - effectiveMin) / targetTickCount;
-        
-        const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
-        const normalizedStep = rawStep / magnitude;
-        
-        let niceStep;
-        if (normalizedStep < 1.5) niceStep = 1;
-        else if (normalizedStep < 3) niceStep = 2;
-        else if (normalizedStep < 7) niceStep = 5;
-        else niceStep = 10;
-        
-        const step = niceStep * magnitude;
-        
-        let ticks = [];
-        let labels = [];
-        let currentTick = Math.floor(effectiveMin / step) * step;
-        
-        while (currentTick <= targetMax + step) { 
-            ticks.push(currentTick);
-            let label = '';
-            if (currentTick === 0) label = '0';
-            else if (currentTick >= 1000000000) label = (currentTick / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
-            else if (currentTick >= 1000000) label = (currentTick / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-            else if (currentTick >= 1000) label = (currentTick / 1000).toFixed(0) + 'k';
-            else label = currentTick.toString();
-            labels.push(label);
-            if (currentTick > targetMax) break;
-            currentTick += step;
-        }
-        // Thêm 5% buffer cho range max để đường kẻ ngang trên cùng không bị mất
-        return { tickVals: ticks, tickText: labels, range: [0, ticks[ticks.length-1] * 1.05] };
+        return null;
     };
 
-    const { tickVals, tickText, range } = calculateSmartTicks(minY, maxY);
+    // 3. Hàm rút gọn số tiền cho trục Y (ví dụ: 1.5M, 2B)
+    const formatYAxis = (value) => {
+        if (value >= 1000000000) return (value / 1000000000).toFixed(1) + 'B';
+        if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
+        if (value >= 1000) return (value / 1000).toFixed(0) + 'k';
+        return value;
+    };
 
-    const layout = useMemo(() => ({
-        showlegend: true,
-        legend: {
-            x: 1.02,
-            y: 1,
-            xanchor: 'left',
-            yanchor: 'top',
-            font: {
-                color: theme.palette.text.secondary,
-                size: 14,
-            },
-            bgcolor: 'transparent',
-        },
+    // Tạo payload tùy chỉnh cho Legend để đảm bảo thứ tự khớp với series
+    const legendPayload = series.map(s => ({
+        id: s.key,
+        dataKey: s.key,
+        value: s.name,
+        color: s.color,
+        type: 'rect'
+    }));
 
-        title: {
-            text: title,
-            font: {
-                color: theme.palette.text.primary,
-                size: 18,
-            },
-            x: 0.05,
-            y: 0.95,
-        },
-        autosize: true,
-        paper_bgcolor: 'transparent',
-        plot_bgcolor: 'transparent',
-        xaxis: {
-            color: theme.palette.text.secondary,
-            gridcolor: 'transparent', // Bỏ grid dọc
-            type: 'category', // BẮT BUỘC: Ép kiểu Category để không bị hiển thị số âm vô nghĩa khi rỗng
-            fixedrange: true, // Không cho zoom trục X
-            ticks: 'outside',
-            ticklen: 20,
-            tickcolor: 'transparent',
-            tickfont: {
-                size: 17, // Tăng cỡ chữ tên Source
-            },
-            showspikes: false,
-        },
-        yaxis: {
-            color: theme.palette.text.secondary,
-            gridcolor: theme.palette.divider,
-            hoverformat: ',.0f đ',
-            // Áp dụng Smart Ticks
-            tickmode: 'array',
-            tickvals: tickVals,
-            ticktext: tickText,
-            range: range,
-            autorange: false,
-            zeroline: true,
-            zerolinecolor: theme.palette.divider,
-            showspikes: false,
-        },
-        margin: { l: 80, r: 40, b: 47, t: 20 }, // Tăng margin bottom (b) từ 20 lên 50
-        hovermode: 'x unified', // Hiển thị tooltip cho cả nhóm khi hover
-        hoverlabel: {
-            bgcolor: 'rgba(10, 25, 41, 0.9)',
-            bordercolor: theme.palette.divider,
-            font: {
-                family: 'Inter, Roboto, sans-serif',
-                size: 14,
-                color: '#e8d283ff'
-            },
-        },
-    }), [theme, title, tickVals, tickText, range]);
+    const hasData = data && data.length > 0;
+    // Nếu không có data, set domain mặc định 0 - 10 Triệu để hiện trục số ảo
+    const yAxisDomain = hasData ? [0, 'auto'] : [0, 10000000];
+    
+    // Tạo data giả định với tất cả giá trị = 0 để Recharts nhận diện được keys
+    const fallbackData = useMemo(() => {
+        if (hasData) return [];
+        const dummyItem = { platform: '' };
+        series.forEach(s => dummyItem[s.key] = 0);
+        return [dummyItem];
+    }, [hasData, series]);
 
     return (
-        <Box sx={{ height: '100%', width: '100%' }}>
-            <Plot
-                data={animatedTraces}
-                layout={layout}
-                useResizeHandler={true}
-                style={{ width: '100%', height: '100%' }}
-                config={{ displayModeBar: false, responsive: true }}
-            />
+        <Box sx={{ height: '100%', width: '100%', position: 'relative' }}>
+            {title && (
+                <Typography variant="h6" sx={{ position: 'absolute', top: 10, left: 10, zIndex: 10 }}>
+                    {title}
+                </Typography>
+            )}
+            
+            <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                    data={hasData ? data : fallbackData} // Sử dụng fallbackData thông minh hơn
+                    margin={{ top: 40, right: 20, left: 20, bottom: 20 }} // Giảm lề phải xuống 20px
+                    barGap={4}
+                >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={theme.palette.divider} opacity={0.5} />
+                    
+                    <XAxis 
+                        dataKey="platform" 
+                        axisLine={{ stroke: theme.palette.text.secondary, strokeWidth: 1 }}
+                        tickLine={false}
+                        tick={{ fill: theme.palette.text.secondary, fontSize: 13, fontWeight: 500 }}
+                        dy={10}
+                    />
+                    
+                    <YAxis 
+                        axisLine={{ stroke: theme.palette.text.secondary, strokeWidth: 1 }}
+                        tickLine={false}
+                        tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
+                        tickFormatter={formatYAxis}
+                        width={60}
+                        domain={yAxisDomain}
+                    />
+                    
+                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
+                    
+                    <Legend 
+                        layout="horizontal" 
+                        verticalAlign="bottom" 
+                        align="center"
+                        iconType="circle"
+                        iconSize={10}
+                        payload={legendPayload} // Sử dụng payload tùy chỉnh
+                        formatter={(value) => (
+                            <span style={{ 
+                                color: theme.palette.text.secondary, 
+                                marginRight: 25
+                            }}>
+                                {value}
+                            </span>
+                        )}
+                        wrapperStyle={{ 
+                            paddingTop: 30, 
+                            fontSize: 14,
+                            userSelect: 'none'
+                        }}
+                    />
+
+                    {/* Render các cột Bar dựa trên cấu hình series */}
+                    {series.map((s, index) => (
+                        <Bar 
+                            key={s.key}
+                            dataKey={s.key}
+                            name={s.name}
+                            fill={s.color}
+                            radius={[4, 4, 0, 0]} 
+                            maxBarSize={60}
+                            animationDuration={500}
+                        />
+                    ))}
+                </BarChart>
+            </ResponsiveContainer>
         </Box>
     );
 }
 
-export default FinanceComparisonChart;
+// Tối ưu hóa render: Chỉ render lại khi data hoặc series thay đổi
+export default React.memo(FinanceComparisonChart, (prevProps, nextProps) => {
+    return (
+        prevProps.title === nextProps.title &&
+        prevProps.data === nextProps.data &&
+        prevProps.series === nextProps.series
+    );
+});

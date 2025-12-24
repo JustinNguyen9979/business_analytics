@@ -78,6 +78,7 @@ function OperationPage() {
                             <GaugeChart
                                 value={kpi.value}
                                 max={kpi.max}
+                                segments={kpi.segments}
                                 title={kpi.title}
                                 unit={kpi.unit}
                                 previousValue={kpi.previousValue}

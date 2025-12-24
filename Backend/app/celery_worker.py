@@ -47,25 +47,25 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
             if request_type == "kpi_summary":
                 # TỐI ƯU: Chỉ cần một truy vấn SUM tất cả các cột từ DailyStat
                 summary_query = db.query(
-                    func.sum(models.DailyStat.net_revenue).label('netRevenue'),
+                    func.sum(models.DailyStat.net_revenue).label('net_revenue'),
                     func.sum(models.DailyStat.gmv).label('gmv'),
                     func.sum(models.DailyStat.profit).label('profit'),
-                    func.sum(models.DailyStat.total_cost).label('totalCost'),
-                    func.sum(models.DailyStat.ad_spend).label('adSpend'),
-                    func.sum(models.DailyStat.total_orders).label('totalOrders'),
+                    func.sum(models.DailyStat.total_cost).label('total_cost'),
+                    func.sum(models.DailyStat.ad_spend).label('ad_spend'),
+                    func.sum(models.DailyStat.total_orders).label('total_orders'),
                     func.sum(models.DailyStat.cogs).label('cogs'),
-                    func.sum(models.DailyStat.execution_cost).label('executionCost'),
+                    func.sum(models.DailyStat.execution_cost).label('execution_cost'),
                     func.sum(models.DailyStat.aov).label('aov'),
                     func.sum(models.DailyStat.upt).label('upt'),
-                    func.sum(models.DailyStat.completion_rate).label('completionRate'),
-                    func.sum(models.DailyStat.cancellation_rate).label('cancellationRate'),
-                    func.sum(models.DailyStat.refund_rate).label('refundRate'),
-                    func.sum(models.DailyStat.completed_orders).label('completedOrders'),
-                    func.sum(models.DailyStat.cancelled_orders).label('cancelledOrders'),
-                    func.sum(models.DailyStat.refunded_orders).label('refundedOrders'),
-                    func.sum(models.DailyStat.unique_skus_sold).label('uniqueSkusSold'),
-                    func.sum(models.DailyStat.total_quantity_sold).label('totalQuantitySold'),
-                    func.sum(models.DailyStat.total_customers).label('totalCustomers')
+                    func.sum(models.DailyStat.completion_rate).label('completion_rate'),
+                    func.sum(models.DailyStat.cancellation_rate).label('cancellation_rate'),
+                    func.sum(models.DailyStat.refund_rate).label('refund_rate'),
+                    func.sum(models.DailyStat.completed_orders).label('completed_orders'),
+                    func.sum(models.DailyStat.cancelled_orders).label('cancelled_orders'),
+                    func.sum(models.DailyStat.refunded_orders).label('refunded_orders'),
+                    func.sum(models.DailyStat.unique_skus_sold).label('unique_skus_sold'),
+                    func.sum(models.DailyStat.total_quantity_sold).label('total_quantity_sold'),
+                    func.sum(models.DailyStat.total_customers).label('total_customers')
                 ).filter(
                     models.DailyStat.brand_id == brand_id,
                     models.DailyStat.date.between(start_date, end_date)
@@ -77,36 +77,36 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                     d = {key: (value or 0) for key, value in summary_query._mapping.items()}
                 else:
                     d = {
-                        'netRevenue': 0, 'gmv': 0, 'profit': 0, 'totalCost': 0, 'adSpend': 0,
-                        'totalOrders': 0, 'cogs': 0, 'executionCost': 0, 
-                        'completedOrders': 0, 'cancelledOrders': 0, 'refundedOrders': 0,
-                        'uniqueSkusSold': 0, 'totalQuantitySold': 0, 'totalCustomers': 0
+                        'net_revenue': 0, 'gmv': 0, 'profit': 0, 'total_cost': 0, 'ad_spend': 0,
+                        'total_orders': 0, 'cogs': 0, 'execution_cost': 0, 
+                        'completed_orders': 0, 'cancelled_orders': 0, 'refunded_orders': 0,
+                        'unique_skus_sold': 0, 'total_quantity_sold': 0, 'total_customers': 0
                     }
 
                 # BƯỚC 3: TÍNH TOÁN LẠI CÁC TỶ LỆ (%) DỰA TRÊN TỔNG
                 # ROI = Lợi nhuận / Tổng chi phí
-                d['roi'] = (d['profit'] / d['totalCost']) if d['totalCost'] > 0 else 0
+                d['roi'] = (d['profit'] / d['total_cost']) if d['total_cost'] > 0 else 0
                 
                 # Profit Margin = Lợi nhuận / Doanh thu ròng
-                d['profitMargin'] = (d['profit'] / d['netRevenue']) if d['netRevenue'] != 0 else 0
+                d['profit_margin'] = (d['profit'] / d['net_revenue']) if d['net_revenue'] != 0 else 0
                 
                 # Take Rate = Phí thực thi / GMV
-                d['takeRate'] = (d['executionCost'] / d['gmv']) if d['gmv'] > 0 else 0
+                d['take_rate'] = (d['execution_cost'] / d['gmv']) if d['gmv'] > 0 else 0
                 
                 # AOV = GMV / Đơn thành công
-                d['aov'] = (d['gmv'] / d['completedOrders']) if d['completedOrders'] > 0 else 0
+                d['aov'] = (d['gmv'] / d['completed_orders']) if d['completed_orders'] > 0 else 0
                 
                 # UPT = Tổng số lượng bán / Đơn thành công
-                d['upt'] = (d['totalQuantitySold'] / d['completedOrders']) if d['completedOrders'] > 0 else 0
+                d['upt'] = (d['total_quantity_sold'] / d['completed_orders']) if d['completed_orders'] > 0 else 0
                 
                 # Tỷ lệ hoàn thành = Đơn thành công / Tổng đơn
-                d['completionRate'] = (d['completedOrders'] / d['totalOrders']) if d['totalOrders'] > 0 else 0
+                d['completion_rate'] = (d['completed_orders'] / d['total_orders']) if d['total_orders'] > 0 else 0
                 
                 # Tỷ lệ hủy = Đơn hủy / Tổng đơn
-                d['cancellationRate'] = (d['cancelledOrders'] / d['totalOrders']) if d['totalOrders'] > 0 else 0
+                d['cancellation_rate'] = (d['cancelled_orders'] / d['total_orders']) if d['total_orders'] > 0 else 0
                 
                 # Tỷ lệ hoàn = Đơn hoàn / Tổng đơn
-                d['refundRate'] = (d['refundedOrders'] / d['totalOrders']) if d['totalOrders'] > 0 else 0
+                d['refund_rate'] = (d['refunded_orders'] / d['total_orders']) if d['total_orders'] > 0 else 0
 
                 # Gán vào result_data
                 result_data = d
@@ -118,19 +118,19 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                     func.min(models.Order.order_date).label('first_order_date')
                 ).filter(models.Order.brand_id == brand_id).group_by(models.Order.username).subquery()
                 
-                newCustomers = db.query(func.count(first_order_subquery.c.username)).filter(
+                new_customers = db.query(func.count(first_order_subquery.c.username)).filter(
                     first_order_subquery.c.first_order_date.between(start_date, end_date)
                 ).scalar() or 0
 
-                returningCustomers = result_data['totalCustomers'] - newCustomers
+                returning_customers = result_data['total_customers'] - new_customers
                 
-                result_data['newCustomers'] = newCustomers
-                result_data['returningCustomers'] = returningCustomers if returningCustomers > 0 else 0
-                result_data['cac'] = (result_data['adSpend'] / newCustomers) if newCustomers > 0 else 0
-                result_data['retentionRate'] = (returningCustomers / result_data['totalCustomers']) if result_data['totalCustomers'] > 0 else 0
-                result_data['ltv'] = (result_data['profit'] / result_data['totalCustomers']) if result_data['totalCustomers'] > 0 else 0
-                result_data['cpo'] = (result_data['adSpend'] / result_data['totalOrders']) if result_data['totalOrders'] else 0
-                result_data['roas'] = (result_data['gmv'] / result_data['adSpend']) if result_data['adSpend'] else 0
+                result_data['new_customers'] = new_customers
+                result_data['returning_customers'] = returning_customers if returning_customers > 0 else 0
+                result_data['cac'] = (result_data['ad_spend'] / new_customers) if new_customers > 0 else 0
+                result_data['retention_rate'] = (returning_customers / result_data['total_customers']) if result_data['total_customers'] > 0 else 0
+                result_data['ltv'] = (result_data['profit'] / result_data['total_customers']) if result_data['total_customers'] > 0 else 0
+                result_data['cpo'] = (result_data['ad_spend'] / result_data['total_orders']) if result_data['total_orders'] else 0
+                result_data['roas'] = (result_data['gmv'] / result_data['ad_spend']) if result_data['ad_spend'] else 0
 
 
             # --------------------------------------------------------------

@@ -19,20 +19,20 @@ export const kpiGroups = [
             groupTitle: 'Tài chính',
             items: [
                 { key: 'gmv', title: 'GMV', format: 'currency', tooltipText: 'Gross Merchandise Value - Tổng giá trị hàng hóa đã bán (chưa trừ chi phí).' },
-                { key: 'netRevenue', title: 'DOANH THU RÒNG', format: 'currency' },
-                { key: 'totalCost', title: 'TỔNG CHI PHÍ', format: 'currency', tooltipText: 'Tổng chi phí bao gồm Giá vốn và Chi phí Thực thi.', direction: 'down' },
+                { key: 'net_revenue', title: 'DOANH THU RÒNG', format: 'currency' },
+                { key: 'total_cost', title: 'TỔNG CHI PHÍ', format: 'currency', tooltipText: 'Tổng chi phí bao gồm Giá vốn và Chi phí Thực thi.', direction: 'down' },
                 { key: 'cogs', title: 'GIÁ VỐN (COGS)', format: 'currency', tooltipText: 'Cost of Goods Sold - Chi phí giá vốn hàng bán.' },
-                { key: 'executionCost', title: 'CHI PHÍ THỰC THI', format: 'currency', direction: 'down' },
+                { key: 'execution_cost', title: 'CHI PHÍ THỰC THI', format: 'currency', direction: 'down' },
                 { key: 'profit', title: 'LỢI NHUẬN GỘP', format: 'currency' },
                 { key: 'roi', title: 'ROI (%)', format: 'percent', tooltipText: 'Return on Investment - Tỷ suất lợi nhuận trên tổng chi phí. Công thức: (Lợi nhuận / Tổng chi phí) * 100.' },
-                { key: 'profitMargin', title: 'TỶ SUẤT LỢI NHUẬN (%)', format: 'percent', tooltipText: 'Tỷ lệ lợi nhuận so với doanh thu. Công thức: (Lợi nhuận / Doanh thu Ròng) * 100.' },
-                { key: 'takeRate', title: 'TAKE RATE (%)', format: 'percent', tooltipText: 'Tỷ lệ phần trăm chi phí thực thi so với GMV. Công thức: (Chi phí Thực thi / GMV) * 100.', direction: 'down' },
+                { key: 'profit_margin', title: 'TỶ SUẤT LỢI NHUẬN (%)', format: 'percent', tooltipText: 'Tỷ lệ lợi nhuận so với doanh thu. Công thức: (Lợi nhuận / Doanh thu Ròng) * 100.' },
+                { key: 'take_rate', title: 'TAKE RATE (%)', format: 'percent', tooltipText: 'Tỷ lệ phần trăm chi phí thực thi so với GMV. Công thức: (Chi phí Thực thi / GMV) * 100.', direction: 'down' },
             ]
         },
         {
             groupTitle: 'Marketing',
             items: [
-                { key: 'adSpend', title: 'CHI PHÍ ADS', format: 'currency' },
+                { key: 'ad_spend', title: 'CHI PHÍ ADS', format: 'currency' },
                 { key: 'conversions', title: 'CHUYỂN ĐỔI', format: 'number'},
                 { key: 'cpm', title: 'CPM', format: 'currency', tooltipText: 'Cost Per Mille - Chi phí cho 1.000 lần hiển thị'},
                 { key: 'cpa', title: 'CPA', format: 'currency', tooltipText: 'Cost Per Action - Chi phí mỗi lượt chuyển đổi.' },
@@ -43,32 +43,32 @@ export const kpiGroups = [
                 { key: 'clicks', title: 'CLICK', format: 'number'},
                 { key: 'reach', title: 'LƯỢT TIẾP CẬN', format: 'number'},
                 { key: 'frequency', title: 'TẦN SUẤT', format: 'number'},
-                { key: 'conversionRate', title: 'TỶ LỆ CHUYỂN ĐỔI (%)', format: 'percent' },
+                { key: 'conversion_rate', title: 'TỶ LỆ CHUYỂN ĐỔI (%)', format: 'percent' },
             ]
         },
         {
             groupTitle: 'Vận hành',
             items: [
-                { key: 'totalOrders', title: 'TỔNG ĐƠN', format: 'number' },
-                { key: 'completedOrders', title: 'ĐƠN CHỐT', format: 'number' },
-                { key: 'cancelledOrders', title: 'ĐƠN HỦY', format: 'number', direction: 'down' },
-                { key: 'refundedOrders', title: 'ĐƠN HOÀN TIỀN', format: 'number', direction: 'down' },
+                { key: 'total_orders', title: 'TỔNG ĐƠN', format: 'number' },
+                { key: 'completed_orders', title: 'ĐƠN CHỐT', format: 'number' },
+                { key: 'cancelled_orders', title: 'ĐƠN HỦY', format: 'number', direction: 'down' },
+                { key: 'refunded_orders', title: 'ĐƠN HOÀN TIỀN', format: 'number', direction: 'down' },
                 { key: 'aov', title: 'AOV', format: 'currency', tooltipText: 'Average Order Value - Giá trị trung bình của một đơn hàng.' },
                 { key: 'upt', title: 'UPT', format: 'number', tooltipText: 'Units Per Transaction - Số sản phẩm trung bình trên một đơn hàng.' },
-                { key: 'uniqueSkusSold', title: 'SỐ SKU ĐÃ BÁN', format: 'number', tooltipText: 'Số loại sản phẩm khác nhau đã được bán.' },
-                { key: 'completionRate', title: 'Tỷ lệ Chốt', format: 'percent', tooltipText: 'Tỷ lệ giữa số đơn chốt và tổng số đơn.' },
-                { key: 'refundRate', title: 'TỶ LỆ HOÀN', format: 'percent', direction: 'down' },
-                { key: 'cancellationRate', title: 'TỶ LỆ HỦY', format: 'percent', direction: 'down' },
+                { key: 'unique_skus_sold', title: 'SỐ SKU ĐÃ BÁN', format: 'number', tooltipText: 'Số loại sản phẩm khác nhau đã được bán.' },
+                { key: 'completion_rate', title: 'Tỷ lệ Chốt', format: 'percent', tooltipText: 'Tỷ lệ giữa số đơn chốt và tổng số đơn.' },
+                { key: 'refund_rate', title: 'TỶ LỆ HOÀN', format: 'percent', direction: 'down' },
+                { key: 'cancellation_rate', title: 'TỶ LỆ HỦY', format: 'percent', direction: 'down' },
             ]
         },
         {
             groupTitle: 'Khách hàng',
             items: [
-                { key: 'totalCustomers', title: 'TỔNG KHÁCH', format: 'number' },
-                { key: 'newCustomers', title: 'KHÁCH MỚI', format: 'number' },
-                { key: 'returningCustomers', title: 'KHÁCH QUAY LẠI', format: 'number' },
+                { key: 'total_customers', title: 'TỔNG KHÁCH', format: 'number' },
+                { key: 'new_customers', title: 'KHÁCH MỚI', format: 'number' },
+                { key: 'returning_customers', title: 'KHÁCH QUAY LẠI', format: 'number' },
                 { key: 'cac', title: 'CAC', format: 'currency', tooltipText: 'Customer Acquisition Cost - Chi phí để có được một khách hàng mới.' },
-                { key: 'retentionRate', title: 'TỶ LỆ QL (%)', format: 'percent' },
+                { key: 'retention_rate', title: 'TỶ LỆ QL (%)', format: 'percent' },
                 { key: 'ltv', title: 'LTV', format: 'currency', tooltipText: 'Customer Lifetime Value - Lợi nhuận trung bình một khách hàng mang lại.' },
             ]
         }

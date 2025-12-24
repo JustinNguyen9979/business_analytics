@@ -67,10 +67,10 @@ export const processChartData = (dailyData, chartDateRange) => {
     // DEBUG: Kiểm tra aggregation
     console.log(`[Processor] Aggregating ${dailyData.length} rows to '${aggregationType}'`);
 
-    const DEFAULT_KEYS = ['netRevenue', 'profit', 'totalCost', 'adSpend', 'cogs', 'shippingCost', 'packagingCost', 'operatingCost', 'otherCost'];
+    const DEFAULT_KEYS = ['net_revenue', 'profit', 'total_cost', 'ad_spend', 'cogs', 'shipping_cost', 'packaging_cost', 'operating_cost', 'other_cost'];
 
-    // Quét toàn bộ dữ liệu để tìm tất cả các key là số, thay vì chỉ lấy từ phần tử đầu tiên
-    // Điều này sửa lỗi: Nếu ngày đầu tiên thiếu field (ví dụ adSpend=0 hoặc null), field đó bị bỏ qua vĩnh viễn.
+    // Quét toàn bộ dữ liệu để tìm tất cả các key là số
+    // LUÔN LUÔN bao gồm các key mặc định để đảm bảo vẽ được biểu đồ ngay cả khi dữ liệu toàn 0
     const numericKeysSet = new Set(DEFAULT_KEYS);
     dailyData.forEach(entry => {
         Object.keys(entry).forEach(key => {

@@ -35,9 +35,9 @@ function DashboardPage() {
     const { isSidebarOpen } = useLayout();
 
     const lineChartSeries = useMemo(() => [
-        { key: 'netRevenue', name: 'Doanh thu ròng', color: theme.palette.primary.main},
+        { key: 'net_revenue', name: 'Doanh thu ròng', color: theme.palette.primary.main},
         { key: 'profit', name: 'Lợi nhuận', color: '#28a545'},
-        { key: 'totalCost', name: 'Tổng chi phí', color: '#cdb832ff'},
+        { key: 'total_cost', name: 'Tổng chi phí', color: '#cdb832ff'},
     ], [theme.palette.primary.main]);
 
     // Gọi hook cho từng bộ lọc
@@ -217,7 +217,7 @@ function DashboardPage() {
                                     <DateRangeFilterMenu {...donutFilterControl.menuProps} />
                                 </Box>
                             </Box>
-                            <Box sx={{ flexGrow: 1, minHeight: 400, position: 'relative' }}>
+                            <Box sx={{ flexGrow: 1, height: 400, position: 'relative' }}>
                                 {donut.loading && !donut.data ? (
                                     <Box sx={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                                         <CircularProgress />
@@ -226,7 +226,9 @@ function DashboardPage() {
                                     donut.data ? (
                                         <>
                                             {donut.loading && <LoadingOverlay borderRadius={4} />}
-                                             <CostDonutChart {...donut.data} />
+                                            <Suspense fallback={<ChartSkeleton />}>
+                                                <CostDonutChart {...donut.data} />
+                                            </Suspense>
                                         </>
                                     ) : <ChartPlaceholder title="Phân bổ Chi phí"/>
                                 )}
@@ -242,7 +244,7 @@ function DashboardPage() {
                                     <DateRangeFilterMenu {...topProductsFilterControl.menuProps} />
                                 </Box>
                             </Box>
-                            <Box sx={{ flexGrow: 1, minHeight: 600, position: 'relative' }}>
+                                <Box sx={{ flexGrow: 1, height: 600, position: 'relative' }}>
                                 {topProducts.loading && !topProducts.data ? (
                                     <Box sx={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                                         <CircularProgress />
@@ -251,7 +253,9 @@ function DashboardPage() {
                                     topProducts.data ? (
                                         <>
                                             {topProducts.loading && <LoadingOverlay borderRadius={4} />}
-                                            <TopProductsChart data={topProducts.data} />
+                                            <Suspense fallback={<ChartSkeleton />}>
+                                                <TopProductsChart data={topProducts.data} />
+                                            </Suspense>
                                         </>
                                     ) : <ChartPlaceholder title="Top SKU bán chạy" />
                                 )}
@@ -294,12 +298,14 @@ function DashboardPage() {
                                 map.data ? (
                                     <>
                                         {map.loading && <LoadingOverlay borderRadius={4} />}
-                                        <GeoMapChart 
-                                            data={map.data} 
-                                            valueKey="orders" 
-                                            labelKey="city" 
-                                            unitLabel="đơn"
-                                        />
+                                        <Suspense fallback={<ChartSkeleton />}>
+                                            <GeoMapChart 
+                                                data={map.data} 
+                                                valueKey="orders" 
+                                                labelKey="city" 
+                                                unitLabel="đơn"
+                                            />
+                                        </Suspense>
                                     </>
                                 ) : (
                                     <ChartPlaceholder title="Phân bổ Khách hàng" />
