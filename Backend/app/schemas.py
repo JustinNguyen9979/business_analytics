@@ -209,6 +209,14 @@ class OperationKpisResponse(BaseModel):
     avg_daily_orders: float
     refund_rate: float
     bomb_rate: float
+    
+    # Bổ sung dữ liệu chi tiết cho các biểu đồ mới
+    cancel_reason_breakdown: Dict[str, int] = {}
+    hourly_breakdown: Dict[str, int] = {}
+    payment_method_breakdown: Dict[str, int] = {}
+    location_distribution: List[Dict[str, Any]] = []
+    top_refunded_products: List[Dict[str, Any]] = []
+    platform_comparison: List[Dict[str, Any]] = []
 
     class config:
         from_attributes = True

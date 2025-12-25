@@ -5,7 +5,7 @@ import {
     Tooltip, Legend, ResponsiveContainer 
 } from 'recharts';
 import { useTheme } from '@mui/material/styles';
-import { Box, Typography, Paper } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { formatCurrency, formatPercentage } from '../../utils/formatters';
 
 // BỘ MÀU CUSTOM (30 màu)
@@ -20,40 +20,43 @@ const BASE_COLORS = [
 function SourceDistributionChart({ data, dataKey, title, format }) {
     const theme = useTheme();
 
-    // 1. CHUẨN BỊ DỮ LIỆU CHO RECHARTS
-    const chartData = useMemo(() => {
-        if (!data) return [];
-        // Lọc bỏ dòng tổng cộng và map về dạng chuẩn { name, value }
-        return data
+    // 1. CHUẨN BỊ DỮ LIỆU
+    const { chartData, isPlaceholder } = useMemo(() => {
+        if (!data) return { chartData: [], isPlaceholder: true };
+
+        // Lọc bỏ dòng tổng cộng và map về dạng chuẩn
+        const processed = data
             .filter(item => item.platform !== 'Tổng cộng')
             .map(item => ({
                 name: item.platform,
                 value: item[dataKey] || 0,
-                // Giữ lại raw object nếu cần dùng field khác
                 ...item
             }))
-            .filter(item => item.value !== 0); // Có thể lọc bỏ giá trị 0 cho gọn biểu đồ
+            .filter(item => item.value !== 0);
+
+        // Nếu sau khi lọc mà không có dữ liệu nào (hoặc toàn 0), trả về dữ liệu giả
+        if (processed.length === 0) {
+            return {
+                chartData: [{ name: 'Chưa có dữ liệu', value: 1, isEmpty: true }],
+                isPlaceholder: true
+            };
+        }
+
+        return { chartData: processed, isPlaceholder: false };
     }, [data, dataKey]);
 
     const totalValue = useMemo(() => {
+        if (isPlaceholder) return 0;
         return chartData.reduce((acc, cur) => acc + cur.value, 0);
-    }, [chartData]);
-
-    // Nếu không có dữ liệu
-    if (!chartData || chartData.length === 0) {
-        return (
-            <Paper variant="glass" sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                <Typography variant="caption" color="text.secondary" align="center" sx={{ mb: 1, textTransform: 'uppercase', fontWeight: 'bold' }}>
-                    Phân bổ {title}
-                </Typography>
-            </Paper>
-        );
-    }
+    }, [chartData, isPlaceholder]);
 
     // --- RENDER TOOLTIP CUSTOM ---
-    const CustomTooltip = ({ active, payload, label }) => {
+    const CustomTooltip = ({ active, payload }) => {
         if (active && payload && payload.length) {
-            const { name, value, color } = payload[0].payload;
+            const point = payload[0].payload;
+            if (point.isEmpty) return null; // Không hiện tooltip cho dữ liệu giả
+
+            const { name, value, color } = point;
             const percent = totalValue > 0 ? value / totalValue : 0;
             
             return (
@@ -77,7 +80,7 @@ function SourceDistributionChart({ data, dataKey, title, format }) {
         return null;
     };
 
-    // --- RENDER CONTENT ---
+    // --- RENDER CHART ---
     const renderChart = () => {
         // TRƯỜNG HỢP 1: BAR CHART (Cho các chỉ số %, ROI...)
         if (format === 'percent') {
@@ -101,14 +104,19 @@ function SourceDistributionChart({ data, dataKey, title, format }) {
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)' }} />
                         <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={60}>
                             {chartData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={BASE_COLORS[index % BASE_COLORS.length]} />
+                                <Cell 
+                                    key={`cell-${index}`} 
+                                    fill={entry.isEmpty ? theme.palette.action.disabledBackground : BASE_COLORS[index % BASE_COLORS.length]} 
+                                />
                             ))}
-                            <LabelList 
-                                dataKey="value" 
-                                position="top" 
-                                formatter={(val) => formatPercentage(val)} 
-                                style={{ fill: theme.palette.text.primary, fontSize: 11, fontWeight: 600 }}
-                            />
+                            {!isPlaceholder && (
+                                <LabelList 
+                                    dataKey="value" 
+                                    position="top" 
+                                    formatter={(val) => formatPercentage(val)} 
+                                    style={{ fill: theme.palette.text.primary, fontSize: 11, fontWeight: 600 }}
+                                />
+                            )}
                         </Bar>
                     </BarChart>
                 </ResponsiveContainer>
@@ -125,13 +133,22 @@ function SourceDistributionChart({ data, dataKey, title, format }) {
                         cy="50%"
                         innerRadius="45%"
                         outerRadius="70%"
-                        paddingAngle={2}
+                        paddingAngle={isPlaceholder ? 0 : 2}
                         dataKey="value"
                         stroke="none"
-                        labelLine={{ stroke: theme.palette.text.secondary, strokeWidth: 1 }}
-                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
+                        isAnimationActive={!isPlaceholder} // Tắt animation nếu là placeholder
+                        labelLine={!isPlaceholder ? { stroke: theme.palette.text.secondary, strokeWidth: 1 } : false}
+                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+                            if (isPlaceholder) {
+                                // Hiển thị số 0 ở giữa nếu là placeholder
+                                return (
+                                    <text x={cx} y={cy} dy={8} textAnchor="middle" fill={theme.palette.text.disabled} style={{ fontSize: '24px', fontWeight: 'bold' }}>
+                                        0
+                                    </text>
+                                );
+                            }
+
                             const RADIAN = Math.PI / 180;
-                            // Tính toán vị trí label (đẩy ra xa hơn outerRadius)
                             const radius = outerRadius * 1.25; 
                             const x = cx + radius * Math.cos(-midAngle * RADIAN);
                             const y = cy + radius * Math.sin(-midAngle * RADIAN);
@@ -151,42 +168,33 @@ function SourceDistributionChart({ data, dataKey, title, format }) {
                         }}
                     >
                         {chartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={BASE_COLORS[index % BASE_COLORS.length]} />
+                            <Cell 
+                                key={`cell-${index}`} 
+                                fill={entry.isEmpty ? theme.palette.action.disabledBackground : BASE_COLORS[index % BASE_COLORS.length]} 
+                            />
                         ))}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend 
-                        layout="horizontal" 
-                        verticalAlign="bottom" 
-                        align="center"
-                        iconType="circle"
-                        iconSize={8}
-                        wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
-                    />
+                    {!isPlaceholder && (
+                        <Legend 
+                            layout="horizontal" 
+                            verticalAlign="bottom" 
+                            align="center"
+                            iconType="circle"
+                            iconSize={8}
+                            wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }}
+                        />
+                    )}
                 </PieChart>
             </ResponsiveContainer>
         );
     };
 
     return (
-        <Paper variant="glass" sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="caption" color="text.secondary" align="center" sx={{ mb: 2, textTransform: 'uppercase', fontWeight: 'bold' }}>
-                Phân bổ {title}
-            </Typography>
-            <Box sx={{ flexGrow: 1, minHeight: 0 }}>
-                {renderChart()}
-            </Box>
-        </Paper>
+        <Box sx={{ width: '100%', height: '100%', minHeight: 0 }}>
+            {renderChart()}
+        </Box>
     );
 }
 
-// Tối ưu hóa render bằng React.memo
-// Chỉ render lại khi các props thực sự thay đổi
-export default React.memo(SourceDistributionChart, (prevProps, nextProps) => {
-    return (
-        prevProps.dataKey === nextProps.dataKey &&
-        prevProps.title === nextProps.title &&
-        prevProps.format === nextProps.format &&
-        prevProps.data === nextProps.data 
-    );
-});
+export default React.memo(SourceDistributionChart);

@@ -5,7 +5,7 @@ import {
     FormControl, InputLabel, Select, MenuItem
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 
 import DateRangeFilterMenu from '../common/DateRangeFilterMenu';
 import { dateShortcuts } from '../../config/dashboardConfig';
@@ -166,7 +166,7 @@ function DeleteDataDialog({ open, onClose, brandSlug, brandName }) {
                         <Box sx={{ display: 'flex', gap: 2 }}>
                             <Button
                                 variant="outlined"
-                                startIcon={<CalendarTodayIcon />}
+                                startIcon={<CalendarMonthIcon />}
                                 onClick={handleOpenFilter}
                                 sx={{ flexGrow: 1, color: 'text.primary', borderColor: 'rgba(255,255,255,0.3)' }}
                             >

@@ -196,6 +196,62 @@ def _calculate_top_products(orders: List[models.Order], limit=10) -> List[Dict]:
         for sku, data in sorted_products
     ]
 
+def _calculate_top_refunded_products(orders: List[models.Order], revenues: List[models.Revenue], limit=10) -> List[Dict]:
+    """
+    Tính Top sản phẩm bị Hoàn/Hủy/Bom trong ngày.
+    Dựa trên:
+    1. Status đơn hàng (Hủy, Bom).
+    2. Giao dịch hoàn tiền trong bảng Revenue (refund < 0).
+    """
+    refunded_skus = defaultdict(int)
+    product_names = {}
+
+    # 1. Xác định các đơn hàng có vấn đề (Bad Orders)
+    # Map order_code -> bool (is_bad)
+    bad_orders_map = {}
+
+    # Check từ Revenue (Ưu tiên vì chính xác về tiền bạc)
+    for r in revenues:
+        if r.refund < 0 and r.order_code:
+            bad_orders_map[r.order_code] = True
+
+    # Check từ Order Status
+    for order in orders:
+        if order.order_code in bad_orders_map:
+            continue # Đã xác định là xấu từ revenue rồi
+        
+        status_lower = unidecode(str(order.status or "")).lower()
+        # Dùng lại keywords đã định nghĩa ở trên
+        is_bad_status = any(kw in status_lower for kw in ORDER_STATUS_KEYWORDS["bomb_status"] + ORDER_STATUS_KEYWORDS["cancel_status"])
+        
+        if is_bad_status:
+            bad_orders_map[order.order_code] = True
+
+    # 2. Duyệt qua các đơn hàng xấu để đếm SKU
+    for order in orders:
+        if bad_orders_map.get(order.order_code):
+            if order.details and isinstance(order.details.get('items'), list):
+                for item in order.details['items']:
+                    sku = item.get('sku')
+                    if sku:
+                        qty = int(item.get('quantity', 0))
+                        refunded_skus[sku] += qty
+                        # Lưu tên sản phẩm
+                        if sku not in product_names:
+                            product_names[sku] = item.get('name', sku)
+
+    # 3. Sắp xếp và format
+    sorted_refunds = sorted(refunded_skus.items(), key=lambda x: x[1], reverse=True)[:limit]
+
+    return [
+        {
+            "sku": sku,
+            "name": product_names.get(sku, sku),
+            "value": qty # Thống nhất key là 'value' cho frontend dễ dùng
+        }
+        for sku, qty in sorted_refunds
+    ]
+
 def _calculate_location_distribution(orders: List[models.Order], db_session: Session = None) -> List[Dict]:
     """
     Tính phân bổ đơn hàng theo tỉnh/thành phố.
@@ -570,6 +626,10 @@ def calculate_daily_kpis(
         # 3. Tính các trường JSONB (Đổi key sang snake_case)
         kpis["hourly_breakdown"] = _calculate_hourly_breakdown(created_orders)
         kpis["top_products"] = _calculate_top_products(created_orders)
+        
+        # Mới: Tính Top SP Hoàn
+        kpis["top_refunded_products"] = _calculate_top_refunded_products(orders_in_day, revenues_in_day)
+
         kpis["payment_method_breakdown"] = _calculate_payment_method_breakdown(created_orders)
         kpis["cancel_reason_breakdown"] = _calculate_cancel_reason_breakdown(created_orders)
         

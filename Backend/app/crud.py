@@ -1,6 +1,6 @@
 # FILE: backend/app/crud.py
 
-import models, json, schemas, traceback, re, unicodedata
+import models, json, schemas, traceback, re, unicodedata, kpi_utils
 
 from sqlalchemy.orm import Session
 from sqlalchemy import func, union_all, select, and_
@@ -950,3 +950,73 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
         print(f"Error deleting data for brand {brand_id}: {e}")
         traceback.print_exc()
         raise e
+
+def get_aggregated_operation_kpis(db: Session, brand_id: int, start_date: date, end_date: date, source_list: list[str] = None) -> dict:
+    """
+    Lấy KPI vận hành tổng hợp (1 cục duy nhất cho cả khoảng thời gian) theo Source.
+    Sử dụng logic từ kpi_utils để gộp dữ liệu.
+    """
+    # 1. Xác định chiến lược query
+    strategy, clean_sources = kpi_utils.normalize_source_strategy(source_list)
+    
+    # 2. Query dữ liệu thô (List các dict metric theo ngày/source)
+    raw_data_list = []
+    
+    if strategy == kpi_utils.STRATEGY_EMPTY:
+        # Trường hợp không chọn source nào -> Trả về 0 hết
+        pass 
+
+    elif strategy == kpi_utils.STRATEGY_ALL:
+        # Query bảng DailyStat (Đã tính sẵn cho All Source)
+        # Lưu ý: DailyStat là theo ngày, ta cần gộp nhiều ngày lại thành 1
+        stats = db.query(models.DailyStat).filter(
+            models.DailyStat.brand_id == brand_id,
+            models.DailyStat.date.between(start_date, end_date)
+        ).all()
+        
+        # Chuyển Model Object -> Dict để utils xử lý
+        for s in stats:
+            raw_data_list.append({
+                "net_revenue": s.net_revenue, "gmv": s.gmv, "profit": s.profit, "total_cost": s.total_cost,
+                "ad_spend": s.ad_spend, "cogs": s.cogs, "execution_cost": s.execution_cost,
+                "completed_orders": s.completed_orders, "total_orders": s.total_orders,
+                "cancelled_orders": s.cancelled_orders, "refunded_orders": s.refunded_orders, "bomb_orders": s.bomb_orders,
+                "total_quantity_sold": s.total_quantity_sold, "total_customers": s.total_customers,
+                "impressions": s.impressions, "clicks": s.clicks, "conversions": s.conversions,
+                "avg_processing_time": s.avg_processing_time, "avg_shipping_time": s.avg_shipping_time,
+                # JSON Fields
+                "hourly_breakdown": s.hourly_breakdown,
+                "cancel_reason_breakdown": s.cancel_reason_breakdown,
+                "top_refunded_products": s.top_refunded_products
+            })
+
+    elif strategy == kpi_utils.STRATEGY_FILTERED:
+        # Query bảng DailyAnalytics (Lọc theo source)
+        analytics = db.query(models.DailyAnalytics).filter(
+            models.DailyAnalytics.brand_id == brand_id,
+            models.DailyAnalytics.date.between(start_date, end_date),
+            models.DailyAnalytics.source.in_(clean_sources)
+        ).all()
+        
+        for a in analytics:
+            raw_data_list.append({
+                "net_revenue": a.net_revenue, "gmv": a.gmv, "profit": a.profit, "total_cost": a.total_cost,
+                "ad_spend": a.ad_spend, "cogs": a.cogs, "execution_cost": a.execution_cost,
+                "completed_orders": a.completed_orders, "total_orders": a.total_orders,
+                "cancelled_orders": a.cancelled_orders, "refunded_orders": a.refunded_orders, "bomb_orders": a.bomb_orders,
+                "total_quantity_sold": a.total_quantity_sold,
+                "impressions": a.impressions, "clicks": a.clicks, "conversions": a.conversions,
+                "avg_processing_time": a.avg_processing_time, "avg_shipping_time": a.avg_shipping_time,
+                # JSON Fields
+                "hourly_breakdown": getattr(a, 'hourly_breakdown', {}),
+                "cancel_reason_breakdown": getattr(a, 'cancel_reason_breakdown', {}),
+                "top_refunded_products": getattr(a, 'top_refunded_products', [])
+            })
+
+    # 3. Gộp dữ liệu (Aggregate)
+    aggregated_data = kpi_utils.aggregate_data_points(raw_data_list)
+    
+    # 4. Tính toán chỉ số dẫn xuất (Ratio)
+    final_kpis = kpi_utils.calculate_derived_metrics(aggregated_data)
+    
+    return final_kpis

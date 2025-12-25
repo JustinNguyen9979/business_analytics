@@ -1,7 +1,7 @@
 // FILE: frontend/src/pages/DashboardPage.jsx (PHIÊN BẢN HOÀN THIỆN)
 
 import { useTheme } from '@mui/material/styles';
-import React, { useState, useEffect, Suspense, lazy, useMemo } from 'react';
+import React, { useState, useEffect, Suspense, lazy, useMemo, useCallback } from 'react';
 import { Typography, Box, Paper, Divider, CircularProgress, Button, Stack, Skeleton } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import dayjs from 'dayjs';
@@ -14,10 +14,13 @@ import { useLayout } from '../context/LayoutContext';
 import { useBrand } from '../context/BrandContext';
 import { useDateFilter } from '../hooks/useDateFilter';
 import LoadingOverlay from '../components/common/LoadingOverlay';
+import DashboardBox from '../components/ui/DashboardBox';
+
+import { useCostBreakdown } from '../hooks/useCostBreakdown';
+import HorizontalBarChart from '../components/charts/HorizontalBarChart';
 
 const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
-const CostDonutChart = lazy(() => import('../components/charts/CostDonutChart'));
-const TopProductsChart = lazy(() => import('../components/charts/TopProductsChart'));
+const DonutChart = lazy(() => import('../components/charts/DonutChart'));
 const GeoMapChart = lazy(() => import('../components/charts/GeoMapChart'));
 
 const ChartSkeleton = () => (
@@ -80,6 +83,13 @@ function DashboardPage() {
 
     const anyError = Object.values(dashboardState).find(s => s.error);
 
+    // Chuẩn bị dữ liệu cho Donut Chart
+    const donutChartData = useCostBreakdown(donut.data);
+
+    // Optimize: Dùng useCallback để hàm không bị tạo mới mỗi lần render, tránh re-render chart con
+    const getTopProductColor = useCallback((index) => {
+        return index < 3 ? theme.palette.warning.main : theme.palette.primary.main;
+    }, [theme.palette.warning.main, theme.palette.primary.main]);
 
     return (
         <Box sx={{ px: 4 }} >
@@ -163,7 +173,7 @@ function DashboardPage() {
                 <Box variant="loaderContainer" sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 3, pt: 3 }}>
                     <Typography variant="h6" noWrap>Biểu đồ Doanh thu ròng & Lợi nhuận</Typography>
                     <Box>
-                        <Button variant="outlined" size="small" {...lineChartFilterControl.buttonProps} />
+                        <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />} {...lineChartFilterControl.buttonProps} />
                         <DateRangeFilterMenu {...lineChartFilterControl.menuProps} />
                     </Box>
                 </Box>
@@ -208,90 +218,97 @@ function DashboardPage() {
                 >
                     {/* Dùng Stack để tạo khoảng cách giữa 2 biểu đồ bên trong */}
                     <Stack spacing={4}>
-                        {/* KHỐI 1: DONUT CHART */}
-                        <Paper variant="glass" elevation={0} sx={{ p: 1, display: 'flex', flexDirection: 'column' }}>
-                            <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
-                                <Typography variant="h6" noWrap>Phân bổ Chi phí</Typography>
-                                <Box>
-                                    <Button variant="outlined" size="small" {...donutFilterControl.buttonProps} />
-                                    <DateRangeFilterMenu {...donutFilterControl.menuProps} />
-                                </Box>
-                            </Box>
-                            <Box sx={{ flexGrow: 1, height: 400, position: 'relative' }}>
-                                {donut.loading && !donut.data ? (
-                                    <Box sx={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                        <CircularProgress />
-                                    </Box>
-                                ) : (
-                                    donut.data ? (
-                                        <>
-                                            {donut.loading && <LoadingOverlay borderRadius={4} />}
-                                            <Suspense fallback={<ChartSkeleton />}>
-                                                <CostDonutChart {...donut.data} />
-                                            </Suspense>
-                                        </>
-                                    ) : <ChartPlaceholder title="Phân bổ Chi phí"/>
-                                )}
-                            </Box>
-                        </Paper>
-
-                        {/* KHỐI 2: TOP PRODUCTS CHART */}
-                        <Paper variant="glass" elevation={0} sx={{ p: 1, display: 'flex', flexDirection: 'column' }}>
-                            <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
-                                <Typography variant="h6" noWrap>Top SKU bán chạy</Typography>
-                                <Box>
-                                    <Button variant="outlined" size="small" {...topProductsFilterControl.buttonProps} />
-                                    <DateRangeFilterMenu {...topProductsFilterControl.menuProps} />
-                                </Box>
-                            </Box>
-                                <Box sx={{ flexGrow: 1, height: 600, position: 'relative' }}>
-                                {topProducts.loading && !topProducts.data ? (
-                                    <Box sx={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                                        <CircularProgress />
-                                    </Box>
-                                ) : (
-                                    topProducts.data ? (
-                                        <>
-                                            {topProducts.loading && <LoadingOverlay borderRadius={4} />}
-                                            <Suspense fallback={<ChartSkeleton />}>
-                                                <TopProductsChart data={topProducts.data} />
-                                            </Suspense>
-                                        </>
-                                    ) : <ChartPlaceholder title="Top SKU bán chạy" />
-                                )}
-                            </Box>
-                        </Paper>
-                    </Stack>
-                </Box>
-
-                {/* --- BOX CON BÊN PHẢI --- */}
-                <Box
-                    sx={{
-                        width: { xs: '100%', md: 'calc(50% - 16px)' },
-                        display: 'flex',
-                    }}
-                >
-                    {/* THAY THẾ NỘI DUNG CŨ BẰNG KHỐI NÀY */}
-                    <Paper
-                        variant="glass"
-                        elevation={0}
-                        sx={{
-                            p: 1,
-                            width: '100%',
-                            flexGrow: 1,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            minHeight: { xs: 900, md: '100%' }
-                        }}
-                    >
-                        <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
-                            <Typography variant="h6" noWrap>Phân bổ Khách hàng</Typography>
-                            <Box>
-                                <Button variant="outlined" size="small" {...mapFilterControl.buttonProps} />
-                                <DateRangeFilterMenu {...mapFilterControl.menuProps} />
-                            </Box>
-                        </Box>
-                        <Box sx={{ flexGrow: 1, minHeight: { xs: 500, lg: 'auto' }, position: 'relative' }}>
+                                                {/* KHỐI 1: DONUT CHART */}
+                                                <Paper variant="glass" elevation={0} sx={{ p: 1, display: 'flex', flexDirection: 'column' }}>
+                                                    <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
+                                                        <Typography variant="h6" noWrap>Phân bổ Chi phí</Typography>
+                                                        <Box>
+                                                            <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />} {...donutFilterControl.buttonProps} />
+                                                            <DateRangeFilterMenu {...donutFilterControl.menuProps} />
+                                                        </Box>
+                                                    </Box>
+                                                    <Box sx={{ flexGrow: 1, height: 400, position: 'relative' }}>
+                                                        {donut.loading && !donut.data ? (
+                                                            <Box sx={{ position: 'absolute', inset: 0, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                                                <CircularProgress />
+                                                            </Box>
+                                                        ) : (
+                                                            donut.data ? (
+                                                                <>
+                                                                    {donut.loading && <LoadingOverlay borderRadius={4} />}
+                                                                    <Suspense fallback={<ChartSkeleton />}>
+                                                                        <DonutChart 
+                                                                            data={donutChartData} 
+                                                                            centerLabel="TỔNG"
+                                                                            centerValue={donut.data?.total_cost}
+                                                                            unit="đ"
+                                                                            formatType="currency"
+                                                                            height="100%"
+                                                                        />
+                                                                    </Suspense>
+                                                                </>
+                                                            ) : <ChartPlaceholder title="Phân bổ Chi phí"/>
+                                                        )}
+                                                    </Box>
+                                                </Paper>
+                        
+                                                {/* KHỐI 2: TOP PRODUCTS CHART */}
+                                                <Paper variant="glass" elevation={0} sx={{ p: 1, display: 'flex', flexDirection: 'column' }}>
+                                                    <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
+                                                        <Typography variant="h6" noWrap>Top SKU bán chạy</Typography>
+                                                        <Box>
+                                                            <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />} {...topProductsFilterControl.buttonProps} />
+                                                            <DateRangeFilterMenu {...topProductsFilterControl.menuProps} />
+                                                        </Box>
+                                                    </Box>
+                                                    <Box sx={{ flexGrow: 1, height: 600, position: 'relative' }}>
+                                                        {topProducts.loading ? (
+                                                            <ChartSkeleton />
+                                                        ) : (
+                                                            topProducts.data ? (
+                                                                <HorizontalBarChart 
+                                                                    data={topProducts.data} 
+                                                                    dataKey="total_quantity"
+                                                                    labelKey="name"
+                                                                    subLabelKey="sku"
+                                                                    unit=" sp"
+                                                                    height="100%"
+                                                                    color={getTopProductColor}
+                                                                />
+                                                            ) : <ChartPlaceholder title="Top SKU bán chạy" />
+                                                        )}
+                                                    </Box>
+                                                </Paper>
+                                            </Stack>
+                                        </Box>
+                        
+                                        {/* --- BOX CON BÊN PHẢI --- */}
+                                        <Box
+                                            sx={{
+                                                width: { xs: '100%', md: 'calc(50% - 16px)' },
+                                                display: 'flex',
+                                            }}
+                                        >
+                                            {/* THAY THẾ NỘI DUNG CŨ BẰNG KHỐI NÀY */}
+                                            <Paper
+                                                variant="glass"
+                                                elevation={0}
+                                                sx={{
+                                                    p: 1,
+                                                    width: '100%',
+                                                    flexGrow: 1,
+                                                    display: 'flex',
+                                                    flexDirection: 'column',
+                                                    minHeight: { xs: 900, md: '100%' }
+                                                }}
+                                            >
+                                                <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
+                                                    <Typography variant="h6" noWrap>Phân bổ Khách hàng</Typography>
+                                                    <Box>
+                                                        <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />} {...mapFilterControl.buttonProps} />
+                                                        <DateRangeFilterMenu {...mapFilterControl.menuProps} />
+                                                    </Box>
+                                                </Box>                        <Box sx={{ flexGrow: 1, minHeight: { xs: 500, lg: 'auto' }, position: 'relative' }}>
                             {map.loading && !map.data ? (
                                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}><CircularProgress /></Box>
                             ) : (

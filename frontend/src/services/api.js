@@ -5,6 +5,9 @@ import axios from 'axios';
 const apiClient = axios.create({
     // '/api' sẽ được Vite proxy chuyển tiếp đến backend
     baseURL: '/api',
+    paramsSerializer: {
+        indexes: null // Quan trọng: Tắt việc thêm brackets [] vào array keys (source=a&source=b)
+    }
 });
 
 export const fetchCustomerMap = async (brandSlug, startDate, endDate, signal) => {
@@ -259,12 +262,19 @@ export const fetchAsyncData = async (requestType, brandSlug, dateRange, params =
     }
 };
 
-export const fetchOperationKpisAPI = async (brandSlug, startDate, endDate) => {
+export const fetchOperationKpisAPI = async (brandSlug, startDate, endDate, sources = []) => {
     try {
         const params = {
             start_date: startDate,
             end_date: endDate
         };
+
+        // Nếu có truyền list source cụ thể, thêm vào params
+        // Axios sẽ tự động chuyển array ['a', 'b'] thành ?source=a&source=b
+        if (sources && sources.length > 0) {
+            params.source = sources;
+        }
+
         const response = await apiClient.get(`/brands/${brandSlug}/kpis/operation`, { params });
         return response.data;
     } catch (error) {

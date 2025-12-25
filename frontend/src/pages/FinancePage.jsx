@@ -1,7 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import { Box, Typography, Paper, Button, Skeleton, IconButton, Tooltip, CircularProgress } from '@mui/material';
 import {
-    CalendarToday as CalendarTodayIcon,
+    CalendarMonth as CalendarMonthIcon,
     Settings as SettingsIcon
 } from '@mui/icons-material';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
@@ -12,9 +12,12 @@ import FinanceComparisonChart from '../components/charts/FinanceComparisonChart'
 import ChartSettingsPanel from '../components/charts/controls/ChartSettingsPanel';
 import ChartSettingSection from '../components/charts/controls/ChartSettingSection';
 import ChartSettingItem from '../components/charts/controls/ChartSettingItem';
+import SourceSelectionSection from '../components/charts/controls/SourceSelectionSection';
 import { useFinancePageLogic } from '../hooks/useFinancePageLogic'; 
 import { useTheme } from '@mui/material/styles'; 
 import LoadingOverlay from '../components/common/LoadingOverlay';
+import SectionTitle from '../components/ui/SectionTitle';
+import DashboardBox from '../components/ui/DashboardBox';
 
 const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
 
@@ -71,7 +74,7 @@ function FinancePage() {
                 <Box sx={{ display: 'flex', gap: 2 }}>
                     <Button
                         variant="outlined"
-                        startIcon={<CalendarTodayIcon />}
+                        startIcon={<CalendarMonthIcon />}
                         onClick={handleOpenFilter}
                         sx={{ 
                             color: theme.palette.primary.main, 
@@ -113,6 +116,37 @@ function FinancePage() {
                             />
                         </Box>
                 ))}
+            </Box>
+
+            {/* --- PHẦN 2: CHART PHÂN BỔ (Đã di chuyển lên trên) --- */}
+            <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
+                {(() => {
+                    const isExpanded = platformData.length > 5;
+                    const minWidth = isExpanded ? '30%' : '300px'; 
+
+                    if (loading) {
+                        return Array.from(new Array(5)).map((_, index) => (
+                            <DashboardBox key={index} minWidth={minWidth} height={350}>
+                                <Skeleton variant="rectangular" width="100%" height="100%" sx={{ borderRadius: 2 }} />
+                            </DashboardBox>
+                        ));
+                    }
+
+                    return cardConfigs.map(config => (
+                        <DashboardBox 
+                            key={config.key} 
+                            title={config.title}
+                            minWidth={minWidth}
+                            height={350}
+                        >
+                            <SourceDistributionChart
+                                data={platformData}
+                                dataKey={config.key}
+                                format={config.format || 'currency'}
+                            />
+                        </DashboardBox>
+                    ));
+                })()}
             </Box>
 
             {/* --- 1. BIỂU ĐỒ BAR CHART (SO SÁNH NỀN TẢNG) --- */}
@@ -174,21 +208,11 @@ function FinancePage() {
                         ))}
                     </ChartSettingSection>
 
-                    <ChartSettingSection title="Nguồn dữ liệu">
-                        <ChartSettingItem
-                            label="Tất cả nguồn"
-                            checked={barSelectedSources.includes('all')}
-                            onChange={() => handleToggleBarSource('all')}
-                        />
-                        {sourceOptions.map(option => (
-                            <ChartSettingItem
-                                key={option.value}
-                                label={option.label}
-                                checked={barSelectedSources.includes('all') || barSelectedSources.includes(option.value)}
-                                onChange={() => handleToggleBarSource(option.value)}
-                            />
-                        ))}
-                    </ChartSettingSection>
+                    <SourceSelectionSection
+                        selectedSources={barSelectedSources}
+                        sourceOptions={sourceOptions}
+                        onToggle={handleToggleBarSource}
+                    />
                 </ChartSettingsPanel>
             </Paper>
 
@@ -255,57 +279,16 @@ function FinancePage() {
                         ))}
                     </ChartSettingSection>
 
-                    <ChartSettingSection title="Nguồn dữ liệu">
-                        <ChartSettingItem
-                            label="Tất cả nguồn"
-                            checked={selectedSources.includes('all')}
-                            onChange={() => handleToggleSource('all')}
-                        />
-                        {sourceOptions.map(option => (
-                            <ChartSettingItem
-                                key={option.value}
-                                label={option.label}
-                                checked={selectedSources.includes('all') || selectedSources.includes(option.value)}
-                                onChange={() => handleToggleSource(option.value)}
-                            />
-                        ))}
-                    </ChartSettingSection>
+                    <SourceSelectionSection
+                        selectedSources={selectedSources}
+                        sourceOptions={sourceOptions}
+                        onToggle={handleToggleSource}
+                    />
                 </ChartSettingsPanel>
             </Paper>
 
-            {/* --- PHẦN 2: CHART PHÂN BỔ --- */}
-            <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
-                {(() => {
-                    const isExpanded = platformData.length > 5;
-                    const chartBoxSx = isExpanded
-                        ? { width: 'calc(33.333% - 16px)', height: 350 }
-                        : { flex: '1 1 300px', height: 350 };             
-
-                    if (loading) {
-                        return Array.from(new Array(5)).map((_, index) => (
-                            <Box key={index} sx={chartBoxSx}>
-                                 <Skeleton variant="rectangular" width="100%" height="250px" sx={{ borderRadius: 4, bgcolor: 'rgba(255,255,255,0.05)' }} />
-                            </Box>
-                        ));
-                    }
-
-                    return cardConfigs.map(config => (
-                        <Box key={config.key} sx={chartBoxSx}>
-                            <SourceDistributionChart
-                                data={platformData}
-                                dataKey={config.key}
-                                title={config.title}
-                                format={config.format || 'currency'}
-                            />
-                        </Box>
-                    ));
-                })()}
-            </Box>
-
             {/* Bảng chi tiết */}
-            <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
-                Chi tiết theo nền tảng
-            </Typography>
+            <SectionTitle>Chi tiết theo nền tảng</SectionTitle>
             <FinanceTable data={platformData} loading={loading} error={error} />
         </Box>
     );

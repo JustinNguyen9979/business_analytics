@@ -55,6 +55,17 @@ const theme = createTheme({
         h4: { fontWeight: 600, color: PALETTE.primary.main },
         h5: { fontWeight: 500, fontSize: '1.5rem' },
         h6: { fontWeight: 500, color: PALETTE.secondary.light },
+        // Thêm style chuyên biệt cho tiêu đề các phần (Section)
+        sectionTitle: {
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '1px',
+            color: '#80DEEA', // PALETTE.text.secondary
+            marginBottom: '16px',
+            marginTop: '32px',
+            display: 'block'
+        }
     },
     
     // --- TÙY CHỈNH STYLE CHO COMPONENT ---

@@ -85,17 +85,19 @@ function KpiCard({ title, value, icon, color = 'primary.main', previousValue, fo
 
     return (
         <Paper 
-            elevation={0}
+            variant="glass"
             sx={{
                 p: 2.5,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                borderRadius: 4,
-                height: '100%', // Đảm bảo card có chiều cao bằng nhau
+                height: '100%',
+                transition: 'all 0.3s ease',
+                '&:hover': {
+                    transform: 'translateY(-5px)',
+                    borderColor: color, // Viền đổi sang màu của Icon
+                    boxShadow: `0 10px 30px -10px ${color}60`, // Glow màu theo icon
+                }
             }}
         >
             <Box>

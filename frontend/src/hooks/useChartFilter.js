@@ -1,0 +1,69 @@
+import { useState, useEffect } from 'react';
+import dayjs from 'dayjs';
+import { dateShortcuts } from '../config/dashboardConfig';
+
+/**
+ * Hook quản lý bộ lọc Hybrid (Cha - Con).
+ * Quy tắc:
+ * 1. Khi globalState thay đổi -> localState cập nhật theo (Cha là nhất).
+ * 2. Khi người dùng chỉnh local -> localState thay đổi (Ghi đè tạm thời).
+ * 
+ * @param {object} globalState - State của bộ lọc tổng { dateRange, dateLabel, selectedSources }
+ */
+export const useChartFilter = (globalState) => {
+    // 1. State nội bộ (Local)
+    const [dateRange, setDateRange] = useState(globalState?.dateRange || [dayjs().startOf('month'), dayjs().endOf('month')]);
+    const [dateLabel, setDateLabel] = useState(globalState?.dateLabel || 'Tháng này');
+    const [selectedSources, setSelectedSources] = useState(globalState?.selectedSources || ['all']);
+    
+    // State quản lý Menu Date
+    const [dateAnchorEl, setDateAnchorEl] = useState(null);
+
+    // 2. EFFECT: Lắng nghe Cha (Master Override)
+    // Khi Cha thay đổi, Con phải tuân lệnh ngay lập tức
+    useEffect(() => {
+        if (globalState) {
+            if (globalState.dateRange) setDateRange(globalState.dateRange);
+            if (globalState.dateLabel) setDateLabel(globalState.dateLabel);
+            // Lưu ý: OperationPage chưa có filter Source tổng, nên tạm thời chưa sync source
+            // Nếu sau này có source tổng, thêm dòng này:
+            // if (globalState.selectedSources) setSelectedSources(globalState.selectedSources);
+        }
+    }, [globalState?.dateRange, globalState?.dateLabel, globalState?.selectedSources]);
+
+    // 3. Handlers cho Local
+    const openDateMenu = (event) => setDateAnchorEl(event.currentTarget);
+    const closeDateMenu = () => setDateAnchorEl(null);
+    
+    const applyDateRange = (range, typeOrLabel) => {
+        // Tìm label tiếng Việt tương ứng nếu tham số truyền vào là 'type' (ví dụ: 'this_month')
+        const shortcut = dateShortcuts.find(s => s.type === typeOrLabel);
+        const displayLabel = shortcut ? shortcut.label : (typeOrLabel === 'custom' ? 'Tùy chỉnh' : typeOrLabel);
+
+        setDateRange(range);
+        setDateLabel(displayLabel);
+        closeDateMenu();
+    };
+
+    const applySourceFilter = (newSources) => {
+        setSelectedSources(newSources);
+    };
+
+    return {
+        // Date Props
+        dateRange,
+        dateLabel,
+        dateMenuProps: {
+            anchorEl: dateAnchorEl,
+            open: Boolean(dateAnchorEl),
+            onClose: closeDateMenu,
+            onApply: applyDateRange,
+            initialDateRange: dateRange
+        },
+        openDateMenu,
+
+        // Source Props
+        selectedSources,
+        applySourceFilter
+    };
+};

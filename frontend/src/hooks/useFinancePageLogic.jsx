@@ -13,6 +13,7 @@ import { useDashboardData } from './useDashboardData';
 import { useFinanceData } from './useFinanceData';
 import { getSourcesForBrand } from '../services/api';
 import { useBrand } from '../context/BrandContext';
+import { toggleSourceSelection } from '../utils/filterLogic';
 
 // Giá trị mặc định
 const defaultDateRange = dateShortcuts.find(s => s.type === 'this_month').getValue();
@@ -78,65 +79,14 @@ export const useFinancePageLogic = () => {
     }, [brandSlug]);
 
     // --- HANDLERS ---
-    // Toggle Source cho Line Chart (Logic Select All chuẩn Excel)
+    // Toggle Source cho Line Chart (Dùng logic chung)
     const handleToggleSource = (sourceValue) => {
-        setSelectedSources(prev => {
-            const allValues = sourceOptions.map(o => o.value);
-            
-            // 1. Nếu click vào nút "Tất cả"
-            if (sourceValue === 'all') {
-                // Nếu đang có 'all' (đang chọn hết) -> Click thì Bỏ hết
-                if (prev.includes('all')) {
-                    return []; 
-                }
-                // Ngược lại -> Chọn hết
-                return ['all', ...allValues];
-            }
-
-            // 2. Nếu click vào một source cụ thể
-            // Trước tiên, mở rộng 'all' thành list đầy đủ nếu cần để dễ xử lý
-            let currentSelection = prev.includes('all') 
-                ? ['all', ...allValues] 
-                : [...prev];
-
-            if (currentSelection.includes(sourceValue)) {
-                // Đang chọn -> Bỏ chọn source đó
-                currentSelection = currentSelection.filter(v => v !== sourceValue);
-                // Bắt buộc bỏ cờ 'all' vì không còn đủ bộ
-                currentSelection = currentSelection.filter(v => v !== 'all');
-            } else {
-                // Chưa chọn -> Chọn thêm
-                currentSelection.push(sourceValue);
-            }
-
-            // 3. Kiểm tra xem đã đủ bộ chưa để tự động bật lại 'all'
-            const rawSources = currentSelection.filter(v => v !== 'all');
-            // Nếu số lượng source chọn == tổng số source option
-            if (rawSources.length === allValues.length && allValues.length > 0) {
-                return ['all', ...rawSources];
-            }
-
-            // Trả về danh sách unique (đề phòng trùng lặp)
-            return [...new Set(rawSources)];
-        });
+        setSelectedSources(prev => toggleSourceSelection(sourceValue, prev, sourceOptions));
     };
 
-    // Toggle Source cho Bar Chart (MỚI)
+    // Toggle Source cho Bar Chart (Dùng logic chung - Đã sửa lỗi)
     const handleToggleBarSource = (sourceValue) => {
-        setBarSelectedSources(prev => {
-            if (sourceValue === 'all') {
-                return ['all'];
-            }
-            if (prev.includes('all')) {
-                return [sourceValue];
-            }
-            if (prev.includes(sourceValue)) {
-                const newSelection = prev.filter(v => v !== sourceValue);
-                return newSelection.length === 0 ? ['all'] : newSelection;
-            } else {
-                return [...prev, sourceValue];
-            }
-        });
+        setBarSelectedSources(prev => toggleSourceSelection(sourceValue, prev, sourceOptions));
     };
 
     const handleOpenFilter = (event) => setAnchorEl(event.currentTarget);

@@ -1,15 +1,31 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { useDateFilter } from './useDateFilter'; 
-import { fetchOperationKpisAPI } from '../services/api';
+import { fetchOperationKpisAPI, getSourcesForBrand } from '../services/api'; // Thêm API lấy source
 import { useBrand } from '../context/BrandContext'; 
 
 export const useOperationPageLogic = () => {
     const theme = useTheme();
     const selectedBrand = useBrand(); 
 
-    // Logic lọc ngày
+    // Logic lọc ngày chung cho cả trang
     const { filter, buttonProps, menuProps } = useDateFilter({ defaultType: 'this_month' });
+
+    const [sourceOptions, setSourceOptions] = useState([]);
+
+    // 1. Lấy danh sách Sources khi Brand thay đổi
+    useEffect(() => {
+        const fetchSources = async () => {
+            if (!selectedBrand?.slug) return;
+            try {
+                const sources = await getSourcesForBrand(selectedBrand.slug);
+                setSourceOptions(sources.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) })));
+            } catch (err) {
+                console.error("Error fetching sources:", err);
+            }
+        };
+        fetchSources();
+    }, [selectedBrand?.slug]);
 
     const dateRange = filter.range;
     const dateLabel = buttonProps.children;
@@ -71,6 +87,16 @@ export const useOperationPageLogic = () => {
         value: 0,
         previousValue: null
     }))); 
+    
+    // Bổ sung states cho các biểu đồ chi tiết
+    const [breakdownData, setBreakdownData] = useState({
+        cancelReasons: [],
+        hourlyOrders: [],
+        paymentRisks: [],
+        platformPerf: [],
+        locationDistribution: []
+    });
+
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -104,7 +130,12 @@ export const useOperationPageLogic = () => {
                         refund_rate: 0, 
                         bomb_rate: 0,
                         cancelled_orders: 0,
-                        refunded_orders: 0
+                        refunded_orders: 0,
+                        cancel_reason_breakdown: {},
+                        hourly_breakdown: {},
+                        payment_method_breakdown: {},
+                        location_distribution: [],
+                        platform_comparison: []
                     };
                 }
 
@@ -164,6 +195,16 @@ export const useOperationPageLogic = () => {
 
                 setKpiData(mappedData);
 
+                // Xử lý dữ liệu Breakdown cho các biểu đồ mới
+                setBreakdownData({
+                    cancelReasons: Object.entries(apiResponse.cancel_reason_breakdown || {}).map(([name, value]) => ({ name, value })),
+                    hourlyOrders: Object.entries(apiResponse.hourly_breakdown || {}).map(([hour, count]) => ({ hour: `${hour}h`, count })),
+                    platformPerf: apiResponse.platform_comparison || [],
+                    locationDistribution: apiResponse.location_distribution || [],
+                    paymentRisks: Object.entries(apiResponse.payment_method_breakdown || {}).map(([name, value]) => ({ name, value })),
+                    topRefundedProducts: apiResponse.top_refunded_products || []
+                });
+
             } catch (err) {
                 console.error("Logic Error:", err);
                 setKpiData([]); 
@@ -182,7 +223,9 @@ export const useOperationPageLogic = () => {
         handleOpenFilter,
         handleCloseFilter,
         handleApplyDateRange,
+        sourceOptions, // Export thêm options
         kpiData, 
+        breakdownData, // Export thêm data mới
         loading,
         error
     };

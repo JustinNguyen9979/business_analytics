@@ -281,7 +281,8 @@ def read_brand_kpis(
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     if cache_was_missing:
         print(f"API: Phát hiện cache lỗi thời cho brand ID {brand.id}. Kích hoạt worker tự sửa chữa.")
-        process_brand_data.delay(brand.id)
+    # Gọi worker để xử lý trong nền (Bảng DailyStat)
+    recalculate_all_brand_data.delay(brand.id)
     return db_brand
 
 @app.get("/brands/{brand_slug}/daily-kpis", response_model=schemas.DailyKpiResponse)
@@ -320,6 +321,7 @@ def get_operation_kpis (
     brand_slug: str,
     start_date: date = Query(..., description="Ngày bắt đầu (YYYY-MM-DD)"),
     end_date: date = Query(..., description="Ngày kết thúc (YYYY-MM-DD)"),
+    source: List[str] = Query(None, description="Danh sách nguồn dữ liệu (e.g. shopee, lazada)"),
     db: Session = Depends(get_db),
 ): 
     """
@@ -330,57 +332,19 @@ def get_operation_kpis (
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     
-    # Lấy dữ liệu KPI theo ngày trong range (từ DailyStat, tổng hợp cho cả brand)
-    # Hàm này trả về list các dictionary, mỗi dict là KPI của 1 ngày
-    print(f"DEBUG_API: get_operation_kpis called with range: {start_date} -> {end_date}")
-    daily_kpis_list = crud.get_daily_kpis_for_range(db, db_brand.id, start_date, end_date, source_list=['all'])
+    # Lấy dữ liệu KPI theo ngày trong range
+    # Nếu không có source truyền vào, mặc định là ['all'] bên trong logic
     
-    print(f"DEBUG_API: Found {len(daily_kpis_list)} records from DB.")
-    if daily_kpis_list:
-        print(f"DEBUG_API: Sample Record [0]: {daily_kpis_list[0]}") # In ra để soi key
-
-    # Nếu không có dữ liệu, trả về default 0
-    if not daily_kpis_list:
-        return schemas.OperationKpisResponse(
-            avg_processing_time=0, avg_shipping_time=0,
-            completion_rate=0, cancellation_rate=0,
-            avg_daily_orders=0,
-        )
+    print(f"DEBUG_API: get_operation_kpis called with range: {start_date} -> {end_date}, sources: {source}")
     
-    # Tính giá trị trung bình cho các chỉ số trong khoảng thời gian
-    total_processing_time = 0
-    total_shipping_time = 0
-    total_completion_rate = 0
-    total_cancellation_rate = 0
-    total_refund_rate = 0
-    total_bomb_rate = 0
-    total_orders = 0
-
-    count_days = len(daily_kpis_list)
-
-    for daily_kpi in daily_kpis_list:
-        total_processing_time += daily_kpi.get('avg_processing_time', 0)
-        total_shipping_time += daily_kpi.get('avg_shipping_time', 0)
-        total_completion_rate += daily_kpi.get('completion_rate', 0)
-        total_cancellation_rate += daily_kpi.get('cancellation_rate', 0)
-        total_refund_rate += daily_kpi.get('refund_rate', 0)
-        total_bomb_rate += daily_kpi.get('bomb_rate', 0)
-        total_orders += daily_kpi.get('total_orders', 0) # Lấy tổng số đơn hàng
-
-    avg_processing_time = (total_processing_time / count_days) if count_days > 0 else 0
-    avg_shipping_time = (total_shipping_time / count_days) if count_days > 0 else 0
-    avg_completion_rate = (total_completion_rate / count_days) if count_days > 0 else 0
-    avg_cancellation_rate = (total_cancellation_rate / count_days) if count_days > 0 else 0
-    avg_refund_rate = (total_refund_rate / count_days) if count_days > 0 else 0
-    avg_bomb_rate = (total_bomb_rate / count_days) if count_days > 0 else 0
-    avg_daily_orders = (total_orders / count_days) if count_days > 0 else 0
-
-    return schemas.OperationKpisResponse(
-        avg_processing_time=avg_processing_time,
-        avg_shipping_time=avg_shipping_time,
-        completion_rate=avg_completion_rate,
-        cancellation_rate=avg_cancellation_rate,
-        refund_rate=avg_refund_rate,
-        bomb_rate=avg_bomb_rate,
-        avg_daily_orders=avg_daily_orders,
+    # Sử dụng hàm aggregation mới từ crud (đã dùng kpi_utils để gộp JSON)
+    operation_kpis = crud.get_aggregated_operation_kpis(
+        db, 
+        db_brand.id, 
+        start_date, 
+        end_date, 
+        source_list=source
     )
+
+    # Convert kết quả dict thành Pydantic model response
+    return operation_kpis
