@@ -372,6 +372,9 @@ function OperationPage() {
                 <DashboardBox 
                     title="Hiệu quả Vận hành theo Sàn" 
                     height={600}
+                    loading={platformLoading}
+                    hasData={platformData.length > 0}
+                    placeholderTitle="Chưa có dữ liệu Vận hành theo Sàn"
                     action={
                         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                             <ToggleButtonGroup
@@ -392,35 +395,33 @@ function OperationPage() {
                         </Box>
                     }
                 >
-                     {platformLoading ? <Skeleton variant="rectangular" width="100%" height="100%" /> : (
-                         platformViewMode === 'quality' ? (
-                             <HorizontalBarChart
-                                data={platformData.filter(i => i.platform !== 'Tổng cộng')}
-                                layout="vertical"
-                                // stacked={true}
-                                showLegend={true}
-                                series={[
-                                    { dataKey: 'completed_orders', label: 'Thành công', color: theme.palette.success.main },
-                                    { dataKey: 'cancelled_orders', label: 'Hủy', color: theme.palette.error.main },
-                                    { dataKey: 'refunded_orders', label: 'Hoàn', color: theme.palette.warning.main }
-                                ]}
-                                labelKey="platform"
-                                unit=" đơn"
-                                height="100%"
-                             />
-                         ) : (
-                             <HorizontalBarChart
-                                data={platformData.filter(i => i.platform !== 'Tổng cộng')}
-                                layout="vertical"
-                                showLegend={true}
-                                series={[
-                                    { dataKey: 'avg_processing_time', label: 'Thời gian xử lý TB', color: theme.palette.info.main },
-                                ]}
-                                labelKey="platform"
-                                unit=" giờ"
-                                height="100%"
-                             />
-                         )
+                     {platformViewMode === 'quality' ? (
+                         <HorizontalBarChart
+                            data={platformData.filter(i => i.platform !== 'Tổng cộng')}
+                            layout="vertical"
+                            // stacked={true}
+                            showLegend={true}
+                            series={[
+                                { dataKey: 'completed_orders', label: 'Thành công', color: theme.palette.success.main },
+                                { dataKey: 'cancelled_orders', label: 'Hủy', color: theme.palette.error.main },
+                                { dataKey: 'refunded_orders', label: 'Hoàn', color: theme.palette.warning.main }
+                            ]}
+                            labelKey="platform"
+                            unit=" đơn"
+                            height="100%"
+                         />
+                     ) : (
+                         <HorizontalBarChart
+                            data={platformData.filter(i => i.platform !== 'Tổng cộng')}
+                            layout="vertical"
+                            showLegend={true}
+                            series={[
+                                { dataKey: 'avg_processing_time', label: 'Thời gian xử lý TB', color: theme.palette.info.main },
+                            ]}
+                            labelKey="platform"
+                            unit=" giờ"
+                            height="100%"
+                         />
                      )}
                 </DashboardBox>
             </DashboardRow>

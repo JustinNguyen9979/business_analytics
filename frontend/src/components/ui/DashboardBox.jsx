@@ -1,26 +1,47 @@
 import React from 'react';
-import { Paper, Typography, Box } from '@mui/material';
+import { Paper, Typography, Box, Button, Skeleton } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import DateRangeFilterMenu from '../common/DateRangeFilterMenu';
+import LoadingOverlay from '../common/LoadingOverlay';
+import ChartPlaceholder from '../common/ChartPlaceholder';
+
+const ChartSkeleton = () => (
+    <Skeleton 
+        variant="rectangular" 
+        width="100%" 
+        height="100%" 
+        sx={{ borderRadius: 2, bgcolor: 'rgba(255, 255, 255, 0.05)' }} 
+    />
+);
 
 /**
  * DashboardBox - Hộp chứa nội dung chuẩn cho Dashboard.
  * Tái sử dụng Paper variant="glass" từ theme.
- * 
- * @param {string} title - Tiêu đề của hộp.
- * @param {string} minWidth - Chiều rộng tối thiểu (mặc định 500px).
- * @param {number|string} height - Chiều cao (mặc định 400).
- * @param {ReactNode} children - Nội dung bên trong.
  */
-const DashboardBox = ({ title, action, children, minWidth = '500px', height = 400, sx = {} }) => {
+const DashboardBox = ({ 
+    title, 
+    action, 
+    children, 
+    minWidth = 'auto', 
+    height = 400, 
+    sx = {},
+    loading = false,
+    hasData = true,
+    filterControl = null,
+    placeholderTitle = '',
+    contentSx = {}
+}) => {
     const theme = useTheme();
+
     return (
         <Paper 
             variant="glass" 
             sx={{ 
-                position: 'relative', // Quan trọng cho SettingsPanel
-                overflow: 'hidden',   // Quan trọng để Panel trượt mượt mà trong box
-                flex: `1 1 ${minWidth}`, 
-                p: 3, 
+                position: 'relative',
+                overflow: 'hidden',
+                flex: minWidth === 'auto' ? '1 1 auto' : `1 1 ${minWidth}`, 
+                p: 2, 
                 height: height, 
                 display: 'flex', 
                 flexDirection: 'column',
@@ -32,18 +53,45 @@ const DashboardBox = ({ title, action, children, minWidth = '500px', height = 40
                 ...sx 
             }}
         >
-            {(title || action) && (
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                    {title && (
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                            {title}
-                        </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, px: 1 }}>
+                {title && (
+                    <Typography variant="h6" sx={{ fontWeight: 600 }} noWrap>
+                        {title}
+                    </Typography>
+                )}
+                
+                <Box display="flex" gap={1} alignItems="center">
+                    {filterControl && (
+                        <>
+                            <Button 
+                                variant="outlined" 
+                                size="small" 
+                                startIcon={<CalendarMonthIcon />} 
+                                onClick={filterControl.openDateMenu}
+                                sx={{ borderRadius: 1.5 }}
+                            >
+                                {filterControl.dateLabel}
+                            </Button>
+                            <DateRangeFilterMenu {...filterControl.dateMenuProps} />
+                        </>
                     )}
-                    {action && <Box display="flex" gap={1}>{action}</Box>}
+                    {action}
                 </Box>
-            )}
-            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', position: 'relative', minWidth: 0 }}>
-                {children}
+            </Box>
+
+            <Box sx={{ flexGrow: 1, position: 'relative', minWidth: 0, ...contentSx }}>
+                {loading && !hasData ? (
+                    <ChartSkeleton />
+                ) : (
+                    hasData ? (
+                        <>
+                            {loading && <LoadingOverlay borderRadius={2} />}
+                            {children}
+                        </>
+                    ) : (
+                        <ChartPlaceholder title={placeholderTitle || title} />
+                    )
+                )}
             </Box>
         </Paper>
     );
