@@ -65,9 +65,8 @@ export const useDateFilter = ({ defaultType, useUrl = false, urlPrefix = '' }) =
         if (shortcut) {
             newLabel = shortcut.label;
         } else if (labelType.startsWith('Quý')) {
-            // Ví dụ: labelType là 'Quý 1_2025' -> 'Quý 1, 2025'
-            const parts = labelType.split('_'); // parts sẽ là ['Quý 1', '2025']
-            newLabel = `${parts[0]}, ${parts[1]}`; // Ghép lại thành "Quý 1, 2025"
+            // labelType hiện tại đã có format đẹp "Quý X YYYY" nên dùng trực tiếp
+            newLabel = labelType;
         } else {
             newLabel = `${newRange[0].format('DD/MM')} - ${newRange[1].format('DD/MM/YYYY')}`;
         }

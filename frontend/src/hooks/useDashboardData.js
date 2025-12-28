@@ -125,7 +125,7 @@ export const useDashboardData = (brandSlug, filters) => {
         fetchKpi();
 
         return () => controller.abort();
-    }, [brandSlug, filters.kpi]); // Chỉ phụ thuộc vào bộ lọc KPI
+    }, [brandSlug, filters.kpi?.range, filters.kpi?.type]); // Chỉ phụ thuộc vào giá trị range và type
 
     // <<< THAY ĐỔI 3: useEffect riêng cho Biểu đồ đường (Line Chart) >>>
     useEffect(() => {
@@ -201,7 +201,7 @@ export const useDashboardData = (brandSlug, filters) => {
             clearTimeout(timeoutId);
             controller.abort();
         };
-    }, [brandSlug, filters.lineChart]); // Chỉ phụ thuộc vào bộ lọc Line Chart
+    }, [brandSlug, filters.lineChart?.range, filters.lineChart?.type, filters.lineChart?.source]); // Dependencies cụ thể
 
     // <<< THAY ĐỔI 4: useEffect riêng cho các biểu đồ còn lại (Donut, Top Products, Map) >>>
     // Helper function để tránh lặp code
@@ -226,7 +226,7 @@ export const useDashboardData = (brandSlug, filters) => {
             fetchData();
 
             return () => controller.abort();
-        }, [brandSlug, filter]);
+        }, [brandSlug, filter?.range, filter?.type]); // Dependency là range và type bên trong filter
     };
 
     createSingleChartEffect('donut', 'kpi_summary', filters.donut);
@@ -261,7 +261,7 @@ export const useDashboardData = (brandSlug, filters) => {
         fetchMapData();
 
         return () => controller.abort();
-    }, [brandSlug, filters.map]);
+    }, [brandSlug, filters.map?.range]); // Dependency là range của map
     
     // Trả về toàn bộ state đã được cấu trúc
     return state;

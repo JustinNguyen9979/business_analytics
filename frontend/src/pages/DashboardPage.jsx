@@ -13,6 +13,7 @@ import ChartPlaceholder from '../components/common/ChartPlaceholder';
 import { useLayout } from '../context/LayoutContext';
 import { useBrand } from '../context/BrandContext';
 import { useDateFilter } from '../hooks/useDateFilter';
+import { useChartFilter } from '../hooks/useChartFilter';
 import LoadingOverlay from '../components/common/LoadingOverlay';
 import DashboardBox from '../components/ui/DashboardBox';
 
@@ -43,30 +44,40 @@ function DashboardPage() {
         { key: 'total_cost', name: 'Tổng chi phí', color: '#cdb832ff'},
     ], [theme.palette.primary.main]);
 
-    // Gọi hook cho từng bộ lọc
-    const kpiFilterControl = useDateFilter({
+    // 1. TẠO BỘ LỌC TỔNG (GLOBAL FILTER) - CHA
+    const globalDateFilter = useDateFilter({
         defaultType: 'this_month',
-        useUrl: true,
-        urlPrefix: 'kpi_'
+        useUrl: true, 
+        urlPrefix: 'dashboard_'
     });
 
-    const lineChartFilterControl = useDateFilter({ defaultType: 'this_month' });
-    const donutFilterControl = useDateFilter({ defaultType: 'this_month' });
-    const topProductsFilterControl = useDateFilter({ defaultType: 'this_month' });
-    const mapFilterControl = useDateFilter({ defaultType: 'this_month' });
+    // Tạo state tổng để truyền xuống con
+    const globalFilterState = useMemo(() => ({
+        dateRange: globalDateFilter.filter.range,
+        dateLabel: globalDateFilter.buttonProps.children
+    }), [globalDateFilter.filter.range, globalDateFilter.buttonProps.children]);
 
+    // 2. TẠO CÁC BỘ LỌC CON (LOCAL FILTERS) - KẾ THỪA TỪ CHA
+    const kpiFilterControl = useChartFilter(globalFilterState);
+    const lineChartFilterControl = useChartFilter(globalFilterState);
+    const donutFilterControl = useChartFilter(globalFilterState);
+    const topProductsFilterControl = useChartFilter(globalFilterState);
+    const mapFilterControl = useChartFilter(globalFilterState);
+
+    // 3. MAPPING DỮ LIỆU CHO HOOK FETCH DATA
+    // Lưu ý: useChartFilter trả về trực tiếp dateRange, ta cần map về format { range: ... } để useDashboardData hiểu
     const filtersForHook = useMemo (() => ({
-        kpi: kpiFilterControl.filter,
-        lineChart: lineChartFilterControl.filter,
-        donut: donutFilterControl.filter,
-        topProducts: topProductsFilterControl.filter,
-        map: mapFilterControl.filter,
+        kpi: { range: kpiFilterControl.dateRange, type: 'custom' },
+        lineChart: { range: lineChartFilterControl.dateRange, type: 'custom' },
+        donut: { range: donutFilterControl.dateRange, type: 'custom' },
+        topProducts: { range: topProductsFilterControl.dateRange, type: 'custom' },
+        map: { range: mapFilterControl.dateRange, type: 'custom' },
     }), [
-        kpiFilterControl.filter,
-        lineChartFilterControl.filter,
-        donutFilterControl.filter,
-        topProductsFilterControl.filter,
-        mapFilterControl.filter,
+        kpiFilterControl.dateRange,
+        lineChartFilterControl.dateRange,
+        donutFilterControl.dateRange,
+        topProductsFilterControl.dateRange,
+        mapFilterControl.dateRange,
     ]);
 
     const dashboardState = useDashboardData(brandSlug, filtersForHook)
@@ -92,16 +103,41 @@ function DashboardPage() {
     }, [theme.palette.warning.main, theme.palette.primary.main]);
 
     return (
-        <Box sx={{ px: 4 }} >
-            <Typography variant="h4" gutterBottom sx={{ mb: 4 }}>
-                {brandName ? `Báo cáo Kinh doanh: ${brandName}` : 'Đang tải...'}
-            </Typography>
+        <Box sx={{ px: 4, py: 3 }} >
+            {/* --- HEADER: TIÊU ĐỀ & BỘ LỌC TỔNG --- */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+                <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
+                    {brandName ? `Báo cáo Kinh doanh: ${brandName}` : 'Đang tải...'}
+                </Typography>
+                
+                <Box>
+                    <Button 
+                        variant="outlined" 
+                        startIcon={<CalendarMonthIcon />} 
+                        {...globalDateFilter.buttonProps}
+                        sx={{ borderRadius: 2, height: 40, px: 3 }}
+                    >
+                         {globalDateFilter.buttonProps.children}
+                    </Button>
+                    <DateRangeFilterMenu {...globalDateFilter.menuProps} />
+                </Box>
+            </Box>
             
             <Paper variant="glass" elevation={0} sx={{ p: 3, mb: 4 }}>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 2 }}>
                     <Typography variant="h6" sx={{ fontWeight: 600 }} noWrap>Chỉ số Hiệu suất Tổng thể</Typography>
                     
-                    <Button variant="outlined" startIcon={<CalendarMonthIcon />} {...kpiFilterControl.buttonProps} />
+                    <Box>
+                        <Button 
+                            variant="outlined" 
+                            size="small"
+                            startIcon={<CalendarMonthIcon />} 
+                            onClick={kpiFilterControl.openDateMenu}
+                        >
+                            {kpiFilterControl.dateLabel}
+                        </Button>
+                        <DateRangeFilterMenu {...kpiFilterControl.dateMenuProps} />
+                    </Box>
                 </Box>
                 
                 <Divider sx={{ mb: 3 }} />
@@ -173,8 +209,15 @@ function DashboardPage() {
                 <Box variant="loaderContainer" sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 3, pt: 3 }}>
                     <Typography variant="h6" noWrap>Biểu đồ Doanh thu ròng & Lợi nhuận</Typography>
                     <Box>
-                        <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />} {...lineChartFilterControl.buttonProps} />
-                        <DateRangeFilterMenu {...lineChartFilterControl.menuProps} />
+                        <Button 
+                            variant="outlined" 
+                            size="small" 
+                            startIcon={<CalendarMonthIcon />} 
+                            onClick={lineChartFilterControl.openDateMenu}
+                        >
+                            {lineChartFilterControl.dateLabel}
+                        </Button>
+                        <DateRangeFilterMenu {...lineChartFilterControl.dateMenuProps} />
                     </Box>
                 </Box>
                 
@@ -193,7 +236,7 @@ function DashboardPage() {
                                         isLoading={lineChart.loading}
                                         chartRevision={chartRevision}
                                         aggregationType={lineChart.data.aggregationType}
-                                        selectedDateRange={lineChartFilterControl.filter.range}
+                                        selectedDateRange={lineChartFilterControl.dateRange}
                                     />
                                 </>
                             ) : <ChartPlaceholder title="Doanh thu & Lợi nhuận" />}
@@ -223,8 +266,15 @@ function DashboardPage() {
                                                     <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                                                         <Typography variant="h6" noWrap>Phân bổ Chi phí</Typography>
                                                         <Box>
-                                                            <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />} {...donutFilterControl.buttonProps} />
-                                                            <DateRangeFilterMenu {...donutFilterControl.menuProps} />
+                                                            <Button 
+                                                                variant="outlined" 
+                                                                size="small" 
+                                                                startIcon={<CalendarMonthIcon />} 
+                                                                onClick={donutFilterControl.openDateMenu}
+                                                            >
+                                                                {donutFilterControl.dateLabel}
+                                                            </Button>
+                                                            <DateRangeFilterMenu {...donutFilterControl.dateMenuProps} />
                                                         </Box>
                                                     </Box>
                                                     <Box sx={{ flexGrow: 1, height: 400, position: 'relative' }}>
@@ -257,8 +307,15 @@ function DashboardPage() {
                                                     <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                                                         <Typography variant="h6" noWrap>Top SKU bán chạy</Typography>
                                                         <Box>
-                                                            <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />} {...topProductsFilterControl.buttonProps} />
-                                                            <DateRangeFilterMenu {...topProductsFilterControl.menuProps} />
+                                                            <Button 
+                                                                variant="outlined" 
+                                                                size="small" 
+                                                                startIcon={<CalendarMonthIcon />} 
+                                                                onClick={topProductsFilterControl.openDateMenu}
+                                                            >
+                                                                {topProductsFilterControl.dateLabel}
+                                                            </Button>
+                                                            <DateRangeFilterMenu {...topProductsFilterControl.dateMenuProps} />
                                                         </Box>
                                                     </Box>
                                                     <Box sx={{ flexGrow: 1, height: 600, position: 'relative' }}>
@@ -305,8 +362,15 @@ function DashboardPage() {
                                                 <Box variant="loaderContainer" sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, px: 2, pt: 2 }}>
                                                     <Typography variant="h6" noWrap>Phân bổ Khách hàng</Typography>
                                                     <Box>
-                                                        <Button variant="outlined" size="small" startIcon={<CalendarMonthIcon />} {...mapFilterControl.buttonProps} />
-                                                        <DateRangeFilterMenu {...mapFilterControl.menuProps} />
+                                                        <Button 
+                                                            variant="outlined" 
+                                                            size="small" 
+                                                            startIcon={<CalendarMonthIcon />} 
+                                                            onClick={mapFilterControl.openDateMenu}
+                                                        >
+                                                            {mapFilterControl.dateLabel}
+                                                        </Button>
+                                                        <DateRangeFilterMenu {...mapFilterControl.dateMenuProps} />
                                                     </Box>
                                                 </Box>                        <Box sx={{ flexGrow: 1, minHeight: { xs: 500, lg: 'auto' }, position: 'relative' }}>
                             {map.loading && !map.data ? (
@@ -332,9 +396,6 @@ function DashboardPage() {
                     </Paper>
                 </Box>
             </Box>
-            
-            
-            <DateRangeFilterMenu {...kpiFilterControl.menuProps} />
         </Box>
     );
 }

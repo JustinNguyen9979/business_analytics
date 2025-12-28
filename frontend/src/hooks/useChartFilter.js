@@ -38,7 +38,13 @@ export const useChartFilter = (globalState) => {
     const applyDateRange = (range, typeOrLabel) => {
         // Tìm label tiếng Việt tương ứng nếu tham số truyền vào là 'type' (ví dụ: 'this_month')
         const shortcut = dateShortcuts.find(s => s.type === typeOrLabel);
-        const displayLabel = shortcut ? shortcut.label : (typeOrLabel === 'custom' ? 'Tùy chỉnh' : typeOrLabel);
+        
+        let displayLabel = typeOrLabel;
+        if (shortcut) {
+            displayLabel = shortcut.label;
+        } else if (typeOrLabel === 'custom') {
+            displayLabel = `${range[0].format('DD/MM')} - ${range[1].format('DD/MM/YYYY')}`;
+        }
 
         setDateRange(range);
         setDateLabel(displayLabel);
