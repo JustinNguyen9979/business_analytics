@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Box, Typography, Button, Paper, Skeleton, IconButton, Tooltip } from '@mui/material';
+import { Box, Typography, Button, Paper, Skeleton, IconButton, Tooltip, ToggleButton, ToggleButtonGroup } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import SettingsIcon from '@mui/icons-material/Settings';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import GaugeChart from '../components/charts/GaugeChart';
 import DonutChart from '../components/charts/DonutChart';
 import HorizontalBarChart from '../components/charts/HorizontalBarChart';
+import GeoMapChart from '../components/charts/GeoMapChart';
 import { useOperationPageLogic } from '../hooks/useOperationPageLogic';
 import { useTheme } from '@mui/material/styles';
 import { fetchOperationKpisAPI } from '../services/api';
@@ -23,7 +24,7 @@ import SourceSelectionSection from '../components/charts/controls/SourceSelectio
 import { toggleSourceSelection } from '../utils/filterLogic';
 
 // --- COMPONENT CON QUẢN LÝ SETTINGS PANEL ---
-const OperationBoxControl = ({ filter, sourceOptions, title }) => {
+const OperationBoxControl = ({ filter, sourceOptions, title, hideSource = false }) => {
     const theme = useTheme();
     const [isConfigOpen, setIsConfigOpen] = useState(false);
 
@@ -47,37 +48,41 @@ const OperationBoxControl = ({ filter, sourceOptions, title }) => {
                 <DateRangeFilterMenu {...filter.dateMenuProps} />
             </Box>
 
-            {/* Nút Cấu hình (Bánh răng) */}
-            <Tooltip title="Cấu hình nguồn dữ liệu">
-                <IconButton 
-                    onClick={() => setIsConfigOpen(true)}
-                    sx={{ 
-                        border: `1px solid ${theme.palette.divider}`,
-                        borderRadius: 2,
-                        color: isConfigOpen ? theme.palette.primary.main : theme.palette.text.secondary,
-                        bgcolor: isConfigOpen ? theme.palette.primary.main + '20' : 'transparent',
-                        '&:hover': {
-                            color: theme.palette.primary.main,
-                            borderColor: theme.palette.primary.main,
-                        }
-                    }}
-                >
-                    <SettingsIcon fontSize="small" />
-                </IconButton>
-            </Tooltip>
+            {/* Nút Cấu hình (Bánh răng) - Ẩn nếu hideSource = true */}
+            {!hideSource && (
+                <>
+                    <Tooltip title="Cấu hình nguồn dữ liệu">
+                        <IconButton 
+                            onClick={() => setIsConfigOpen(true)}
+                            sx={{ 
+                                border: `1px solid ${theme.palette.divider}`,
+                                borderRadius: 2,
+                                color: isConfigOpen ? theme.palette.primary.main : theme.palette.text.secondary,
+                                bgcolor: isConfigOpen ? theme.palette.primary.main + '20' : 'transparent',
+                                '&:hover': {
+                                    color: theme.palette.primary.main,
+                                    borderColor: theme.palette.primary.main,
+                                }
+                            }}
+                        >
+                            <SettingsIcon fontSize="small" />
+                        </IconButton>
+                    </Tooltip>
 
-            {/* Panel Cấu hình */}
-            <ChartSettingsPanel
-                open={isConfigOpen}
-                onClose={() => setIsConfigOpen(false)}
-                title={title || "Cấu hình"}
-            >
-                <SourceSelectionSection
-                    selectedSources={filter.selectedSources}
-                    sourceOptions={sourceOptions}
-                    onToggle={handleToggleSource}
-                />
-            </ChartSettingsPanel>
+                    {/* Panel Cấu hình */}
+                    <ChartSettingsPanel
+                        open={isConfigOpen}
+                        onClose={() => setIsConfigOpen(false)}
+                        title={title || "Cấu hình"}
+                    >
+                        <SourceSelectionSection
+                            selectedSources={filter.selectedSources}
+                            sourceOptions={sourceOptions}
+                            onToggle={handleToggleSource}
+                        />
+                    </ChartSettingsPanel>
+                </>
+            )}
         </Box>
     );
 };
@@ -130,6 +135,28 @@ function OperationPage() {
     const [hourlyData, setHourlyData] = useState([]);
     const [hourlyLoading, setHourlyLoading] = useState(false);
 
+    // --- Box: COD vs Prepayment ---
+    const paymentRiskFilter = useChartFilter(globalFilterState);
+    const [paymentData, setPaymentData] = useState([]);
+    const [paymentLoading, setPaymentLoading] = useState(false);
+
+    // --- Box: GeoMap ---
+    const geoFilter = useChartFilter(globalFilterState);
+    const [geoData, setGeoData] = useState([]);
+    const [geoLoading, setGeoLoading] = useState(false);
+
+    // --- Box: Platform Performance ---
+    const platformFilter = useChartFilter(globalFilterState);
+    const [platformData, setPlatformData] = useState([]);
+    const [platformLoading, setPlatformLoading] = useState(false);
+    const [platformViewMode, setPlatformViewMode] = useState('quality'); // 'quality' | 'speed'
+
+    const handlePlatformViewChange = (event, newAlignment) => {
+        if (newAlignment !== null) {
+            setPlatformViewMode(newAlignment);
+        }
+    };
+
     // ==========================================
     // 2. FETCH DATA ĐỘC LẬP
     // ==========================================
@@ -158,6 +185,16 @@ function OperationPage() {
                 setData(response.top_refunded_products || []);
             } else if (key === 'hourly') {
                 setData(Object.entries(response.hourly_breakdown || {}).map(([hour, count]) => ({ hour: `${hour}h`, count })));
+            } else if (key === 'payment') {
+                // Biểu đồ stacked cần format [{ name: 'Payment', cod: 100, prepayment: 50 }]
+                const breakdown = response.payment_method_breakdown || {};
+                const formattedData = Object.entries(breakdown).map(([name, value]) => ({name, value}));
+                setData(formattedData);
+
+            } else if (key === 'geo') {
+                setData(response.location_distribution || []);
+            } else if (key === 'platform') {
+                setData(response.platform_comparison || []);
             }
         } catch (err) {
             console.error(`Error fetching ${key}:`, err);
@@ -170,6 +207,9 @@ function OperationPage() {
     useEffect(() => { fetchLocalData(cancelReasonFilter, setCancelData, setCancelLoading, 'cancelReasons'); }, [cancelReasonFilter.dateRange, cancelReasonFilter.selectedSources, fetchLocalData]);
     useEffect(() => { fetchLocalData(topRefundFilter, setRefundedProds, setRefundLoading, 'topRefunded'); }, [topRefundFilter.dateRange, topRefundFilter.selectedSources, fetchLocalData]);
     useEffect(() => { fetchLocalData(hourlyFilter, setHourlyData, setHourlyLoading, 'hourly'); }, [hourlyFilter.dateRange, hourlyFilter.selectedSources, fetchLocalData]);
+    useEffect(() => { fetchLocalData(paymentRiskFilter, setPaymentData, setPaymentLoading, 'payment'); }, [paymentRiskFilter.dateRange, paymentRiskFilter.selectedSources, fetchLocalData]);
+    useEffect(() => { fetchLocalData(geoFilter, setGeoData, setGeoLoading, 'geo'); }, [geoFilter.dateRange, geoFilter.selectedSources, fetchLocalData]);
+    useEffect(() => { fetchLocalData(platformFilter, setPlatformData, setPlatformLoading, 'platform'); }, [platformFilter.dateRange, platformFilter.selectedSources, fetchLocalData]);
 
     return (
         <Box sx={{ px: 4, py: 3 }}>
@@ -247,6 +287,7 @@ function OperationPage() {
                             centerLabel="TỔNG HỦY" 
                             unit=" đơn"
                             formatType="number"
+                            height="100%"
                         />
                     )}
                 </DashboardBox>
@@ -271,11 +312,24 @@ function OperationPage() {
                 </DashboardBox>
             </DashboardRow>
 
-            {/* --- ĐÁNH GIÁ RỦI RO & XU HƯỚNG --- */}
-            <SectionTitle>Đánh giá Rủi ro & Xu hướng</SectionTitle>
+            {/* --- PHƯƠNG THỨC THANH TOÁN & XU HƯỚNG --- */}
+            <SectionTitle>Phương thức thanh toán & Xu hướng</SectionTitle>
             <DashboardRow>
-                <DashboardBox title="Rủi ro: COD vs Thanh toán trước">
-                    <PlaceholderBox label="Biểu đồ Cột chồng (Stacked Bar)" />
+                <DashboardBox 
+                    title="Phương thức thanh toán"
+                    action={<OperationBoxControl filter={paymentRiskFilter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
+                >
+                    {paymentLoading ? <Skeleton variant="rectangular" width="100%" height="100%" /> : (
+                        <HorizontalBarChart
+                            data={paymentData}
+                            layout="vertical"
+                            dataKey="value"
+                            labelKey="name"
+                            unit=" đơn"
+                            color= "#e8d458"
+                            height="100%"
+                        />
+                    )}
                 </DashboardBox>
                 
                 <DashboardBox 
@@ -301,11 +355,73 @@ function OperationPage() {
             {/* --- PHÂN BỔ ĐỊA LÝ & NỀN TẢNG --- */}
             <SectionTitle>Phân bổ Địa lý & Nền tảng</SectionTitle>
             <DashboardRow>
-                <DashboardBox title="Bản đồ 'Điểm nóng' Đơn hàng" height={500}>
-                    <PlaceholderBox label="Bản đồ Việt Nam (GeoMap)" />
+                <DashboardBox 
+                    title="Bản đồ 'Điểm nóng' Đơn hàng" 
+                    height={600}
+                    action={<OperationBoxControl filter={geoFilter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
+                >
+                    {geoLoading ? <Skeleton variant="rectangular" width="100%" height="100%" /> : (
+                        <GeoMapChart 
+                            data={geoData}
+                            valueKey="orders"
+                            labelKey="city"
+                            unitLabel=" đơn"
+                        />
+                    )}
                 </DashboardBox>
-                <DashboardBox title="Hiệu quả Vận hành theo Sàn" height={500}>
-                    <PlaceholderBox label="Biểu đồ Nhóm (Grouped Bar Chart)" />
+                <DashboardBox 
+                    title="Hiệu quả Vận hành theo Sàn" 
+                    height={600}
+                    action={
+                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                            <ToggleButtonGroup
+                                value={platformViewMode}
+                                exclusive
+                                onChange={handlePlatformViewChange}
+                                size="small"
+                                sx={{ height: 36 }}
+                            >
+                                <ToggleButton value="quality" sx={{ textTransform: 'none', px: 2 }}>
+                                    Chất lượng
+                                </ToggleButton>
+                                <ToggleButton value="speed" sx={{ textTransform: 'none', px: 2 }}>
+                                    Tốc độ xử lý
+                                </ToggleButton>
+                            </ToggleButtonGroup>
+                            <OperationBoxControl filter={platformFilter} sourceOptions={sourceOptions} hideSource={true} />
+                        </Box>
+                    }
+                >
+                     {platformLoading ? <Skeleton variant="rectangular" width="100%" height="100%" /> : (
+                         platformViewMode === 'quality' ? (
+                             <HorizontalBarChart
+                                data={platformData.filter(i => i.platform !== 'Tổng cộng')}
+                                layout="vertical"
+                                // stacked={true}
+                                showLegend={true}
+                                series={[
+                                    { dataKey: 'completed_orders', label: 'Thành công', color: theme.palette.success.main },
+                                    { dataKey: 'cancelled_orders', label: 'Hủy', color: theme.palette.error.main },
+                                    { dataKey: 'refunded_orders', label: 'Hoàn', color: theme.palette.warning.main }
+                                ]}
+                                labelKey="platform"
+                                unit=" đơn"
+                                height="100%"
+                             />
+                         ) : (
+                             <HorizontalBarChart
+                                data={platformData.filter(i => i.platform !== 'Tổng cộng')}
+                                layout="vertical"
+                                showLegend={true}
+                                series={[
+                                    { dataKey: 'avg_processing_time', label: 'Thời gian xử lý TB', color: theme.palette.info.main },
+                                ]}
+                                labelKey="platform"
+                                unit=" giờ"
+                                height="100%"
+                             />
+                         )
+                     )}
                 </DashboardBox>
             </DashboardRow>
 

@@ -272,7 +272,11 @@ export const fetchOperationKpisAPI = async (brandSlug, startDate, endDate, sourc
         // Nếu có truyền list source cụ thể, thêm vào params
         // Axios sẽ tự động chuyển array ['a', 'b'] thành ?source=a&source=b
         if (sources && sources.length > 0) {
-            params.source = sources;
+            if (sources.includes('all')) {
+                params.source = ['all'];
+            } else {
+                params.source = sources;
+            }
         }
 
         const response = await apiClient.get(`/brands/${brandSlug}/kpis/operation`, { params });

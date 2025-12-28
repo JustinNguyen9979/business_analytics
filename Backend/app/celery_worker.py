@@ -7,8 +7,9 @@ import traceback
 from datetime import date, timedelta
 from worker_utils import get_db_session
 import crud
-import kpi_calculator
+import kpi_utils
 import models
+from services import dashboard_service, data_service
 from cache import redis_client
 from sqlalchemy import func, distinct
 
@@ -149,7 +150,7 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                         source_list = [req_source]
 
                 result_data = {
-                    "data": crud.get_daily_kpis_for_range(
+                    "data": dashboard_service.get_daily_kpis_for_range(
                         db, brand_id, start_date, end_date, source_list=source_list
                     )
                 }
@@ -159,14 +160,14 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
             # --------------------------------------------------------------
             elif request_type == "top_products":
                 limit = params.get("limit", 10)
-                result_data = crud.get_top_selling_products(db, brand_id, start_date, end_date, limit)
+                result_data = dashboard_service.get_top_selling_products(db, brand_id, start_date, end_date, limit)
 
             # --------------------------------------------------------------
             # --- Nhánh 5: KPI THEO PLATFORM ---
             # --------------------------------------------------------------
             elif request_type == "kpis_by_platform":
                 # Vì DailyStat hiện tại chưa lưu cột 'source', ta vẫn dùng logic cũ cho phần này
-                result_data = crud.get_kpis_by_platform(db, brand_id, start_date, end_date)
+                result_data = dashboard_service.get_kpis_by_platform(db, brand_id, start_date, end_date)
 
             else:
                 raise ValueError(f"Loại yêu cầu không hợp lệ: {request_type}")
@@ -199,32 +200,54 @@ def recalculate_all_brand_data(brand_id: int):
     print(f"WORKER: Bắt đầu RECALCULATE (DailyStat) cho brand ID {brand_id}.")
     try:
         with get_db_session() as db:
-            # BƯỚC MỚI: Xóa tất cả các bản ghi DailyStat cũ của brand này
-            print(f"WORKER: Đang xóa các bản ghi DailyStat cũ cho brand {brand_id}...")
+            # BƯỚC MỚI: Xóa tất cả các bản ghi DailyStat và DailyAnalytics cũ của brand này
+            print(f"WORKER: [1/4] Đang xóa dữ liệu cũ (Stats & Analytics) cho brand {brand_id}...")
             db.query(models.DailyStat).filter(models.DailyStat.brand_id == brand_id).delete(synchronize_session=False)
-            print(f"WORKER: Đã xóa xong DailyStat cũ.")
+            db.query(models.DailyAnalytics).filter(models.DailyAnalytics.brand_id == brand_id).delete(synchronize_session=False)
+            
+            # QUAN TRỌNG: Commit ngay lập tức để xác nhận việc xóa
+            db.commit() 
+            print(f"WORKER: [2/4] Đã xóa xong và Commit dữ liệu cũ.")
 
-            # 1. Lấy tất cả các ngày có hoạt động
-            all_activity_dates = crud.get_all_activity_dates(db, brand_id=brand_id)
+            # 1. Lấy tất cả các ngày có hoạt động (Query trực tiếp để tránh lỗi Import CRUD)
+            print(f"WORKER: [3/4] Đang quét các ngày có hoạt động...")
+            from sqlalchemy import union_all, select
+            
+            q1 = select(func.date(models.Order.order_date)).filter(models.Order.brand_id == brand_id).where(models.Order.order_date.isnot(None))
+            q2 = select(models.Revenue.transaction_date).filter(models.Revenue.brand_id == brand_id).where(models.Revenue.transaction_date.isnot(None))
+            q3 = select(models.MarketingSpend.date).filter(models.MarketingSpend.brand_id == brand_id).where(models.MarketingSpend.date.isnot(None))
+            
+            combined_query = union_all(q1, q2, q3).subquery()
+            # Thực thi query từ subquery
+            # Lưu ý: Khi select từ subquery, ta cần chỉ định cột cụ thể hoặc dùng combined_query.c[0]
+            results = db.execute(select(combined_query.c[0]).distinct().order_by(combined_query.c[0])).all()
+            all_activity_dates = [r[0] for r in results if r[0]]
             
             if not all_activity_dates:
-                print(f"WORKER: Brand {brand_id} không có dữ liệu.")
-                # Xóa cache lần cuối rồi kết thúc
+                print(f"WORKER: Brand {brand_id} không có dữ liệu hoạt động nào.")
                 crud.clear_brand_cache(brand_id)
                 return
             
             # 2. Tính toán và lưu vào DailyStat từng ngày
-            print(f"WORKER: Đang cập nhật {len(all_activity_dates)} ngày vào DailyStat...")
+            print(f"WORKER: [4/4] Đang tính toán lại cho {len(all_activity_dates)} ngày...")
+            count = 0
             for target_date in all_activity_dates:
-                crud.update_daily_stats(db, brand_id, target_date)
+                try:
+                    data_service.update_daily_stats(db, brand_id, target_date)
+                    count += 1
+                    if count % 10 == 0:
+                        print(f"WORKER: ...đã xử lý {count}/{len(all_activity_dates)} ngày.")
+                except Exception as inner_e:
+                    print(f"WORKER ERROR tại ngày {target_date}: {inner_e}")
+                    # Tiếp tục chạy các ngày khác chứ không dừng hẳn
             
-            # 3. Commit MỘT LẦN DUY NHẤT sau khi tính toán xong tất cả
-            print("WORKER: Đang commit transaction...")
+            # 3. Commit dữ liệu mới
+            print("WORKER: Đang commit dữ liệu mới...")
             db.commit()
-            print("WORKER: Commit thành công.")
+            print("WORKER: Commit thành công. Hoàn tất!")
 
             # 4. Xóa cache MỘT LẦN DUY NHẤT
-            crud.clear_brand_cache(brand_id)
+            data_service.clear_brand_cache(brand_id)
                 
     except Exception as e:
         print(f"WORKER RECALCULATE ERROR: {e}")

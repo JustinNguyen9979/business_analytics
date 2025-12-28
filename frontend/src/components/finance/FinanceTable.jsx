@@ -19,15 +19,15 @@ import { formatCurrency, formatPercentage } from '../../utils/formatters';
 const columns = [
     { id: 'platform', label: 'Nền tảng', minWidth: 170, align: 'left', format: (value) => value },
     { id: 'gmv', label: 'GMV', minWidth: 120, align: 'right', format: (value) => formatCurrency(value) },
-    { id: 'netRevenue', label: 'Doanh thu thuần', minWidth: 120, align: 'right', format: (value) => formatCurrency(value) },
+    { id: 'net_revenue', label: 'Doanh thu thuần', minWidth: 120, align: 'right', format: (value) => formatCurrency(value) },
     { id: 'profit', label: 'Lợi nhuận', minWidth: 120, align: 'right', format: (value) => formatCurrency(value) },
     { id: 'cogs', label: 'Giá vốn (COGS)', minWidth: 120, align: 'right', format: (value) => formatCurrency(value) },
-    { id: 'executionCost', label: 'Phí vận hành', minWidth: 120, align: 'right', format: (value) => formatCurrency(value) },
-    { id: 'adSpend', label: 'Chi phí Ads', minWidth: 120, align: 'right', format: (value) => formatCurrency(value) },
-    { id: 'totalCost', label: 'Tổng chi phí', minWidth: 120, align: 'right', format: (value) => formatCurrency(value) },
-    { id: 'profitMargin', label: 'Tỷ suất lợi nhuận', minWidth: 100, align: 'right', format: (value) => formatPercentage(value) },
+    { id: 'execution_cost', label: 'Phí vận hành', minWidth: 120, align: 'right', format: (value) => formatCurrency(value) },
+    { id: 'ad_spend', label: 'Chi phí Ads', minWidth: 120, align: 'right', format: (value) => formatCurrency(value) },
+    { id: 'total_cost', label: 'Tổng chi phí', minWidth: 120, align: 'right', format: (value) => formatCurrency(value) },
+    { id: 'profit_margin', label: 'Tỷ suất lợi nhuận', minWidth: 100, align: 'right', format: (value) => formatPercentage(value) },
     { id: 'roi', label: 'ROI', minWidth: 100, align: 'right', format: (value) => formatPercentage(value) },
-    { id: 'takeRate', label: 'Take Rate', minWidth: 100, align: 'right', format: (value) => formatPercentage(value) },
+    { id: 'take_rate', label: 'Take Rate', minWidth: 100, align: 'right', format: (value) => formatPercentage(value) },
 ];
 
 // Component Skeleton để hiển thị khi đang tải dữ liệu

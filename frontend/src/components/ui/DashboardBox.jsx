@@ -42,7 +42,7 @@ const DashboardBox = ({ title, action, children, minWidth = '500px', height = 40
                     {action && <Box display="flex" gap={1}>{action}</Box>}
                 </Box>
             )}
-            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', minWidth: 0 }}>
+            <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', position: 'relative', minWidth: 0 }}>
                 {children}
             </Box>
         </Paper>

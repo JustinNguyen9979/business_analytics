@@ -175,6 +175,11 @@ class DailyKpi(BaseModel):
     date: date
     net_revenue: float = 0
     profit: float = 0
+    gmv: float = 0
+    total_cost: float = 0
+    ad_spend: float = 0
+    cogs: float = 0
+    execution_cost: float = 0
 
 class DailyKpiResponse(BaseModel):
     """Cấu trúc dữ liệu trả về cho API biểu đồ."""
