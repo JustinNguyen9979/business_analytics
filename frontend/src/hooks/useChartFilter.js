@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import dayjs from 'dayjs';
 import { dateShortcuts } from '../config/dashboardConfig';
 
@@ -31,11 +31,11 @@ export const useChartFilter = (globalState) => {
         }
     }, [globalState?.dateRange, globalState?.dateLabel, globalState?.selectedSources]);
 
-    // 3. Handlers cho Local
-    const openDateMenu = (event) => setDateAnchorEl(event.currentTarget);
-    const closeDateMenu = () => setDateAnchorEl(null);
+    // 3. Handlers cho Local (Memoized)
+    const openDateMenu = useCallback((event) => setDateAnchorEl(event.currentTarget), []);
+    const closeDateMenu = useCallback(() => setDateAnchorEl(null), []);
     
-    const applyDateRange = (range, typeOrLabel) => {
+    const applyDateRange = useCallback((range, typeOrLabel) => {
         // Tìm label tiếng Việt tương ứng nếu tham số truyền vào là 'type' (ví dụ: 'this_month')
         const shortcut = dateShortcuts.find(s => s.type === typeOrLabel);
         
@@ -49,13 +49,13 @@ export const useChartFilter = (globalState) => {
         setDateRange(range);
         setDateLabel(displayLabel);
         closeDateMenu();
-    };
+    }, [closeDateMenu]);
 
-    const applySourceFilter = (newSources) => {
+    const applySourceFilter = useCallback((newSources) => {
         setSelectedSources(newSources);
-    };
+    }, []);
 
-    return {
+    return useMemo(() => ({
         // Date Props
         dateRange,
         dateLabel,
@@ -71,5 +71,5 @@ export const useChartFilter = (globalState) => {
         // Source Props
         selectedSources,
         applySourceFilter
-    };
+    }), [dateRange, dateLabel, dateAnchorEl, selectedSources, closeDateMenu, applyDateRange, openDateMenu, applySourceFilter]);
 };
