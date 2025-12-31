@@ -1,83 +1,131 @@
-// FILE: frontend/src/components/charts/GeoMapChart.jsx (PHIÊN BẢN ANIMATION SVG GỐC)
-
-import React, { memo, useMemo, useEffect, useState } from 'react';
-import { ComposableMap, Geographies, Geography, Marker } from '@vnedyalk0v/react19-simple-maps';
-import { Box, Stack, Typography, CircularProgress } from '@mui/material';
-import { scaleLinear } from 'd3-scale';
-
-const defaultTooltipFormatter = (label, value) => `${label}: ${value.toLocaleString('vi-VN')}`;
+import React, { useEffect, useState, useMemo, useRef } from 'react';
+import ReactECharts from 'echarts-for-react';
+import * as echarts from 'echarts';
+import { Box, Typography, Stack, CircularProgress } from '@mui/material';
 
 /**
-* Generic GeoMapChart
-* @param {Array} data - Mảng dữ liệu đầu vào. Mỗi phần tử PHẢI có trường 'coords': [long, lat].
-* @param {string} valueKey - Tên trường chứa giá trị định lượng (VD: 'orders', 'revenue','customer_count').
-* @param {string} labelKey - Tên trường chứa nhãn hiển thị (VD: 'city', 'province').
-* @param {function} tooltipFormatter - Hàm tùy chỉnh hiển thị tooltip (nhận vào item).
-* @param {string} unitLabel - Nhãn đơn vị cho phần Top 5 (VD: 'khách', 'đơn', 'VND').
-*/
+ * GeoMapChart sử dụng Apache ECharts
+ * Ưu điểm: Hiệu năng cực cao nhờ Canvas, hỗ trợ Map sẵn, hiệu ứng ripple mượt mà.
+ */
+const GeoMapChart = ({ data, valueKey = 'value', labelKey = 'city', unitLabel = '' }) => {
+    const [geoJson, setGeoJson] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const echartsRef = useRef(null);
 
-function GeoMapChartComponent({ data, valueKey = 'value', labelKey = 'city', tooltipFormatter, unitLabel = '' }) {
-
-    // 1. Hook lấy dữ liệu bản đồ với cơ chế cache IndexedDB
-    const [geoShapeData, setGeoShapeData] = useState(null);
-    const [isLoadingGeo, setIsLoadingGeo] = useState(true);
-    const [showMarkers, setShowMarkers] = useState(false);
-
+    // 1. Tải GeoJSON bản đồ Việt Nam
     useEffect(() => {
-        const loadGeography = async () => {
-            setIsLoadingGeo(true);
+        const fetchGeoJson = async () => {
             try {
                 const response = await fetch('/vietnam-shape.json');
-                const fetchedGeo = await response.json();
-                setGeoShapeData(fetchedGeo);
-                
+                const data = await response.json();
+                // Đăng ký bản đồ với ECharts
+                echarts.registerMap('vietnam', data);
+                setGeoJson(data);
             } catch (error) {
-                console.error("Error loading geography data:", error);
+                console.error("Error loading GeoJSON:", error);
             } finally {
-                setIsLoadingGeo(false);
+                setIsLoading(false);
             }
         };
-
-        loadGeography();
+        fetchGeoJson();
     }, []);
 
+    // 2. Xử lý dữ liệu cho ECharts
+    const chartData = useMemo(() => {
+        if (!data) return [];
+        return data
+            .filter(item => item.longitude && item.latitude)
+            .map(item => ({
+                name: item[labelKey],
+                value: [item.longitude, item.latitude, item[valueKey]], // Format: [lon, lat, value]
+                rawData: item
+            }));
+    }, [data, labelKey, valueKey]);
 
-    // 3. Hook tính toán scale
-    const { sizeScale, opacityScale } = useMemo(() => {
-        if (!data || data.length === 0) {
-            return { sizeScale: () => 0, opacityScale: () => 0 };
-        }
-        
-        const values = data.map(d => d[valueKey]);
-        const max = Math.max(...values.map(v => Number(v)), 0);
-        const size = scaleLinear().domain([0, max]).range([4, 12]).clamp(true);
-        const opacity = scaleLinear().domain([0, max]).range([0.6, 1.0]).clamp(true);
-
-        return { sizeScale: size, opacityScale: opacity };
-    }, [data, valueKey]);
-
-    // 4. Hook tính toán Top 5
+    // 3. Tính toán Top 5 để hiển thị list dưới bản đồ
     const topItems = useMemo(() => {
         if (!data || data.length === 0) return [];
-        // Sắp xếp dữ liệu theo customer_count giảm dần và lấy 5 phần tử đầu tiên
         return [...data]
-            .sort((a, b) => b[valueKey] - a[valueKey])
+            .sort((a, b) => (b[valueKey] || 0) - (a[valueKey] || 0))
             .slice(0, 6);
     }, [data, valueKey]);
 
-    // 5. Hook hiệu ứng delay
-    useEffect(() => {
-        if (geoShapeData) {
-            const timer = setTimeout(() => {
-                setShowMarkers(true);
-            }, 50);
-            return () => clearTimeout(timer);
-        } else {
-            setShowMarkers(false);
-        }
-    }, [geoShapeData]);
+    // 4. Cấu hình ECharts Option
+    const option = useMemo(() => {
+        if (!geoJson) return {};
 
-    if (isLoadingGeo || !geoShapeData) {
+        const values = chartData.map(d => d.value[2]);
+        const maxVal = Math.max(...values, 1);
+
+        return {
+            backgroundColor: 'transparent',
+            tooltip: {
+                trigger: 'item',
+                formatter: (params) => {
+                    const val = params.value[2];
+                    return `${params.name}: ${val.toLocaleString('vi-VN')} ${unitLabel}`;
+                },
+                backgroundColor: 'rgba(20, 20, 20, 0.9)',
+                borderColor: '#444',
+                textStyle: { color: '#fff' },
+                borderWidth: 1
+            },
+            // Cấu hình bản đồ nền
+            geo: {
+                map: 'vietnam',
+                roam: true, // Cho phép zoom/kéo
+                emphasis: {
+                    label: { show: false },
+                    itemStyle: { areaColor: '#3d4869' }
+                },
+                itemStyle: {
+                    areaColor: '#303952',
+                    borderColor: '#777c86ff',
+                    borderWidth: 0.8
+                },
+                label: { show: false },
+                zoom: 1.2,
+                center: [108, 16.4]
+            },
+            series: [
+                {
+                    name: 'Điểm nóng',
+                    type: 'effectScatter',
+                    coordinateSystem: 'geo',
+                    data: chartData,
+                    symbolSize: function (val) {
+                        // Dùng căn bậc 2 (Math.sqrt) để giảm sự chênh lệch quá lớn giữa Top 1 và Top 2, 3
+                        // Giúp các chấm vệ tinh to rõ hơn
+                        return Math.sqrt(val[2] / maxVal) * 25 + 6;
+                    },
+                    encode: { value: 2 },
+                    showEffectOn: 'render',
+                    rippleEffect: {
+                        brushType: 'stroke',
+                        scale: 3,
+                        period: 4
+                    },
+                    label: {
+                        formatter: '{b}',
+                        position: 'right',
+                        show: false
+                    },
+                    itemStyle: {
+                        color: '#FF5252',
+                        shadowBlur: 10,
+                        shadowColor: '#333'
+                    },
+                    emphasis: {
+                        scale: true,
+                        label: { show: false }
+                    },
+                    zlevel: 1
+                }
+            ]
+        };
+    }, [geoJson, chartData, unitLabel]);
+
+    if (isLoading) {
         return (
             <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
                 <CircularProgress />
@@ -87,101 +135,37 @@ function GeoMapChartComponent({ data, valueKey = 'value', labelKey = 'city', too
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            <Box sx={{ flexGrow: 1, position: 'relative' }}>
-                <ComposableMap
-                    projection="geoMercator"
-                    projectionConfig={{ scale: 2300, center: [108, 16.4] }}
-                    style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}
-                >
-                    <Geographies geography={geoShapeData}>
-                        {({ geographies }) =>
-                            geographies.map((geo, index) => (
-                                <Geography
-                                    key={index}
-                                    geography={geo}
-                                    fill="#303952"
-                                    stroke="#777c86ff"
-                                    style={{ default: { outline: 'none' } }}
-                                />
-                            ))
-                        }
-                    </Geographies>
-
-                    {showMarkers && data.map(item => {
-                        const lat = item.latitude;
-                        const lon = item.longitude;
-                        
-                        if (lat === undefined || lon === undefined || lat === null || lon === null) return null;
-
-                        const val = item[valueKey];
-                        const label = item[labelKey];
-                        const size = sizeScale(val);
-                        const opacity = opacityScale(val);
-
-                        // Fix lỗi ReferenceError: tooltipContent is not defined
-                        const tooltipContent = tooltipFormatter 
-                            ? tooltipFormatter(item) 
-                            : defaultTooltipFormatter(label, val);
-
-                        return (
-                            <Marker
-                                key={label}
-                                coordinates={[lon, lat]}
-                            >
-                                <g style={{ cursor: 'pointer', pointerEvents: 'none' }}>
-                                    <circle
-                                        className="ripple"
-                                        r={size} 
-                                        fill="none" 
-                                        stroke="#FF5252" 
-                                        strokeWidth={2}
-                                    />
-                                     <circle
-                                        className="ripple ripple-2"
-                                        r={size} 
-                                        fill="none" 
-                                        stroke="#FF5252" 
-                                        strokeWidth={2}
-                                    />
-                                    <circle
-                                        className="map-dot"
-                                        r={size}
-                                        data-tooltip-id="map-tooltip"
-                                        data-tooltip-content={tooltipContent}
-                                        fill={`rgba(255, 82, 82, ${opacity})`}
-                                        stroke="#FFFFFF"
-                                        strokeWidth={0.5}
-                                        style={{ transition: 'transform 0.2s ease', pointerEvents: 'auto' }}
-                                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.8)'; }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                                    />
-                                </g>
-                            </Marker>
-                        );
-                    })}
-                </ComposableMap>
+            {/* Map Container */}
+            <Box sx={{ flex: 1, position: 'relative', minHeight: 300 }}>
+                <ReactECharts
+                    ref={echartsRef}
+                    option={option}
+                    style={{ height: '100%', width: '100%' }}
+                    notMerge={true}
+                    lazyUpdate={true}
+                />
             </Box>
+
+            {/* Top 5 List (Giữ nguyên UI của anh) */}
             {topItems.length > 0 && (
                 <Box sx={{ p: 2, flexShrink: 0, borderTop: 1, borderColor: 'divider' }}>
                     <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 2, textAlign: 'center' }}>
                         Top Tỉnh/Thành có lượng khách hàng cao nhất
                     </Typography>
-                    {/* THAY THẾ GRID BẰNG BOX */}
                     <Box sx={{
                         display: 'grid',
-                        // Sử dụng auto-fit để các item tự động xuống dòng và co giãn
                         gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                        gap: { xs: 1, sm: 2 }, // Giảm khoảng cách giữa các item
-                        justifyContent: 'space-between' // Thêm justify-content
+                        gap: { xs: 1, sm: 2 },
+                        justifyContent: 'space-between'
                     }}>
                         {topItems.map((province, index) => (
-                            <Box key={province.city} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+                            <Box key={province.city || index} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
                                 <Stack direction="row" spacing={1.5} alignItems="center">
                                     <Typography sx={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'text.secondary', width: '24px' }}>
                                         {index + 1}.
                                     </Typography>
                                     <Box>
-                                        <Typography sx={{ fontWeight: 'bold' }}>{province.city}</Typography>
+                                        <Typography sx={{ fontWeight: 'bold' }}>{province[labelKey]}</Typography>
                                         <Typography variant="body2" color="text.secondary">
                                             {province[valueKey].toLocaleString('vi-VN')} {unitLabel}
                                         </Typography>
@@ -194,6 +178,6 @@ function GeoMapChartComponent({ data, valueKey = 'value', labelKey = 'city', too
             )}
         </Box>
     );
-}
+};
 
-export default memo(GeoMapChartComponent);
+export default GeoMapChart;

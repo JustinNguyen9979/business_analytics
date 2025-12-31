@@ -230,14 +230,14 @@ function DashboardPage() {
                     </Stack>
                 </Box>
 
-                <Box sx={{ width: { xs: '100%', md: 'calc(50% - 16px)' }, display: 'flex' }}>
+                <Box sx={{ width: { xs: '100%', md: 'calc(50% - 16px)' }, display: 'flex', flexDirection: 'column' }}>
                     <DashboardBox
                         title="Phân bổ Khách hàng"
                         filterControl={mapFilterControl}
                         loading={map.loading}
-                        hasData={!!map.data}
-                        height="100%"
-                        sx={{ flexGrow: 1, minHeight: { xs: 500, md: 'auto' } }}
+                        hasData={map.data && map.data.length > 0}
+                        height={600}
+                        sx={{ minHeight: { xs: 500, md: 'auto' } }}
                     >
                         <Suspense fallback={<Skeleton variant="rectangular" width="100%" height="100%" />}>
                             <GeoMapChart 
