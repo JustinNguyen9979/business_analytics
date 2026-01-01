@@ -118,7 +118,12 @@ export const useOperationPageLogic = () => {
     const { slug: brandSlug } = useBrand(); 
 
     // 1. Quản lý Bộ lọc & Nguồn Tổng (Global)
-    const { filter: globalDateFilter, buttonProps, menuProps } = useDateFilter({ defaultType: 'this_month' });
+    // Enable URL params để đồng bộ trạng thái như DashboardPage
+    const globalDateFilter = useDateFilter({ 
+        defaultType: 'this_month',
+        useUrl: true, 
+        urlPrefix: 'op_' 
+    });
     const [sourceOptions, setSourceOptions] = useState([]);
 
     useEffect(() => {
@@ -135,9 +140,9 @@ export const useOperationPageLogic = () => {
     }, [brandSlug]);
 
     const globalFilterState = useMemo(() => ({
-        dateRange: globalDateFilter.range,
-        dateLabel: buttonProps.children
-    }), [globalDateFilter.range, buttonProps.children]);
+        dateRange: globalDateFilter.filter.range,
+        dateLabel: globalDateFilter.buttonProps.children
+    }), [globalDateFilter.filter.range, globalDateFilter.buttonProps.children]);
 
     // 2. Logic cho từng Box Biểu đồ
     const cancelReasonChart = useChartBoxLogic(globalFilterState, brandSlug, 'cancelReasons');
@@ -167,8 +172,8 @@ export const useOperationPageLogic = () => {
             if (!brandSlug) return;
             setGlobalLoading(true);
             try {
-                const start = globalDateFilter.range[0].format('YYYY-MM-DD');
-                const end = globalDateFilter.range[1].format('YYYY-MM-DD');
+                const start = globalDateFilter.filter.range[0].format('YYYY-MM-DD');
+                const end = globalDateFilter.filter.range[1].format('YYYY-MM-DD');
                 // Gọi API với 'all' sources mặc định cho KPI tổng
                 const apiResponse = await fetchOperationKpisAPI(brandSlug, start, end); 
 
@@ -206,7 +211,7 @@ export const useOperationPageLogic = () => {
             }
         };
         fetchGlobalKpis();
-    }, [brandSlug, globalDateFilter.range, kpiConfig]);
+    }, [brandSlug, globalDateFilter.filter.range, kpiConfig]);
 
         // 4. Return
 
@@ -221,12 +226,12 @@ export const useOperationPageLogic = () => {
 
         return {
             // Global Filters
-            dateRange: globalDateFilter.range,
-            dateLabel: buttonProps.children,
-            anchorEl: menuProps.anchorEl,
-            handleOpenFilter: buttonProps.onClick,
-            handleCloseFilter: menuProps.onClose,
-            handleApplyDateRange: menuProps.onApply,
+            dateRange: globalDateFilter.filter.range,
+            dateLabel: globalDateFilter.buttonProps.children,
+            anchorEl: globalDateFilter.menuProps.anchorEl,
+            handleOpenFilter: globalDateFilter.buttonProps.onClick,
+            handleCloseFilter: globalDateFilter.menuProps.onClose,
+            handleApplyDateRange: globalDateFilter.menuProps.onApply,
             sourceOptions,
 
             // Global KPI Data

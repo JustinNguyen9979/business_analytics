@@ -268,8 +268,11 @@ def get_kpis_by_platform(
         models.DailyAnalytics.date.between(start_date, end_date)
     )
 
-    # REMOVED: Không lọc source nữa, lấy tất cả để so sánh
-    
+    # Lọc theo source nếu có yêu cầu (để user có thể so sánh subset các sàn)
+    strategy, clean_sources = kpi_utils.normalize_source_strategy(source_list)
+    if strategy == kpi_utils.STRATEGY_FILTERED:
+        query = query.filter(models.DailyAnalytics.source.in_(clean_sources))
+
     results = query.group_by(models.DailyAnalytics.source).all()
     
     final_data = []

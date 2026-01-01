@@ -319,7 +319,7 @@ const PlatformBox = React.memo(({ chart, sourceOptions }) => {
                             Tốc độ xử lý
                         </ToggleButton>
                     </ToggleButtonGroup>
-                    <OperationBoxControl filter={chart.filter} sourceOptions={sourceOptions} hideSource={true} />
+                    <OperationBoxControl filter={chart.filter} sourceOptions={sourceOptions} />
                 </Box>
             }
         >
@@ -364,6 +364,7 @@ const DashboardRow = ({ children }) => (
 function OperationPage() {
     // const theme = useTheme(); // Không dùng theme ở đây nữa
     const {
+        dateRange, // Lấy thêm dateRange
         dateLabel: globalDateLabel,
         anchorEl,
         handleOpenFilter,
@@ -389,6 +390,7 @@ function OperationPage() {
                         anchorEl={anchorEl}
                         onClose={handleCloseFilter}
                         onApply={handleApplyDateRange}
+                        initialDateRange={dateRange}
                     />
                 </Box>
             </Box>

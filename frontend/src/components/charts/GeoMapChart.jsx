@@ -184,9 +184,17 @@ const GeoMapChart = ({
 
                     // Thêm dòng tổng cộng ở dưới cùng
                     res += `<div style="margin-top: 5px; border-top: 1px dashed #555; padding-top: 3px; display: flex; justify-content: space-between; font-weight: bold;">
-                        <span>Tổng cộng:</span>
+                        <span>Tổng đơn:</span>
                         <span style="color: ${statusColors.all}">${raw[valueKey].toLocaleString('vi-VN')} ${unitLabel}</span>
                     </div>`;
+
+                    // Thêm dòng Doanh thu (Mới thêm theo yêu cầu của anh)
+                    if (raw.revenue !== undefined) {
+                        res += `<div style="margin-top: 2px; display: flex; justify-content: space-between; font-weight: bold;">
+                            <span>Doanh thu:</span>
+                            <span style="color: #4caf50">${raw.revenue.toLocaleString('vi-VN')} đ</span>
+                        </div>`;
+                    }
 
                     return res;
                 },
