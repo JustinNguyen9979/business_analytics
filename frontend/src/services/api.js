@@ -10,10 +10,22 @@ const apiClient = axios.create({
     }
 });
 
-export const fetchCustomerMap = async (brandSlug, startDate, endDate, signal) => {
+export const fetchCustomerMap = async (brandSlug, startDate, endDate, status = [], sources = [], signal) => {
     try {
+        const params = { start_date: startDate, end_date: endDate };
+        if (status && status.length > 0) {
+            params.status = status;
+        }
+        if (sources && sources.length > 0) {
+             if (sources.includes('all')) {
+                params.source = ['all'];
+            } else {
+                params.source = sources;
+            }
+        }
+        
         const response = await apiClient.get(`/brands/${brandSlug}/customer-map-distribution`, {
-            params: { start_date: startDate, end_date: endDate },
+            params,
             signal
         });
         return response.data;

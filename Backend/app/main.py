@@ -256,12 +256,16 @@ def recalculate_brand_data(request: Request, brand: models.Brand = Depends(get_b
 def read_customer_map_distribution(
     start_date: date,
     end_date: date,
+    status: List[str] = Query(['completed'], description="Trạng thái đơn hàng cần lấy (completed, cancelled, bomb, refunded). Mặc định chỉ lấy completed."),
+    source: List[str] = Query(None, description="Danh sách nguồn dữ liệu (e.g. shopee, lazada)"),
     brand: models.Brand = Depends(get_brand_from_slug),
     db: Session = Depends(get_db)
 ):
     """Lấy dữ liệu phân bổ khách hàng theo tỉnh/thành để vẽ bản đồ."""
     try:
-        distribution_data = crud.get_aggregated_location_distribution(db, brand.id, start_date, end_date)
+        distribution_data = crud.get_aggregated_location_distribution(
+            db, brand.id, start_date, end_date, status_filter=status, source_list=source
+        )
         return distribution_data
     except Exception as e:
         print(f"!!! LỖI ENDPOINT CUSTOMER MAP: {e}")

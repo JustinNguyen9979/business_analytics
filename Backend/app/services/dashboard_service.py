@@ -10,6 +10,7 @@ import pandas as pd
 import models
 import kpi_utils
 from cache import redis_client
+from province_centroids import PROVINCE_CENTROIDS
 
 # Helper xử lý JSON serialize cho Date và Decimal
 def json_serial(obj):
@@ -340,15 +341,35 @@ def get_kpis_by_platform(
         
     return final_data
 
-def get_aggregated_location_distribution(db: Session, brand_id: int, start_date: date, end_date: date):
+def get_aggregated_location_distribution(
+    db: Session, 
+    brand_id: int, 
+    start_date: date, 
+    end_date: date,
+    status_filter: List[str] = ['completed'], # Mặc định chỉ lấy đơn thành công cho Dashboard
+    source_list: Optional[List[str]] = None
+):
     """
-    Tổng hợp dữ liệu phân bố địa lý từ DailyStat.
+    Tổng hợp dữ liệu phân bố địa lý từ DailyStat hoặc DailyAnalytics.
+    Hỗ trợ cả Data Mới (có metrics chi tiết) và Data Cũ (chỉ có total).
     """
     try:
-        daily_records = db.query(models.DailyStat.location_distribution).filter(
-            models.DailyStat.brand_id == brand_id,
-            models.DailyStat.date.between(start_date, end_date),
-        ).all()
+        strategy, clean_sources = kpi_utils.normalize_source_strategy(source_list)
+        
+        daily_records = []
+        if strategy == kpi_utils.STRATEGY_FILTERED:
+             # Query DailyAnalytics
+            daily_records = db.query(models.DailyAnalytics.location_distribution).filter(
+                models.DailyAnalytics.brand_id == brand_id,
+                models.DailyAnalytics.date.between(start_date, end_date),
+                models.DailyAnalytics.source.in_(clean_sources)
+            ).all()
+        else:
+            # Query DailyStat (Default / All)
+            daily_records = db.query(models.DailyStat.location_distribution).filter(
+                models.DailyStat.brand_id == brand_id,
+                models.DailyStat.date.between(start_date, end_date),
+            ).all()
 
         if not daily_records:
             return []
@@ -356,34 +377,72 @@ def get_aggregated_location_distribution(db: Session, brand_id: int, start_date:
         city_stats = {}
 
         for record in daily_records:
-            loc_dist = record[0]  # Lấy giá trị location_distribution từ tuple
+            loc_dist = record[0]
             if loc_dist and isinstance(loc_dist, list):
                 for item in loc_dist:
                     if not isinstance(item, dict): continue
 
                     city = item.get('city')
-                    orders = item.get('orders', 0)
-                    revenue = item.get('revenue', 0)
+                    if not city: continue
                     
-                    lat = item.get('latitude')
-                    lon = item.get('longitude')
+                    # --- LOGIC TÍNH TOÁN HYBRID ---
+                    orders_to_add = 0
+                    revenue_to_add = 0
+                    
+                    # CASE 1: Data Mới (Có metrics chi tiết)
+                    if 'metrics' in item and isinstance(item['metrics'], dict):
+                        for status in status_filter:
+                            if status in item['metrics']:
+                                orders_to_add += item['metrics'][status].get('orders', 0)
+                                revenue_to_add += item['metrics'][status].get('revenue', 0)
+                                
+                    # CASE 2: Data Cũ (Legacy - Chỉ có tổng)
+                    # Nếu không tìm thấy metrics, ta đành lấy số tổng (chấp nhận không filter được)
+                    else:
+                        orders_to_add = item.get('orders', 0)
+                        revenue_to_add = item.get('revenue', 0)
 
-                    if city:
-                        if city not in city_stats:
-                            city_stats[city] = {
-                                'city': city,
-                                'orders': 0,
-                                'revenue': 0,
-                                'latitude': lat,
-                                'longitude': lon,
-                            }
-                        
-                        city_stats[city]["orders"] += orders
-                        city_stats[city]["revenue"] += revenue
-                        
-                        if (city_stats[city]["latitude"] is None) and (lat is not None):
-                            city_stats[city]["latitude"] = lat
-                            city_stats[city]["longitude"] = lon
+                    # --- CỘNG DỒN ---
+                    if city not in city_stats:
+                        city_stats[city] = {
+                            'city': city,
+                            'orders': 0,
+                            'revenue': 0,
+                            # Thêm breakdown chi tiết
+                            'completed': 0,
+                            'cancelled': 0,
+                            'bomb': 0,
+                            'refunded': 0,
+                            'latitude': item.get('latitude'),
+                            'longitude': item.get('longitude'),
+                        }
+                    
+                    # 1. Tính tổng dựa trên Filter (Logic cũ - để sort và hiển thị tổng)
+                    city_stats[city]["orders"] += orders_to_add
+                    city_stats[city]["revenue"] += revenue_to_add
+
+                    # 2. Tính chi tiết breakdown (Logic mới - cho Multi-Series Map)
+                    # Chỉ tính nếu data có metrics chi tiết
+                    if 'metrics' in item and isinstance(item['metrics'], dict):
+                        city_stats[city]['completed'] += item['metrics'].get('completed', {}).get('orders', 0)
+                        city_stats[city]['cancelled'] += item['metrics'].get('cancelled', {}).get('orders', 0)
+                        city_stats[city]['bomb'] += item['metrics'].get('bomb', {}).get('orders', 0)
+                        city_stats[city]['refunded'] += item['metrics'].get('refunded', {}).get('orders', 0)
+                    else:
+                        # Fallback cho data cũ (cố gắng map nếu có thể, hoặc chấp nhận thiếu breakdown)
+                        # Ở đây tạm thời không làm gì vì data cũ không phân loại sâu được
+                        pass
+                    
+                    # Lấy tọa độ chuẩn từ file config (Fix lỗi dữ liệu cũ bị ngược)
+                    coords = PROVINCE_CENTROIDS.get(city)
+                    if coords:
+                        # PROVINCE_CENTROIDS lưu [Longitude, Latitude]
+                        city_stats[city]["latitude"] = coords[1]
+                        city_stats[city]["longitude"] = coords[0]
+                    # Fallback: Nếu không tìm thấy trong config thì mới lấy từ DB
+                    elif (city_stats[city]["latitude"] is None) and (item.get('latitude') is not None):
+                        city_stats[city]["latitude"] = item.get('latitude')
+                        city_stats[city]["longitude"] = item.get('longitude')
                             
         results = list(city_stats.values())
         return sorted(results, key=lambda item: item['orders'], reverse=True)

@@ -184,6 +184,7 @@ def merge_top_products_list(lists_of_products: List[List[Dict]]) -> List[Dict]:
 
 def merge_location_lists(lists_of_locations: List[List[Dict]]) -> List[Dict]:
     city_map = {}
+    
     for loc_list in lists_of_locations:
         if not loc_list or not isinstance(loc_list, list): continue
         for item in loc_list:
@@ -192,21 +193,36 @@ def merge_location_lists(lists_of_locations: List[List[Dict]]) -> List[Dict]:
             
             if city not in city_map:
                 city_map[city] = {
-                    'city': city, 
-                    'orders': 0, 
-                    'revenue': 0,
+                    'city': city,
                     'latitude': item.get('latitude'),
-                    'longitude': item.get('longitude')
+                    'longitude': item.get('longitude'),
+                    'metrics': defaultdict(lambda: {"orders": 0, "revenue": 0}),
+                    # Legacy fields aggregation
+                    'orders': 0, 'revenue': 0 
                 }
             
+            # 1. Merge Metrics (Format Mới)
+            item_metrics = item.get('metrics')
+            if item_metrics and isinstance(item_metrics, dict):
+                for status, val in item_metrics.items():
+                    city_map[city]['metrics'][status]['orders'] += val.get('orders', 0)
+                    city_map[city]['metrics'][status]['revenue'] += val.get('revenue', 0)
+            
+            # 2. Merge Legacy Fields (Cho dữ liệu cũ chưa có metrics)
             city_map[city]['orders'] += (item.get('orders') or 0)
             city_map[city]['revenue'] += (item.get('revenue') or 0)
             
             if city_map[city]['latitude'] is None and item.get('latitude'):
                  city_map[city]['latitude'] = item.get('latitude')
                  city_map[city]['longitude'] = item.get('longitude')
-                 
-    results = list(city_map.values())
+
+    results = []
+    for city, data in city_map.items():
+        # Clean up defaultdict
+        metrics_clean = {k: dict(v) for k, v in data["metrics"].items()}
+        data["metrics"] = metrics_clean
+        results.append(data)
+
     results.sort(key=lambda x: x['orders'], reverse=True)
     return results
 
@@ -340,25 +356,73 @@ def _calculate_top_refunded_products(orders: List[models.Order], revenues: List[
     sorted_refunds = sorted(refunded_skus.items(), key=lambda x: x[1], reverse=True)[:limit]
     return [{"sku": sku, "name": product_names.get(sku, sku), "value": qty} for sku, qty in sorted_refunds]
 
-def _calculate_location_distribution(orders: List[models.Order], db_session: Session = None) -> List[Dict]:
+def _calculate_location_distribution(
+    orders: List[models.Order], 
+    revenue_map: Dict[str, float] = None, # Key: order_code, Value: net_revenue
+    refund_status_map: Dict[str, bool] = None, # Key: order_code, Value: has_refund
+    db_session: Session = None
+) -> List[Dict]:
     if not db_session or not orders: return []
-    city_stats = defaultdict(lambda: {"orders": 0, "revenue": 0})
+    
+    # Structure: City -> { lat, lon, metrics: { status: { orders, revenue } } }
+    city_stats = defaultdict(lambda: {
+        "latitude": None, "longitude": None,
+        "metrics": defaultdict(lambda: {"orders": 0, "revenue": 0})
+    })
+
     usernames = {o.username for o in orders if o.username}
     if not usernames: return []
+
     try:
         customers = db_session.query(models.Customer.username, models.Customer.city).filter(models.Customer.username.in_(usernames)).all()
         user_city_map = {c.username: c.city for c in customers if c.city}
+        
         for order in orders:
             if order.username in user_city_map:
                 city = user_city_map[order.username]
-                city_stats[city]["orders"] += 1
+                
+                # Xác định Status
+                is_refunded = refund_status_map.get(order.order_code, False) if refund_status_map else False
+                status = _classify_order_status(order, -1 if is_refunded else 0)
+                
+                # Xác định Revenue
+                rev = revenue_map.get(order.order_code, 0) if revenue_map else 0
+                
+                # Cộng dồn
+                city_stats[city]["metrics"][status]["orders"] += 1
+                city_stats[city]["metrics"][status]["revenue"] += rev
+                
+                # Lấy tọa độ (chỉ cần lấy 1 lần)
+                if city_stats[city]["latitude"] is None:
+                    coords = PROVINCE_CENTROIDS.get(city)
+                    if coords:
+                        city_stats[city]["latitude"] = coords[1]
+                        city_stats[city]["longitude"] = coords[0]
+
         results = []
         for city, data in city_stats.items():
-            coords = PROVINCE_CENTROIDS.get(city)
-            if coords: results.append({"city": city, "orders": data["orders"], "revenue": data["revenue"], "longitude": coords[0], "latitude": coords[1]})
+            if data["latitude"] is None: continue # Skip if no coords
+            
+            # Tính tổng metrics để sort (mặc định sort theo Completed Orders)
+            total_orders = sum(m["orders"] for m in data["metrics"].values())
+            
+            # Convert metrics dict to standard dict for JSON serialization
+            metrics_clean = {k: dict(v) for k, v in data["metrics"].items()}
+            
+            results.append({
+                "city": city,
+                "metrics": metrics_clean,
+                "longitude": data["longitude"],
+                "latitude": data["latitude"],
+                # Giữ lại các trường legacy để tương thích ngược tạm thời (hoặc hiển thị nhanh)
+                "orders": total_orders, 
+                "revenue": sum(m["revenue"] for m in data["metrics"].values())
+            })
+            
         return sorted(results, key=lambda x: x["orders"], reverse=True)
-    except Exception as e: print(f"Warning: Could not calculate location distribution: {e}")
-    return []
+    except Exception as e: 
+        print(f"Warning: Could not calculate location distribution: {e}")
+        return []
 
 def _calculate_customer_retention(orders: List[models.Order], current_date: date, db_session: Session) -> Dict:
     stats = {"new_customers": 0, "returning_customers": 0, "new_customer_revenue": 0.0, "returning_customer_revenue": 0.0}
@@ -493,7 +557,15 @@ def calculate_daily_kpis(
         data["top_refunded_products"] = _calculate_top_refunded_products(orders_in_day, revenues_in_day)
         data["payment_method_breakdown"] = _calculate_payment_method_breakdown(success_orders)
         data["cancel_reason_breakdown"] = _calculate_cancel_reason_breakdown(target_orders)
-        data["location_distribution"] = _calculate_location_distribution(target_orders, db_session)
+        
+        # Prepare maps for location calculation
+        rev_map = {r.order_code: r.net_revenue for r in valid_revenues}
+        data["location_distribution"] = _calculate_location_distribution(
+            target_orders, 
+            revenue_map=rev_map,
+            refund_status_map=order_has_refund,
+            db_session=db_session
+        )
         
         # 8. Nhật ký tài chính
         financial_events = []

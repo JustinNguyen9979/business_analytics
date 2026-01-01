@@ -244,10 +244,12 @@ export const useDashboardData = (brandSlug, filters) => {
             const [start, end] = filter.range;
             try {
                 // Gọi API trực tiếp (Synchronous)
+                // DashboardPage: Mặc định chỉ lấy đơn 'completed' (đơn sạch)
                 const result = await fetchCustomerMap(
                     brandSlug, 
                     start.format('YYYY-MM-DD'), 
                     end.format('YYYY-MM-DD'), 
+                    ['completed'],
                     controller.signal
                 );
                 updateState('map', { data: result, loading: false });

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { useDateFilter } from './useDateFilter'; 
 import { useChartFilter } from './useChartFilter';
-import { fetchOperationKpisAPI, getSourcesForBrand } from '../services/api'; 
+import { fetchOperationKpisAPI, getSourcesForBrand, fetchCustomerMap } from '../services/api'; 
 import { useBrand } from '../context/BrandContext'; 
 
 // --- Helper Hook: Quản lý logic cho từng Box biểu đồ ---
@@ -24,7 +24,7 @@ const useChartBoxLogic = (globalFilterState, brandSlug, dataKey) => {
                 return;
             }
 
-            // Gọi API chung, server sẽ cache nên không lo gọi nhiều lần bị chậm
+            // Gọi API chung
             const response = await fetchOperationKpisAPI(brandSlug, start, end, sources);
             
             // Map dữ liệu dựa theo key
@@ -37,8 +37,6 @@ const useChartBoxLogic = (globalFilterState, brandSlug, dataKey) => {
             } else if (dataKey === 'payment') {
                 const breakdown = response.payment_method_breakdown || {};
                 setData(Object.entries(breakdown).map(([name, value]) => ({name, value})));
-            } else if (dataKey === 'geo') {
-                setData(response.location_distribution || []);
             } else if (dataKey === 'platform') {
                 setData(response.platform_comparison || []);
             }
@@ -56,6 +54,63 @@ const useChartBoxLogic = (globalFilterState, brandSlug, dataKey) => {
     }, [fetchData]);
 
     return useMemo(() => ({ filter, data, loading }), [filter, data, loading]);
+};
+
+// --- Helper Hook Riêng Cho Map (Hỗ trợ Filter Status) ---
+const useGeoMapLogic = (globalFilterState, brandSlug) => {
+    const filter = useChartFilter(globalFilterState);
+    const [data, setData] = useState([]);
+    const [loading, setLoading] = useState(false);
+    
+    // Status Filter cho Map: Mặc định lấy hết ('all' + các trạng thái cụ thể)
+    // Điều này giúp UI hiển thị đúng trạng thái "Tất cả" được chọn từ đầu
+    const [statusFilter, setStatusFilter] = useState(['all', 'completed', 'cancelled', 'bomb', 'refunded']); 
+
+    // Thay thế toggleStatus đơn giản bằng hàm set trực tiếp để hỗ trợ logic 'Excel-like'
+    const applyStatusFilter = useCallback((newStatusList) => {
+        setStatusFilter(newStatusList);
+    }, []);
+
+    const fetchMapData = useCallback(async () => {
+        if (!brandSlug) return;
+        
+        // Nếu không chọn status nào hoặc không chọn source nào -> Không gọi API, trả về rỗng ngay
+        // Lưu ý: filter.selectedSources có thể là undefined lúc đầu nên cần check tồn tại
+        if (statusFilter.length === 0 || (filter.selectedSources && filter.selectedSources.length === 0)) {
+            setData([]);
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const start = filter.dateRange[0].format('YYYY-MM-DD');
+            const end = filter.dateRange[1].format('YYYY-MM-DD');
+            
+            // Lọc bỏ 'all' trước khi gửi xuống API (vì Backend không hiểu 'all' trong list status)
+            const apiStatusParam = statusFilter.filter(s => s !== 'all');
+
+            // Gọi API Customer Map riêng biệt, có truyền sources
+            const result = await fetchCustomerMap(brandSlug, start, end, apiStatusParam, filter.selectedSources);
+            setData(result || []);
+        } catch (err) {
+            console.error("Error fetching Geo Map:", err);
+            setData([]);
+        } finally {
+            setLoading(false);
+        }
+    }, [brandSlug, filter.dateRange, statusFilter, filter.selectedSources]);
+
+    useEffect(() => {
+        fetchMapData();
+    }, [fetchMapData]);
+
+    return useMemo(() => ({ 
+        filter, 
+        data, 
+        loading,
+        statusFilter, // Expose ra ngoài
+        applyStatusFilter // Expose hàm set mới
+    }), [filter, data, loading, statusFilter, applyStatusFilter]);
 };
 
 export const useOperationPageLogic = () => {
@@ -84,13 +139,15 @@ export const useOperationPageLogic = () => {
         dateLabel: buttonProps.children
     }), [globalDateFilter.range, buttonProps.children]);
 
-    // 2. Logic cho từng Box Biểu đồ (Sử dụng Helper Hook)
+    // 2. Logic cho từng Box Biểu đồ
     const cancelReasonChart = useChartBoxLogic(globalFilterState, brandSlug, 'cancelReasons');
     const topRefundChart = useChartBoxLogic(globalFilterState, brandSlug, 'topRefunded');
     const hourlyChart = useChartBoxLogic(globalFilterState, brandSlug, 'hourly');
     const paymentChart = useChartBoxLogic(globalFilterState, brandSlug, 'payment');
-    const geoChart = useChartBoxLogic(globalFilterState, brandSlug, 'geo');
     const platformChart = useChartBoxLogic(globalFilterState, brandSlug, 'platform');
+    
+    // 2.1 Logic Riêng cho Map
+    const geoChart = useGeoMapLogic(globalFilterState, brandSlug);
 
     // 3. Logic cho phần KPI Tổng quan (Vẫn giữ nguyên vì logic map phức tạp)
     // Config KPI

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Typography, Button, Paper, Skeleton, IconButton, Tooltip, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Box, Typography, Button, Paper, Skeleton, IconButton, Tooltip, ToggleButton, ToggleButtonGroup, Switch, FormControlLabel, FormGroup, Divider } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import SettingsIcon from '@mui/icons-material/Settings';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
@@ -19,8 +19,91 @@ import ChartSettingsPanel from '../components/charts/controls/ChartSettingsPanel
 import SourceSelectionSection from '../components/charts/controls/SourceSelectionSection';
 import { toggleSourceSelection } from '../utils/filterLogic';
 
+// Helper lấy màu theo status (Định nghĩa tập trung)
+const getStatusColors = (theme) => ({
+    all: '#FF5252', // Mặc định: Đỏ tươi
+    completed: theme.palette.success.main,
+    cancelled: '#C62828', // Đỏ sẫm (Khác biệt với #FF5252)
+    bomb: theme.palette.warning.main,
+    refunded: '#9c27b0'
+});
+
+// Component chọn trạng thái cho Map (Redesigned with "Excel-like" All Logic)
+const MapStatusFilter = ({ selectedStatuses, onToggle }) => {
+    const theme = useTheme();
+    const colors = getStatusColors(theme);
+    
+    // Định nghĩa danh sách status, thêm 'all' vào đầu
+    const statusOptions = [
+        { key: 'completed', label: 'Đơn thành công', color: colors.completed },
+        { key: 'cancelled', label: 'Đơn đã hủy', color: colors.cancelled },
+        { key: 'bomb', label: 'Đơn bom (thất bại)', color: colors.bomb },
+        { key: 'refunded', label: 'Đơn hoàn tiền', color: colors.refunded }
+    ];
+
+    // Tạo danh sách option dạng {value, label} để dùng cho hàm toggleSourceSelection
+    const toggleOptions = statusOptions.map(s => ({ value: s.key, label: s.label }));
+
+    const handleSwitchChange = (key) => {
+        // Sử dụng logic toggle thông minh "kiểu Excel" từ utils/filterLogic
+        const newSelection = toggleSourceSelection(key === 'all' ? 'all' : key, selectedStatuses, toggleOptions);
+        onToggle(newSelection);
+    };
+
+    const isAllChecked = selectedStatuses.includes('all');
+
+    return (
+        <Box sx={{ mt: 2 }}>
+            <Divider sx={{ my: 2, borderStyle: 'dashed' }} />
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                Hiển thị theo trạng thái:
+            </Typography>
+            <FormGroup>
+                {/* Nút TẤT CẢ riêng biệt */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.5, mb: 0.5, borderBottom: '1px dashed rgba(255,255,255,0.1)' }}>
+                    <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        Tất cả
+                    </Typography>
+                    <Switch 
+                        size="small"
+                        checked={isAllChecked}
+                        onChange={() => handleSwitchChange('all')}
+                        color="primary"
+                    />
+                </Box>
+
+                {statusOptions.map((status) => {
+                    const isChecked = selectedStatuses.includes(status.key); // Không cần check 'all' ở đây vì logic mảng đã chứa đủ
+                    
+                    return (
+                        <Box key={status.key} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', py: 0.5 }}>
+                            <Typography variant="body2" sx={{ color: status.color, fontWeight: 500 }}>
+                                {status.label}
+                            </Typography>
+                            <Switch 
+                                size="small"
+                                checked={isChecked}
+                                onChange={() => handleSwitchChange(status.key)}
+                                sx={{
+                                    '& .MuiSwitch-switchBase.Mui-checked': {
+                                        color: status.color,
+                                        '&:hover': { backgroundColor: status.color + '15' },
+                                    },
+                                    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                        backgroundColor: status.color,
+                                    },
+                                }}
+                            />
+                        </Box>
+                    );
+                })}
+            </FormGroup>
+        </Box>
+    );
+};
+
 // --- 1. COMPONENT CON QUẢN LÝ SETTINGS PANEL (Memoized) ---
-const OperationBoxControl = React.memo(({ filter, sourceOptions, title, hideSource = false }) => {
+const OperationBoxControl = React.memo(({ filter, sourceOptions, title, hideSource = false, extraContent }) => {
     const theme = useTheme();
     const [isConfigOpen, setIsConfigOpen] = useState(false);
 
@@ -44,41 +127,41 @@ const OperationBoxControl = React.memo(({ filter, sourceOptions, title, hideSour
                 <DateRangeFilterMenu {...filter.dateMenuProps} />
             </Box>
 
-            {/* Nút Cấu hình (Bánh răng) - Ẩn nếu hideSource = true */}
-            {!hideSource && (
-                <>
-                    <Tooltip title="Cấu hình nguồn dữ liệu">
-                        <IconButton 
-                            onClick={() => setIsConfigOpen(true)}
-                            sx={{ 
-                                border: `1px solid ${theme.palette.divider}`,
-                                borderRadius: 2,
-                                color: isConfigOpen ? theme.palette.primary.main : theme.palette.text.secondary,
-                                bgcolor: isConfigOpen ? theme.palette.primary.main + '20' : 'transparent',
-                                '&:hover': {
-                                    color: theme.palette.primary.main,
-                                    borderColor: theme.palette.primary.main,
-                                }
-                            }}
-                        >
-                            <SettingsIcon fontSize="small" />
-                        </IconButton>
-                    </Tooltip>
+            {/* Nút Cấu hình (Bánh răng) */}
+            <Tooltip title="Cấu hình hiển thị">
+                <IconButton 
+                    onClick={() => setIsConfigOpen(true)}
+                    sx={{ 
+                        border: `1px solid ${theme.palette.divider}`,
+                        borderRadius: 2,
+                        color: isConfigOpen ? theme.palette.primary.main : theme.palette.text.secondary,
+                        bgcolor: isConfigOpen ? theme.palette.primary.main + '20' : 'transparent',
+                        '&:hover': {
+                            color: theme.palette.primary.main,
+                            borderColor: theme.palette.primary.main,
+                        }
+                    }}
+                >
+                    <SettingsIcon fontSize="small" />
+                </IconButton>
+            </Tooltip>
 
-                    {/* Panel Cấu hình */}
-                    <ChartSettingsPanel
-                        open={isConfigOpen}
-                        onClose={() => setIsConfigOpen(false)}
-                        title={title || "Cấu hình"}
-                    >
-                        <SourceSelectionSection
-                            selectedSources={filter.selectedSources}
-                            sourceOptions={sourceOptions}
-                            onToggle={handleToggleSource}
-                        />
-                    </ChartSettingsPanel>
-                </>
-            )}
+            {/* Panel Cấu hình */}
+            <ChartSettingsPanel
+                open={isConfigOpen}
+                onClose={() => setIsConfigOpen(false)}
+                title={title || "Cấu hình"}
+            >
+                {!hideSource && (
+                    <SourceSelectionSection
+                        selectedSources={filter.selectedSources}
+                        sourceOptions={sourceOptions}
+                        onToggle={handleToggleSource}
+                    />
+                )}
+                {/* Render nội dung phụ (ví dụ: Map Status Filter) */}
+                {extraContent}
+            </ChartSettingsPanel>
         </Box>
     );
 });
@@ -167,23 +250,42 @@ const HourlyBox = React.memo(({ chart, sourceOptions }) => {
     );
 });
 
-const GeoMapBox = React.memo(({ chart, sourceOptions }) => (
-    <DashboardBox 
-        minWidth="350px"
-        title="Bản đồ 'Điểm nóng' Đơn hàng" 
-        height={600}
-        loading={chart.loading}
-        hasData={chart.data.length > 0}
-        action={<OperationBoxControl filter={chart.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
-    >
-        <GeoMapChart 
-            data={chart.data}
-            valueKey="orders"
-            labelKey="city"
-            unitLabel=" đơn"
-        />
-    </DashboardBox>
-));
+const GeoMapBox = React.memo(({ chart, sourceOptions }) => {
+    const theme = useTheme();
+    const colors = React.useMemo(() => getStatusColors(theme), [theme]);
+
+    return (
+        <DashboardBox 
+            minWidth="350px"
+            title="Bản đồ 'Điểm nóng' Đơn hàng" 
+            height={600}
+            loading={chart.loading}
+            hasData={chart.data.length > 0}
+            action={
+                <OperationBoxControl 
+                    filter={chart.filter} 
+                    sourceOptions={sourceOptions} 
+                    title="Cấu hình Bản đồ"
+                    extraContent={
+                        <MapStatusFilter 
+                            selectedStatuses={chart.statusFilter} 
+                            onToggle={chart.applyStatusFilter} 
+                        />
+                    }
+                />
+            }
+        >
+            <GeoMapChart 
+                data={chart.data}
+                valueKey="orders"
+                labelKey="city"
+                unitLabel=" đơn"
+                statusFilter={chart.statusFilter}
+                statusColors={colors}
+            />
+        </DashboardBox>
+    );
+});
 
 const PlatformBox = React.memo(({ chart, sourceOptions }) => {
     const theme = useTheme();

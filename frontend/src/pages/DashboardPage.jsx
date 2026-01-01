@@ -90,6 +90,15 @@ function DashboardPage() {
         return index < 3 ? theme.palette.warning.main : theme.palette.primary.main;
     }, [theme.palette.warning.main, theme.palette.primary.main]);
 
+    // Bảng màu cho Map Status (Đồng bộ với OperationPage)
+    const statusColors = useMemo(() => ({
+        all: '#FF5252',
+        completed: theme.palette.success.main,
+        cancelled: '#C62828',
+        bomb: theme.palette.warning.main,
+        refunded: '#9c27b0'
+    }), [theme]);
+
     return (
         <Box sx={{ px: 4, py: 3 }} >
             {/* --- HEADER: TIÊU ĐỀ & BỘ LỌC TỔNG --- */}
@@ -245,6 +254,8 @@ function DashboardPage() {
                                 valueKey="orders" 
                                 labelKey="city" 
                                 unitLabel="đơn"
+                                statusColors={statusColors}
+                                statusFilter={['all']}
                             />
                         </Suspense>
                     </DashboardBox>

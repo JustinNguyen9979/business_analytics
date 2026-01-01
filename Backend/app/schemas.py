@@ -90,6 +90,10 @@ class LocationItem(BaseModel):
     revenue: float = 0.0
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    completed: int = 0
+    cancelled: int = 0
+    bomb: int = 0
+    refunded: int = 0
 
 class FinancialEventItem(BaseModel):
     date: str
@@ -203,6 +207,10 @@ class CustomerMapDistributionItem(BaseModel):
     revenue: float = 0.0
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    completed: int = 0
+    cancelled: int = 0
+    bomb: int = 0
+    refunded: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
