@@ -181,6 +181,7 @@ const CancelReasonBox = React.memo(({ chart, sourceOptions }) => (
             unit=" đơn"
             formatType="number"
             height="100%"
+            hideTooltip={true}
         />
     </DashboardBox>
 ));
@@ -202,6 +203,7 @@ const TopRefundBox = React.memo(({ chart, sourceOptions }) => (
             unit=" sp"
             color="#ff6384"
             height="100%"
+            hideTooltip={true}
         />
     </DashboardBox>
 ));
@@ -222,6 +224,7 @@ const PaymentBox = React.memo(({ chart, sourceOptions }) => (
             unit=" đơn"
             color= "#e8d458"
             height="100%"
+            hideTooltip={true}
         />
     </DashboardBox>
 ));
@@ -245,6 +248,7 @@ const HourlyBox = React.memo(({ chart, sourceOptions }) => {
                 unit=" đơn"
                 color={theme.palette.info.main}
                 height="100%"
+                hideTooltip={true}
             />
         </DashboardBox>
     );
@@ -336,6 +340,7 @@ const PlatformBox = React.memo(({ chart, sourceOptions }) => {
                     labelKey="platform"
                     unit=" đơn"
                     height="100%"
+                    hideTooltip={true}
                     />
                 ) : (
                     <HorizontalBarChart
@@ -348,6 +353,7 @@ const PlatformBox = React.memo(({ chart, sourceOptions }) => {
                     labelKey="platform"
                     unit=" giờ"
                     height="100%"
+                    hideTooltip={true}
                     />
                 )}
         </DashboardBox>

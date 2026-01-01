@@ -16,7 +16,8 @@ function DonutChart({
     centerValue = null,
     unit = "", 
     formatType = 'number',
-    height = 300 
+    height = 300,
+    hideTooltip = false
 }) {
     const theme = useTheme();
 
@@ -122,7 +123,7 @@ function DonutChart({
                                 <Cell key={`cell-${index}`} fill={entry.color} />
                             ))}
                         </Pie>
-                        <Tooltip content={renderTooltip} />
+                        <Tooltip content={hideTooltip ? () => null : renderTooltip} />
                     </PieChart>
                 </ResponsiveContainer>
 

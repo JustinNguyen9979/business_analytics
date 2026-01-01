@@ -12,6 +12,9 @@ class DataRequest(BaseModel):
 class ProductBase(BaseModel):
     sku: str; name: Optional[str] = None; cost_price: Optional[int] = 0
 
+class ProductCreate(ProductBase):
+    pass
+
 class Product(ProductBase):
     id: int; brand_id: int; model_config = ConfigDict(from_attributes=True)
 
@@ -19,6 +22,9 @@ class CustomerBase(BaseModel):
     username: str
     city: Optional[str] = None
     district: Optional[str] = None
+
+class CustomerCreate(CustomerBase):
+    pass
 
 class Customer(CustomerBase):
     id: int

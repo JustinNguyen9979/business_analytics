@@ -22,7 +22,8 @@ function UniversalBarChart({
     grid = false,
     layout = "vertical",
     stacked = false,        // Bật chế độ cột chồng
-    showLegend = false      // Hiện chú thích (thường dùng cho đa chuỗi)
+    showLegend = false,      // Hiện chú thích (thường dùng cho đa chuỗi)
+    hideTooltip = false     // Ẩn tooltip khi hover
 }) {
     const theme = useTheme();
     const isVertical = layout === 'vertical';
@@ -150,7 +151,10 @@ function UniversalBarChart({
                         hide={isPlaceholder || !isVertical}
                     />
 
-                    <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.05)', radius: 4 }} />
+                    <Tooltip 
+                        content={hideTooltip ? () => null : <CustomTooltip />} 
+                        cursor={hideTooltip ? false : { fill: 'rgba(255,255,255,0.05)', radius: 4 }} 
+                    />
                     {showLegend && <Legend wrapperStyle={{ paddingTop: 10 }} />}
                     
                     {isMultiSeries ? (
