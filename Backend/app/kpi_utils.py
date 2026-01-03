@@ -17,7 +17,7 @@ STRATEGY_EMPTY = "EMPTY"      # Không query, trả về rỗng
 CANCELLED_STATUSES = {'hủy', 'cancel', 'đã hủy', 'cancelled'}
 
 ORDER_STATUS_KEYWORDS = {
-    "bomb_status": ["fail", "return", "tra hang", "chuyen hoan", "that bai", "khong thanh cong", "khong nhan", "tu choi"],
+    "bomb_status": ["fail", "chuyen hoan", "that bai", "khong thanh cong", "khong nhan", "tu choi", "khong lien lac", "thue bao", "tu choi", "khong nghe may", "boom hang", "bom hang", "contact failed"],
     "cancel_status": ["huy", "cancel"],
     "success_status": ["hoan thanh", "complete", "deliver", "success", "da nhan", "thanh cong", "da giao", "giao thanh cong", "shipped", "finish", "done", "hoan tat"]
 }
@@ -34,10 +34,10 @@ CANCEL_REASON_MAPPING = {
         "trung lap", "duplicate", "huy don"
     ],
     "Thay đổi Đơn hàng (Voucher/Đ.Chỉ/SP)": [
-        "thay doi", "change", "dia chi", "address", "sdt", "so dien thoai",
+        "change", "doi dia chi", "address", "sdt", "so dien thoai", "thay doi mau hoac kich co",
         "voucher", "ma giam gia", "coupon", "khuyen mai", "nhap quen", "forgot code",
         "san pham", "product", "mau sac", "kich thuoc", "size", "color", 
-        "gop don", "tach don"
+        "gop don", "tach don", "delivery address"
     ],
     "Giá / Tìm được rẻ hơn": [
         "gia tot hon", "re hon", "gia cao", "dat qua", 
@@ -45,16 +45,19 @@ CANCEL_REASON_MAPPING = {
         "cuoc van chuyen"
     ],
     "Vấn đề Thanh toán": [
-        "thanh toan", "payment", "pay", "the tin dung", 
+        "thanh toan", "payment", "pay", "the tin dung", "khong kha dung"
         "banking", "chuyen khoan", "cod", "payment method", 
         "vi dien tu", "rac roi", "error", "loi thanh toan"
     ],
     "Vấn đề Vận chuyển (Chậm/Lâu)": [
-        "giao cham", "ship cham", "lau qua", "thoi gian", "time", 
+        "giao cham", "ship cham", "lau qua", "thoi gian", "time", "phi giao hang cao", "phi ship cao",
         "nguoi ban gui", "seller", "delivery", "tre han", "delay", 
         "chuan bi hang"
     ],
-    "Lý do khác": [] 
+    "Do nhà bán": [
+        "khong tra loi", "het hang", "hang ve muon", "hang ve sau", "dung han", "khong gui hang"
+    ],
+    "Lý do khác": []
 }
 
 BOMB_REASON_KEYWORDS = CANCEL_REASON_MAPPING.get("Giao thất bại (Bom hàng)", [])
@@ -269,14 +272,15 @@ def aggregate_data_points(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
 
     aggregated['hourly_breakdown'] = merge_json_counters(hourly_jsons)
     aggregated['cancel_reason_breakdown'] = merge_json_counters(cancel_jsons)
-    aggregated['top_refunded_products'] = merge_top_products_list(refund_product_lists)
+    # Sử dụng hàm merge cấu trúc mới (Dict lồng nhau) thay vì hàm merge list cũ
+    aggregated['top_refunded_products'] = merge_product_breakdown_structure(refund_product_lists)
     aggregated['payment_method_breakdown'] = merge_json_counters(payment_jsons)
     aggregated['location_distribution'] = merge_location_lists(location_lists)
 
     return aggregated
 
 # ==============================================================================
-# PHẦN 2: LOGIC XỬ LÝ DỮ LIỆU THÔ (Dời từ kpi_calculator sang)
+# PHẦN 2: LOGIC XỬ LÝ DỮ LIỆU THÔ
 # ==============================================================================
 
 def _matches_keywords(text: str, keywords: List[str]) -> bool:
@@ -284,36 +288,96 @@ def _matches_keywords(text: str, keywords: List[str]) -> bool:
     normalized_text = unidecode(str(text)).lower()
     return any(kw in normalized_text for kw in keywords)
 
-def _classify_order_status(order: models.Order, total_refund: float) -> str:
-    if total_refund < 0: return 'refunded'
+def _is_bomb_order(status: str, reason: str) -> bool:
+    """Kiểm tra xem đơn có phải là BOM không."""
+    # 1. Trạng thái BOM rõ ràng (Ví dụ: Chuyển hoàn, Thất bại...)
+    if _matches_keywords(status, ORDER_STATUS_KEYWORDS["bomb_status"]):
+        return True
+    
+    # 2. Trạng thái HỦY nhưng lý do là BOM (Ví dụ: Hủy do không nghe máy...)
+    if _matches_keywords(status, ORDER_STATUS_KEYWORDS["cancel_status"]) and \
+       _matches_keywords(reason, BOMB_REASON_KEYWORDS):
+        return True
+        
+    return False
+
+def _is_cancelled_order(status: str) -> bool:
+    """Kiểm tra xem đơn có phải là HỦY không (Chỉ check status)."""
+    return _matches_keywords(status, ORDER_STATUS_KEYWORDS["cancel_status"])
+
+def _is_completed_order(status: str) -> bool:
+    """Kiểm tra xem đơn có phải là THÀNH CÔNG không."""
+    return _matches_keywords(status, ORDER_STATUS_KEYWORDS["success_status"])
+
+def _classify_order_status(order: models.Order, is_financial_refund: bool) -> str:
+    """
+    Phân loại trạng thái đơn hàng theo thứ tự ưu tiên mới (User Defined):
+    1. Hủy (Cancel Status) -> Soi Reason để tách Bom.
+    2. Bom (Bomb Status) -> Bom đặc thù (không có chữ Hủy).
+    3. Hoàn tiền (Financial Refund).
+    4. Thành công (Success Status).
+    5. Khác (Other/Pending).
+    """
     status = order.status or ""
     reason = order.details.get('cancel_reason', '') if order.details and isinstance(order.details, dict) else ""
-    if (_matches_keywords(status, ORDER_STATUS_KEYWORDS["cancel_status"]) and _matches_keywords(reason, BOMB_REASON_KEYWORDS)) or \
-       _matches_keywords(status, ORDER_STATUS_KEYWORDS["bomb_status"]):
+    
+    # --- BƯỚC 1: PHÂN LOẠI CẤP 1 (Dựa trên Status) ---
+    is_cancel_group = _is_cancelled_order(status)
+    is_success_group = _is_completed_order(status)
+
+    # --- BƯỚC 2: XỬ LÝ CHUYÊN SÂU ---
+
+    # Ưu tiên 1: Xử lý nhóm HỦY (Bóc tách Cancel vs Bomb)
+    if is_cancel_group:
+        if _is_bomb_order(status, reason):
+            return 'bomb'
+        return 'cancelled'
+
+    # Ưu tiên 2: Xử lý nhóm BOM ĐẶC THÙ (Không có chữ Hủy nhưng là thất bại)
+    # Ví dụ: "Giao hàng thất bại", "Chuyển hoàn"
+    if _matches_keywords(status, ORDER_STATUS_KEYWORDS["bomb_status"]):
         return 'bomb'
-    if _matches_keywords(status, ORDER_STATUS_KEYWORDS["cancel_status"]): return 'cancelled'
-    if _matches_keywords(status, ORDER_STATUS_KEYWORDS["success_status"]): return 'completed'
+
+    # Ưu tiên 3: Xử lý Đơn HOÀN TIỀN
+    # Logic tài chính (refund âm)
+    if is_financial_refund:
+        return 'refunded'
+
+    # Ưu tiên 4: Xử lý Nhóm THÀNH CÔNG
+    # Chỉ khi thoát được 3 cửa ải trên mới được tính là Thành công
+    if is_success_group:
+        return 'completed'
+        
+    # Ưu tiên 5: CÒN LẠI (An toàn)
+    # Đơn đang giao, chờ xác nhận... -> Không tính toán
     return 'other'
 
 def _calculate_cancel_reason_breakdown(orders: List[models.Order]) -> Dict[str, int]:
-    reason_counts = defaultdict(int)
-    for order in orders:
-        is_cancelled = order.status and order.status.lower().strip() in CANCELLED_STATUSES
-        if not is_cancelled: continue
-        if order.details and isinstance(order.details, dict):
-            raw_reason = order.details.get('cancel_reason', '')
-            if raw_reason:
-                reason_text = unidecode(str(raw_reason)).lower().strip()
-                found_group = False
-                for group_name, keywords in CANCEL_REASON_MAPPING.items() if 'CAN_REASON_MAPPING' in locals() else CANCEL_REASON_MAPPING.items():
-                    for kw in keywords:
-                        if kw in reason_text:
-                            reason_counts[group_name] += 1
-                            found_group = True
-                            break
-                    if found_group: break
-                if not found_group: reason_counts["Lý do khác"] += 1
-    return dict(reason_counts)
+    try:
+        reason_counts = defaultdict(int)
+        for order in orders:
+            # Lọc tất cả đơn có trạng thái Hủy (Bao gồm cả Bom dạng hủy và Hủy thường)
+            # Sử dụng chung bộ từ khóa chuẩn để đồng bộ logic
+            if not _matches_keywords(order.status, ORDER_STATUS_KEYWORDS["cancel_status"]):
+                continue
+                
+            if order.details and isinstance(order.details, dict):
+                raw_reason = order.details.get('cancel_reason', '')
+                if raw_reason:
+                    reason_text = unidecode(str(raw_reason)).lower().strip()
+                    found_group = False
+                    for group_name, keywords in CANCEL_REASON_MAPPING.items() if 'CAN_REASON_MAPPING' in locals() else CANCEL_REASON_MAPPING.items():
+                        for kw in keywords:
+                            if kw in reason_text:
+                                reason_counts[group_name] += 1
+                                found_group = True
+                                break
+                        if found_group: break
+                    if not found_group: reason_counts["Lý do khác"] += 1
+        return dict(reason_counts)
+    except Exception as e:
+        print(f"ERROR in _calculate_cancel_reason_breakdown: {e}")
+        return {}
 
 def _calculate_hourly_breakdown(orders: List[models.Order]) -> Dict[str, int]:
     hourly_counts = defaultdict(int)
@@ -336,25 +400,93 @@ def _calculate_top_products(orders: List[models.Order], limit=10) -> List[Dict]:
     sorted_products = sorted(product_stats.items(), key=lambda x: x[1]['quantity'], reverse=True)[:limit]
     return [{"sku": sku, "name": data["name"], "quantity": data["quantity"], "revenue": data["revenue"]} for sku, data in sorted_products]
 
-def _calculate_top_refunded_products(orders: List[models.Order], revenues: List[models.Revenue], limit=10) -> List[Dict]:
-    refunded_skus = defaultdict(int); product_names = {}; bad_orders_map = {}
-    for r in revenues:
-        if r.refund < 0 and r.order_code: bad_orders_map[r.order_code] = True
-    for order in orders:
-        if order.order_code in bad_orders_map: continue
-        status_lower = unidecode(str(order.status or "")).lower()
-        if any(kw in status_lower for kw in ORDER_STATUS_KEYWORDS["bomb_status"] + ORDER_STATUS_KEYWORDS["cancel_status"]):
-            bad_orders_map[order.order_code] = True
-    for order in orders:
-        if bad_orders_map.get(order.order_code):
+def merge_product_breakdown_structure(list_of_breakdowns: List[Dict]) -> Dict[str, List[Dict]]:
+    """
+    Gộp danh sách các breakdown (mỗi breakdown chứa 3 key: cancelled, bomb, refunded)
+    thành 1 breakdown tổng hợp.
+    """
+    try:
+        grouped = {
+            "cancelled": [],
+            "bomb": [],
+            "refunded": []
+        }
+        
+        for bd in list_of_breakdowns:
+            if not bd: continue
+            # Tương thích ngược: Nếu dữ liệu cũ là List (từ logic cũ), ta bỏ qua hoặc cố gắng convert
+            if isinstance(bd, list): 
+                continue 
+            
+            if isinstance(bd, dict):
+                if "cancelled" in bd: grouped["cancelled"].append(bd["cancelled"])
+                if "bomb" in bd: grouped["bomb"].append(bd["bomb"])
+                if "refunded" in bd: grouped["refunded"].append(bd["refunded"])
+
+        # Sử dụng lại hàm merge list cũ cho từng nhóm
+        return {
+            "cancelled": merge_top_products_list(grouped["cancelled"]),
+            "bomb": merge_top_products_list(grouped["bomb"]),
+            "refunded": merge_top_products_list(grouped["refunded"])
+        }
+    except Exception as e:
+        print(f"ERROR in merge_product_breakdown_structure: {e}")
+        return {"cancelled": [], "bomb": [], "refunded": []}
+
+def _calculate_bad_product_breakdown(
+    orders: List[models.Order], 
+    order_has_refund_map: Dict[str, bool],
+    limit=10
+) -> Dict[str, List[Dict]]:
+    """
+    Tính Top sản phẩm cho 3 nhóm riêng biệt: Hủy, Bom, Hoàn tiền.
+    Sử dụng logic phân loại chuẩn _classify_order_status.
+    """
+    try:
+        # 3 giỏ chứa data thô: Key=SKU, Value={qty, name}
+        baskets = {
+            "cancelled": defaultdict(lambda: {"qty": 0, "name": "Unknown"}),
+            "bomb": defaultdict(lambda: {"qty": 0, "name": "Unknown"}),
+            "refunded": defaultdict(lambda: {"qty": 0, "name": "Unknown"})
+        }
+
+        for order in orders:
+            # 1. Phân loại đơn chuẩn xác
+            cat = _classify_order_status(order, order_has_refund_map.get(order.order_code, False))
+            
+            # 2. Chỉ quan tâm 3 loại xấu này
+            if cat not in baskets: continue
+            
+            # 3. Lấy sản phẩm và cộng dồn vào giỏ tương ứng
             if order.details and isinstance(order.details.get('items'), list):
                 for item in order.details['items']:
                     sku = item.get('sku')
                     if sku:
-                        refunded_skus[sku] += int(item.get('quantity', 0))
-                        if sku not in product_names: product_names[sku] = item.get('name', sku)
-    sorted_refunds = sorted(refunded_skus.items(), key=lambda x: x[1], reverse=True)[:limit]
-    return [{"sku": sku, "name": product_names.get(sku, sku), "value": qty} for sku, qty in sorted_refunds]
+                        try:
+                            qty = int(float(item.get('quantity', 0) or 0)) # Safe convert string/float/None -> int
+                        except:
+                            qty = 0
+                            
+                        name = item.get('name', sku)
+                        
+                        baskets[cat][sku]["qty"] += qty
+                        # Cập nhật tên nếu chưa có
+                        if baskets[cat][sku]["name"] == "Unknown" and name:
+                            baskets[cat][sku]["name"] = name
+
+        # 4. Convert sang list và sort
+        final_result = {}
+        for cat, data in baskets.items():
+            sorted_items = sorted(data.items(), key=lambda x: x[1]['qty'], reverse=True)[:limit]
+            final_result[cat] = [
+                {"sku": sku, "name": val["name"], "value": val["qty"]} 
+                for sku, val in sorted_items
+            ]
+            
+        return final_result
+    except Exception as e:
+        print(f"ERROR in _calculate_bad_product_breakdown: {e}")
+        return {"cancelled": [], "bomb": [], "refunded": []}
 
 def _calculate_location_distribution(
     orders: List[models.Order], 
@@ -383,7 +515,7 @@ def _calculate_location_distribution(
                 
                 # Xác định Status
                 is_refunded = refund_status_map.get(order.order_code, False) if refund_status_map else False
-                status = _classify_order_status(order, -1 if is_refunded else 0)
+                status = _classify_order_status(order, is_refunded)
                 
                 # Xác định Revenue
                 rev = revenue_map.get(order.order_code, 0) if revenue_map else 0
@@ -509,10 +641,23 @@ def calculate_daily_kpis(
         }
 
         # 3. Xử lý trạng thái vận hành
-        order_has_refund = {r.order_code: True for r in valid_revenues if r.refund < 0}
+        # Tính tổng Net Revenue và Refund theo từng Order Code để xác định chính xác Đơn Hoàn
+        rev_summary = defaultdict(lambda: {"net": 0.0, "refund": 0.0})
+        for r in valid_revenues:
+            rev_summary[r.order_code]["net"] += (r.net_revenue or 0)
+            rev_summary[r.order_code]["refund"] += (r.refund or 0)
+
+        # Chỉ những đơn có Refund âm VÀ Net Revenue âm mới được coi là Đơn Hoàn (Refunded)
+        # Những đơn Refund âm nhưng Net = 0 thường là đơn Hủy (đã được lọc ở bước Status Hủy)
+        order_has_refund = {
+            code: True 
+            for code, val in rev_summary.items() 
+            if val["refund"] < -0.1 and val["net"] < -0.1 # Dùng -0.1 để tránh lỗi float rounding
+        }
+
         counters = {"completed": 0, "cancelled": 0, "bomb": 0, "refunded": 0}
         for order in target_orders:
-            cat = _classify_order_status(order, -1 if order_has_refund.get(order.order_code) else 0)
+            cat = _classify_order_status(order, order_has_refund.get(order.order_code, False))
             if cat in counters: counters[cat] += 1
         
         data.update({
@@ -523,7 +668,7 @@ def calculate_daily_kpis(
         })
 
         # 4. Tính Giá vốn (COGS) - Chỉ tính cho đơn không bị Hủy/Hoàn
-        bad_codes = {o.order_code for o in target_orders if _classify_order_status(o, -1 if order_has_refund.get(o.order_code) else 0) in ['cancelled', 'bomb', 'refunded']}
+        bad_codes = {o.order_code for o in target_orders if _classify_order_status(o, order_has_refund.get(o.order_code, False)) in ['cancelled', 'bomb', 'refunded']}
         data["cogs"] = sum((o.cogs or 0) for o in target_orders if o.order_code not in bad_codes)
         
         # --- BỔ SUNG TÍNH TỔNG CHI PHÍ ---
@@ -550,11 +695,12 @@ def calculate_daily_kpis(
 
         # 7. Tính các trường JSONB
         # Lọc danh sách đơn thành công để tính phương thức thanh toán (Loại bỏ Hủy/Bom/Hoàn)
-        success_orders = [o for o in target_orders if _classify_order_status(o, -1 if order_has_refund.get(o.order_code) else 0) == 'completed']
+        success_orders = [o for o in target_orders if _classify_order_status(o, order_has_refund.get(o.order_code, False)) == 'completed']
         
         data["hourly_breakdown"] = _calculate_hourly_breakdown(target_orders)
         data["top_products"] = _calculate_top_products(target_orders)
-        data["top_refunded_products"] = _calculate_top_refunded_products(orders_in_day, revenues_in_day)
+        # Sử dụng hàm mới tách biệt 3 loại sản phẩm xấu
+        data["top_refunded_products"] = _calculate_bad_product_breakdown(target_orders, order_has_refund)
         data["payment_method_breakdown"] = _calculate_payment_method_breakdown(success_orders)
         data["cancel_reason_breakdown"] = _calculate_cancel_reason_breakdown(target_orders)
         

@@ -31,7 +31,7 @@ const useChartBoxLogic = (globalFilterState, brandSlug, dataKey) => {
             if (dataKey === 'cancelReasons') {
                 setData(Object.entries(response.cancel_reason_breakdown || {}).map(([name, value]) => ({ name, value })));
             } else if (dataKey === 'topRefunded') {
-                setData(response.top_refunded_products || []);
+                setData(response.top_refunded_products || {});
             } else if (dataKey === 'hourly') {
                 setData(Object.entries(response.hourly_breakdown || {}).map(([hour, count]) => ({ hour: `${hour}h`, count })));
             } else if (dataKey === 'payment') {

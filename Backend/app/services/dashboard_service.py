@@ -260,6 +260,7 @@ def get_kpis_by_platform(
         func.sum(models.DailyAnalytics.total_orders).label('totalOrders'),
         func.sum(models.DailyAnalytics.cancelled_orders).label('cancelledOrders'),
         func.sum(models.DailyAnalytics.refunded_orders).label('refundedOrders'),
+        func.sum(models.DailyAnalytics.bomb_orders).label('bombOrders'),
         # Tính trọng số cho thời gian (Time * Orders)
         func.sum(models.DailyAnalytics.avg_processing_time * models.DailyAnalytics.total_orders).label('weighted_proc_time'),
         func.sum(models.DailyAnalytics.avg_shipping_time * models.DailyAnalytics.total_orders).label('weighted_ship_time'),
@@ -281,6 +282,7 @@ def get_kpis_by_platform(
         'net_revenue': 0, 'gmv': 0, 'profit': 0, 'ad_spend': 0, 'total_cost': 0,
         'cogs': 0, 'execution_cost': 0,
         'completed_orders': 0, 'total_orders': 0, 'cancelled_orders': 0,
+        'refunded_orders': 0, 'bomb_orders': 0,
         'roi': 0, 'profit_margin': 0,
         'avg_processing_time': 0, 'avg_shipping_time': 0 # Thêm field tổng
     }
@@ -310,6 +312,7 @@ def get_kpis_by_platform(
             'total_orders': row.totalOrders or 0,
             'cancelled_orders': row.cancelledOrders or 0,
             'refunded_orders': row.refundedOrders or 0,
+            'bomb_orders': row.bombOrders or 0,
             'avg_processing_time': avg_proc,
             'avg_shipping_time': avg_ship
         }

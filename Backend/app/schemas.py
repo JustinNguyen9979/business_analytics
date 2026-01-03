@@ -234,7 +234,7 @@ class OperationKpisResponse(BaseModel):
     hourly_breakdown: Dict[str, int] = {}
     payment_method_breakdown: Dict[str, int] = {}
     location_distribution: List[Dict[str, Any]] = []
-    top_refunded_products: List[Dict[str, Any]] = []
+    top_refunded_products: Dict[str, List[Dict[str, Any]]] = {}
     platform_comparison: List[Dict[str, Any]] = []
 
     class config:

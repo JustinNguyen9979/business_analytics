@@ -186,27 +186,62 @@ const CancelReasonBox = React.memo(({ chart, sourceOptions }) => (
     </DashboardBox>
 ));
 
-const TopRefundBox = React.memo(({ chart, sourceOptions }) => (
-    <DashboardBox 
-        minWidth="350px"
-        title="Top 5 Sản phẩm Hoàn/Bom cao nhất"
-        loading={chart.loading}
-        hasData={chart.data.length > 0}
-        placeholderTitle="Chưa có dữ liệu Top Sản phẩm Hoàn"
-        action={<OperationBoxControl filter={chart.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
-    >
-        <HorizontalBarChart 
-            data={chart.data}
-            dataKey="value"
-            labelKey="name"
-            subLabelKey="sku"
-            unit=" sp"
-            color="#ff6384"
-            height="100%"
-            hideTooltip={true}
-        />
-    </DashboardBox>
-));
+const TopRefundBox = React.memo(({ chart, sourceOptions }) => {
+    const theme = useTheme();
+    const [viewMode, setViewMode] = useState('refunded');
+
+    const handleViewChange = (event, newMode) => {
+        if (newMode !== null) setViewMode(newMode);
+    };
+
+    // Lấy data theo viewMode, xử lý an toàn nếu data chưa load hoặc format sai
+    const currentData = (chart.data && !Array.isArray(chart.data)) ? (chart.data[viewMode] || []) : [];
+    
+    // Config màu sắc và label cho từng mode
+    const config = {
+        refunded: { color: '#9c27b0', label: 'Top Hoàn tiền', unit: ' sp' },
+        bomb: { color: theme.palette.warning.main, label: 'Top Bom hàng', unit: ' sp' },
+        cancelled: { color: '#C62828', label: 'Top Hủy đơn', unit: ' sp' }
+    };
+
+    return (
+        <DashboardBox 
+            minWidth="350px"
+            title="Sản phẩm có vấn đề (Top 10)"
+            loading={chart.loading}
+            // Check data exist: Nếu object có ít nhất 1 key có data thì coi là hasData
+            hasData={chart.data && !Array.isArray(chart.data) && Object.values(chart.data).some(arr => arr && arr.length > 0)}
+            placeholderTitle={`Chưa có dữ liệu ${config[viewMode].label}`}
+            action={
+                <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                     <ToggleButtonGroup
+                        value={viewMode}
+                        exclusive
+                        onChange={handleViewChange}
+                        size="small"
+                        sx={{ height: 32 }}
+                    >
+                        <ToggleButton value="refunded" sx={{ textTransform: 'none', px: 1.5, fontSize: '0.75rem' }}>Hoàn</ToggleButton>
+                        <ToggleButton value="bomb" sx={{ textTransform: 'none', px: 1.5, fontSize: '0.75rem' }}>Bom</ToggleButton>
+                        <ToggleButton value="cancelled" sx={{ textTransform: 'none', px: 1.5, fontSize: '0.75rem' }}>Hủy</ToggleButton>
+                    </ToggleButtonGroup>
+                    <OperationBoxControl filter={chart.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />
+                </Box>
+            }
+        >
+            <HorizontalBarChart 
+                data={currentData}
+                dataKey="value"
+                labelKey="name"
+                subLabelKey="sku"
+                unit={config[viewMode].unit}
+                color={config[viewMode].color}
+                height="100%"
+                hideTooltip={true}
+            />
+        </DashboardBox>
+    );
+});
 
 const PaymentBox = React.memo(({ chart, sourceOptions }) => (
     <DashboardBox 
@@ -335,7 +370,8 @@ const PlatformBox = React.memo(({ chart, sourceOptions }) => {
                     series={[
                         { dataKey: 'completed_orders', label: 'Thành công', color: theme.palette.success.main },
                         { dataKey: 'cancelled_orders', label: 'Hủy', color: theme.palette.error.main },
-                        { dataKey: 'refunded_orders', label: 'Hoàn', color: theme.palette.warning.main }
+                        { dataKey: 'bomb_orders', label: 'Bom', color: theme.palette.warning.main },
+                        { dataKey: 'refunded_orders', label: 'Hoàn', color: '#9c27b0' }
                     ]}
                     labelKey="platform"
                     unit=" đơn"
