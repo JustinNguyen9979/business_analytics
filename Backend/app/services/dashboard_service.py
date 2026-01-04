@@ -182,57 +182,75 @@ def get_top_selling_products(
     brand_id: int, 
     start_date: date, 
     end_date: date, 
-    limit: int = 10
+    limit: int = 10,
+    source_list: Optional[List[str]] = None
 ) -> List[Dict[str, Any]]:
     """
-    Lấy top sản phẩm bán chạy. 
-    Logic cũ dùng Pandas parse JSON details trực tiếp từ Order -> Khá chậm nếu data lớn.
-    Nhưng hiện tại để an toàn ta giữ nguyên logic query Order, chỉ tối ưu code structure.
+    Lấy top sản phẩm bán chạy từ dữ liệu đã aggregate sẵn (DailyStat/DailyAnalytics).
+    Nhanh hơn nhiều so với query trực tiếp bảng Order.
     """
-    # ... (Giữ logic cũ nhưng viết gọn lại)
-    orders = db.query(models.Order).filter(
-        models.Order.brand_id == brand_id,
-        func.date(models.Order.order_date).between(start_date, end_date)
-    ).all()
-    
-    if not orders: return []
+    # 1. Xác định chiến lược lọc source
+    strategy, clean_sources = kpi_utils.normalize_source_strategy(source_list)
 
-    all_items = []
-    for order in orders:
-        if order.details and isinstance(order.details.get('items'), list):
-            for item in order.details['items']:
-                if isinstance(item, dict) and item.get('sku') and item.get('quantity'):
-                    try:
-                        all_items.append({
-                            'sku': str(item['sku']), 
-                            'quantity': int(item['quantity'])
-                        })
-                    except (ValueError, TypeError): continue
+    # 2. Query dữ liệu aggregate
+    records = []
+    if strategy == kpi_utils.STRATEGY_FILTERED:
+        # Query DailyAnalytics nếu lọc theo source
+        records = db.query(models.DailyAnalytics.top_products).filter(
+            models.DailyAnalytics.brand_id == brand_id,
+            models.DailyAnalytics.date.between(start_date, end_date),
+            models.DailyAnalytics.source.in_(clean_sources)
+        ).all()
+    else:
+        # Query DailyStat nếu lấy tất cả (Mặc định)
+        records = db.query(models.DailyStat.top_products).filter(
+            models.DailyStat.brand_id == brand_id,
+            models.DailyStat.date.between(start_date, end_date)
+        ).all()
     
-    if not all_items: return []
+    if not records:
+        return []
+
+    # 3. Aggregate dữ liệu JSON (Cộng dồn quantity theo SKU)
+    product_map = {} # SKU -> {name, total_quantity, revenue}
+
+    for record in records:
+        # record là một tuple (top_products,), lấy phần tử đầu tiên
+        daily_top = record[0]
+        if not daily_top or not isinstance(daily_top, list):
+            continue
+            
+        for item in daily_top:
+            if not isinstance(item, dict): continue
+            
+            sku = item.get('sku')
+            if not sku: continue
+            
+            quantity = item.get('quantity', 0)
+            # Fallback nếu key là total_quantity (đề phòng data cũ/mới lẫn lộn)
+            if quantity == 0:
+                quantity = item.get('total_quantity', 0)
+                
+            if quantity <= 0: continue
+
+            revenue = item.get('revenue', 0)
+
+            if sku not in product_map:
+                product_map[sku] = {
+                    'sku': sku,
+                    'name': item.get('name', 'Unknown'),
+                    'total_quantity': 0,
+                    'revenue': 0.0
+                }
+            
+            product_map[sku]['total_quantity'] += quantity
+            product_map[sku]['revenue'] += revenue
+
+    # 4. Convert về list và Sort
+    result = list(product_map.values())
+    result.sort(key=lambda x: x['total_quantity'], reverse=True)
     
-    # Dùng Pandas aggregate
-    df = pd.DataFrame(all_items)
-    top_df = df.groupby('sku')['quantity'].sum().nlargest(limit).reset_index()
-    
-    # Map tên sản phẩm
-    skus = top_df['sku'].tolist()
-    products = db.query(models.Product.sku, models.Product.name).filter(
-        models.Product.brand_id == brand_id,
-        models.Product.sku.in_(skus)
-    ).all()
-    name_map = {p.sku: p.name for p in products}
-    
-    results = []
-    for _, row in top_df.iterrows():
-        sku = row['sku']
-        results.append({
-            "sku": sku,
-            "total_quantity": int(row['quantity']),
-            "name": name_map.get(sku, sku)
-        })
-        
-    return results
+    return result[:limit]
 
 def get_kpis_by_platform(
     db: Session, 

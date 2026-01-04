@@ -305,13 +305,14 @@ def read_brand_daily_kpis(
 def read_top_products(
     start_date: date,
     end_date: date,
+    source: List[str] = Query(None, description="Lọc theo nguồn (shopee, lazada...)"),
     brand: models.Brand = Depends(get_brand_from_slug),
     limit: int = 10,
     db: Session = Depends(get_db)
 ):
     """Lấy top N sản phẩm bán chạy nhất."""
     try:
-        top_products = crud.get_top_selling_products(db, brand.id, start_date, end_date, limit)
+        top_products = crud.get_top_selling_products(db, brand.id, start_date, end_date, limit, source_list=source)
         return top_products
     except Exception as e:
         print(f"!!! LỖI ENDPOINT TOP PRODUCTS: {e}")

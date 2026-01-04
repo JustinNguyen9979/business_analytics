@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from '@mui/material/styles';
 import { useDateFilter } from './useDateFilter'; 
 import { useChartFilter } from './useChartFilter';
-import { fetchOperationKpisAPI, getSourcesForBrand, fetchCustomerMap } from '../services/api'; 
+import { fetchOperationKpisAPI, getSourcesForBrand, fetchCustomerMap, fetchTopProducts, fetchDailyKpisAPI } from '../services/api'; 
 import { useBrand } from '../context/BrandContext'; 
 
 // --- Helper Hook: Quản lý logic cho từng Box biểu đồ ---
@@ -24,21 +24,53 @@ const useChartBoxLogic = (globalFilterState, brandSlug, dataKey) => {
                 return;
             }
 
-            // Gọi API chung
-            const response = await fetchOperationKpisAPI(brandSlug, start, end, sources);
-            
-            // Map dữ liệu dựa theo key
-            if (dataKey === 'cancelReasons') {
-                setData(Object.entries(response.cancel_reason_breakdown || {}).map(([name, value]) => ({ name, value })));
-            } else if (dataKey === 'topRefunded') {
-                setData(response.top_refunded_products || {});
-            } else if (dataKey === 'hourly') {
-                setData(Object.entries(response.hourly_breakdown || {}).map(([hour, count]) => ({ hour: `${hour}h`, count })));
-            } else if (dataKey === 'payment') {
-                const breakdown = response.payment_method_breakdown || {};
-                setData(Object.entries(breakdown).map(([name, value]) => ({name, value})));
-            } else if (dataKey === 'platform') {
-                setData(response.platform_comparison || []);
+            // Xử lý các loại data đặc biệt
+            if (dataKey === 'topSelling') {
+                // Gọi API riêng cho Top Product với lọc theo nguồn
+                const res = await fetchTopProducts(brandSlug, start, end, 10, sources);
+                // Map lại key cho giống chart
+                setData(res.map(item => ({ ...item, value: item.total_quantity })));
+            } 
+            else if (['orderTrend', 'speedTrend', 'uptTrend'].includes(dataKey)) {
+                // Gọi API Daily KPIs cho các biểu đồ xu hướng
+                const res = await fetchDailyKpisAPI(brandSlug, start, end, sources);
+                const dailyList = res.data || [];
+                
+                if (dataKey === 'orderTrend') {
+                    setData(dailyList.map(d => ({
+                        date: d.date,
+                        total: d.total_orders,
+                        completed: d.completed_orders || 0 // Cần đảm bảo backend trả về field này
+                    })));
+                } else if (dataKey === 'speedTrend') {
+                    setData(dailyList.map(d => ({
+                        date: d.date,
+                        value: d.avg_processing_time || 0
+                    })));
+                } else if (dataKey === 'uptTrend') {
+                    setData(dailyList.map(d => ({
+                        date: d.date,
+                        value: (d.completed_orders > 0) ? parseFloat((d.total_quantity_sold / d.completed_orders).toFixed(2)) : 0
+                    })));
+                }
+            }
+            else {
+                // Các chart cũ dùng API Operation Aggregated
+                const response = await fetchOperationKpisAPI(brandSlug, start, end, sources);
+                
+                // Map dữ liệu dựa theo key
+                if (dataKey === 'cancelReasons') {
+                    setData(Object.entries(response.cancel_reason_breakdown || {}).map(([name, value]) => ({ name, value })));
+                } else if (dataKey === 'topRefunded') {
+                    setData(response.top_refunded_products || {});
+                } else if (dataKey === 'hourly') {
+                    setData(Object.entries(response.hourly_breakdown || {}).map(([hour, count]) => ({ hour: `${hour}h`, count })));
+                } else if (dataKey === 'payment') {
+                    const breakdown = response.payment_method_breakdown || {};
+                    setData(Object.entries(breakdown).map(([name, value]) => ({name, value})));
+                } else if (dataKey === 'platform') {
+                    setData(response.platform_comparison || []);
+                }
             }
 
         } catch (err) {
@@ -151,6 +183,12 @@ export const useOperationPageLogic = () => {
     const paymentChart = useChartBoxLogic(globalFilterState, brandSlug, 'payment');
     const platformChart = useChartBoxLogic(globalFilterState, brandSlug, 'platform');
     
+    // --- New Positive Charts ---
+    const topSellingChart = useChartBoxLogic(globalFilterState, brandSlug, 'topSelling');
+    const orderTrendChart = useChartBoxLogic(globalFilterState, brandSlug, 'orderTrend');
+    const speedTrendChart = useChartBoxLogic(globalFilterState, brandSlug, 'speedTrend');
+    const uptTrendChart = useChartBoxLogic(globalFilterState, brandSlug, 'uptTrend');
+    
     // 2.1 Logic Riêng cho Map
     const geoChart = useGeoMapLogic(globalFilterState, brandSlug);
 
@@ -221,8 +259,13 @@ export const useOperationPageLogic = () => {
             hourly: hourlyChart,
             payment: paymentChart,
             geo: geoChart,
-            platform: platformChart
-        }), [cancelReasonChart, topRefundChart, hourlyChart, paymentChart, geoChart, platformChart]);
+            platform: platformChart,
+            // New
+            topSelling: topSellingChart,
+            orderTrend: orderTrendChart,
+            speedTrend: speedTrendChart,
+            uptTrend: uptTrendChart
+        }), [cancelReasonChart, topRefundChart, hourlyChart, paymentChart, geoChart, platformChart, topSellingChart, orderTrendChart, speedTrendChart, uptTrendChart]);
 
         return {
             // Global Filters

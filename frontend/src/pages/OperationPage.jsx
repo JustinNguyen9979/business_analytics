@@ -1,12 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, lazy, Suspense } from 'react';
 import { Box, Typography, Button, Paper, Skeleton, IconButton, Tooltip, ToggleButton, ToggleButtonGroup, Switch, FormControlLabel, FormGroup, Divider } from '@mui/material';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import SettingsIcon from '@mui/icons-material/Settings';
 import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
-import GaugeChart from '../components/charts/GaugeChart';
-import DonutChart from '../components/charts/DonutChart';
-import HorizontalBarChart from '../components/charts/HorizontalBarChart';
-import GeoMapChart from '../components/charts/GeoMapChart';
+import LazyLoader from '../components/common/LazyLoader'; 
 import { useOperationPageLogic } from '../hooks/useOperationPageLogic';
 import { useTheme } from '@mui/material/styles';
 
@@ -18,6 +15,21 @@ import SectionTitle from '../components/ui/SectionTitle';
 import ChartSettingsPanel from '../components/charts/controls/ChartSettingsPanel';
 import SourceSelectionSection from '../components/charts/controls/SourceSelectionSection';
 import { toggleSourceSelection } from '../utils/filterLogic';
+
+const GaugeChart = lazy(() => import('../components/charts/GaugeChart'));
+const DonutChart = lazy(() => import('../components/charts/DonutChart'));
+const HorizontalBarChart = lazy(() => import('../components/charts/HorizontalBarChart'));
+const GeoMapChart = lazy(() => import('../components/charts/GeoMapChart'));
+const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
+
+const ChartSkeleton = () => (
+    <Skeleton
+        variant="rectangular"
+        width="100%"
+        height="100%"
+        sx={{ borderRadius: 2, bgcolor: 'rgba(255, 255, 255, 0.05)' }}
+    />
+);
 
 // Helper lấy màu theo status (Định nghĩa tập trung)
 const getStatusColors = (theme) => ({
@@ -167,6 +179,108 @@ const OperationBoxControl = React.memo(({ filter, sourceOptions, title, hideSour
 });
 
 // --- 2. CÁC BOX BIỂU ĐỒ RIÊNG BIỆT (Memoized) ---
+
+// === 4 BOX MỚI (TÍCH CỰC) ===
+const TopSellingBox = React.memo(({ chart, sourceOptions }) => {
+    const theme = useTheme();
+    return (
+        <DashboardBox 
+            minWidth="350px"
+            title="Top Sản phẩm Bán chạy"
+            loading={chart.loading}
+            hasData={chart.data.length > 0}
+            action={<OperationBoxControl filter={chart.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />} 
+        >
+            <Suspense fallback={<ChartSkeleton />}>
+                <HorizontalBarChart 
+                    data={chart.data}
+                    dataKey="value"
+                    labelKey="name"
+                    subLabelKey="sku"
+                    unit=" sp"
+                    color={theme.palette.success.main}
+                    height="100%"
+                    hideTooltip={true}
+                />
+            </Suspense>
+        </DashboardBox>
+    );
+});
+
+const OrderTrendBox = React.memo(({ chart, sourceOptions }) => (
+    <DashboardBox 
+        minWidth="350px"
+        title="Nhịp độ Đơn hàng (Vào vs Ra)"
+        loading={chart.loading}
+        hasData={chart.data.length > 0}
+        action={<OperationBoxControl filter={chart.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
+    >
+        <Suspense fallback={<ChartSkeleton />}>
+            <RevenueProfitChart 
+                data={chart.data}
+                series={[
+                    { dataKey: 'total', label: 'Đơn đặt mới', color: '#2196F3', area: true },
+                    { dataKey: 'completed', label: 'Đơn đi (Thành công)', color: '#4CAF50', area: true }
+                ]}
+                unit=" đơn"
+                xKey="date"
+                height="100%"
+            />
+        </Suspense>
+    </DashboardBox>
+));
+
+const SpeedTrendBox = React.memo(({ chart, sourceOptions }) => {
+    const theme = useTheme();
+    return (
+        <DashboardBox 
+            minWidth="350px"
+            title="Tốc độ Xử lý"
+            loading={chart.loading}
+            hasData={chart.data.length > 0}
+            action={<OperationBoxControl filter={chart.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
+        >
+            <Suspense fallback={<ChartSkeleton />}>
+                <RevenueProfitChart 
+                    data={chart.data}
+                    series={[
+                        { dataKey: 'value', label: 'Thời gian TB (Giờ)', color: theme.palette.warning.main, area: true }
+                    ]}
+                    unit=" giờ"
+                    xKey="date"
+                    height="100%"
+                />            
+            </Suspense>
+        </DashboardBox>
+    );
+});
+
+const UptTrendBox = React.memo(({ chart, sourceOptions }) => {
+    const theme = useTheme();
+    return (
+        <DashboardBox 
+            minWidth="350px"
+            title="Hiệu suất Đóng gói (UPT)"
+            loading={chart.loading}
+            hasData={chart.data.length > 0}
+            action={<OperationBoxControl filter={chart.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
+        >
+            <Suspense fallback={<ChartSkeleton />}>
+                <RevenueProfitChart 
+                    data={chart.data}
+                    series={[
+                        { dataKey: 'value', label: 'Sản phẩm / Đơn', color: '#9c27b0', type: 'bar' }
+                    ]}
+                    unit=" sp/đơn"
+                    xKey="date"
+                    height="100%"
+                />
+            </Suspense>
+        </DashboardBox>
+    );
+});
+
+// === CÁC BOX CŨ (TIÊU CỰC / PHÂN TÍCH) ===
 const CancelReasonBox = React.memo(({ chart, sourceOptions }) => (
     <DashboardBox 
         minWidth="350px"
@@ -175,14 +289,16 @@ const CancelReasonBox = React.memo(({ chart, sourceOptions }) => (
         hasData={chart.data.length > 0}
         action={<OperationBoxControl filter={chart.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
     >
-        <DonutChart 
-            data={chart.data} 
-            centerLabel="TỔNG HỦY" 
-            unit=" đơn"
-            formatType="number"
-            height="100%"
-            hideTooltip={true}
-        />
+        <Suspense fallback={<ChartSkeleton />}>
+            <DonutChart 
+                data={chart.data} 
+                centerLabel="TỔNG HỦY" 
+                unit=" đơn"
+                formatType="number"
+                height="100%"
+                hideTooltip={true}
+            />
+        </Suspense>
     </DashboardBox>
 ));
 
@@ -229,16 +345,18 @@ const TopRefundBox = React.memo(({ chart, sourceOptions }) => {
                 </Box>
             }
         >
-            <HorizontalBarChart 
-                data={currentData}
-                dataKey="value"
-                labelKey="name"
-                subLabelKey="sku"
-                unit={config[viewMode].unit}
-                color={config[viewMode].color}
-                height="100%"
-                hideTooltip={true}
-            />
+            <Suspense fallback={<ChartSkeleton />}>
+                <HorizontalBarChart 
+                    data={currentData}
+                    dataKey="value"
+                    labelKey="name"
+                    subLabelKey="sku"
+                    unit={config[viewMode].unit}
+                    color={config[viewMode].color}
+                    height="100%"
+                    hideTooltip={true}
+                />
+            </Suspense>
         </DashboardBox>
     );
 });
@@ -251,16 +369,18 @@ const PaymentBox = React.memo(({ chart, sourceOptions }) => (
         hasData={chart.data.length > 0}
         action={<OperationBoxControl filter={chart.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
     >
-        <HorizontalBarChart
-            data={chart.data}
-            layout="vertical"
-            dataKey="value"
-            labelKey="name"
-            unit=" đơn"
-            color= "#e8d458"
-            height="100%"
-            hideTooltip={true}
-        />
+        <Suspense fallback={<ChartSkeleton />}>
+            <HorizontalBarChart
+                data={chart.data}
+                layout="vertical"
+                dataKey="value"
+                labelKey="name"
+                unit=" đơn"
+                color= "#e8d458"
+                height="100%"
+                hideTooltip={true}
+            />
+        </Suspense>
     </DashboardBox>
 ));
 
@@ -275,16 +395,18 @@ const HourlyBox = React.memo(({ chart, sourceOptions }) => {
             placeholderTitle="Chưa có dữ liệu Khung giờ"
             action={<OperationBoxControl filter={chart.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
         >
-            <HorizontalBarChart 
-                data={chart.data}
-                layout="horizontal" 
-                dataKey="count"
-                labelKey="hour"
-                unit=" đơn"
-                color={theme.palette.info.main}
-                height="100%"
-                hideTooltip={true}
-            />
+            <Suspense fallback={<ChartSkeleton />}>
+                <HorizontalBarChart 
+                    data={chart.data}
+                    layout="horizontal" 
+                    dataKey="count"
+                    labelKey="hour"
+                    unit=" đơn"
+                    color={theme.palette.info.main}
+                    height="100%"
+                    hideTooltip={true}
+                />
+            </Suspense>
         </DashboardBox>
     );
 });
@@ -314,14 +436,16 @@ const GeoMapBox = React.memo(({ chart, sourceOptions }) => {
                 />
             }
         >
-            <GeoMapChart 
-                data={chart.data}
-                valueKey="orders"
-                labelKey="city"
-                unitLabel=" đơn"
-                statusFilter={chart.statusFilter}
-                statusColors={colors}
-            />
+            <Suspense fallback={<ChartSkeleton />}>
+                <GeoMapChart 
+                    data={chart.data}
+                    valueKey="orders"
+                    labelKey="city"
+                    unitLabel=" đơn"
+                    statusFilter={chart.statusFilter}
+                    statusColors={colors}
+                />
+            </Suspense>
         </DashboardBox>
     );
 });
@@ -362,6 +486,7 @@ const PlatformBox = React.memo(({ chart, sourceOptions }) => {
                 </Box>
             }
         >
+            <Suspense fallback={<ChartSkeleton />}>
                 {viewMode === 'quality' ? (
                     <HorizontalBarChart
                     data={chart.data.filter(i => i.platform !== 'Tổng cộng')}
@@ -392,6 +517,7 @@ const PlatformBox = React.memo(({ chart, sourceOptions }) => {
                     hideTooltip={true}
                     />
                 )}
+            </Suspense>
         </DashboardBox>
     );
 });
@@ -466,41 +592,64 @@ function OperationPage() {
                                 }
                             }}
                         >
-                            <GaugeChart
-                                value={kpi.value}
-                                max={kpi.max}
-                                segments={kpi.segments}
-                                title={kpi.title}
-                                unit={kpi.unit}
-                                previousValue={kpi.previousValue}
-                                height={220}
-                                color={kpi.color}
-                            />
+                            <Suspense fallback={<Skeleton variant="circular" width={140} height={140} />}>
+                                <GaugeChart
+                                    value={kpi.value}
+                                    max={kpi.max}
+                                    segments={kpi.segments}
+                                    title={kpi.title}
+                                    unit={kpi.unit}
+                                    previousValue={kpi.previousValue}
+                                    height={220}
+                                    color={kpi.color}
+                                />
+                            </Suspense>
                         </Paper>
                     ))
                 )}
             </DashboardRow>
 
-            {/* --- PHÂN TÍCH NGUYÊN NHÂN --- */}
+            {/* --- HIỆU SUẤT & SẢN LƯỢNG (MỚI) - LAZY LOAD --- */}
+            <SectionTitle>Hiệu suất & Sản lượng</SectionTitle>
+            <LazyLoader height={400}>
+                <DashboardRow>
+                    <TopSellingBox chart={charts.topSelling} sourceOptions={sourceOptions} />
+                    <OrderTrendBox chart={charts.orderTrend} sourceOptions={sourceOptions} />
+                </DashboardRow>
+            </LazyLoader>
+            <LazyLoader height={400}>
+                <DashboardRow>
+                    <SpeedTrendBox chart={charts.speedTrend} sourceOptions={sourceOptions} />
+                    <UptTrendBox chart={charts.uptTrend} sourceOptions={sourceOptions} />
+                </DashboardRow>
+            </LazyLoader>
+
+            {/* --- PHÂN TÍCH NGUYÊN NHÂN - LAZY LOAD --- */}
             <SectionTitle>Phân tích Nguyên nhân</SectionTitle>
-            <DashboardRow>
-                <CancelReasonBox chart={charts.cancelReason} sourceOptions={sourceOptions} />
-                <TopRefundBox chart={charts.topRefund} sourceOptions={sourceOptions} />
-            </DashboardRow>
+            <LazyLoader height={400}>
+                <DashboardRow>
+                    <CancelReasonBox chart={charts.cancelReason} sourceOptions={sourceOptions} />
+                    <TopRefundBox chart={charts.topRefund} sourceOptions={sourceOptions} />
+                </DashboardRow>
+            </LazyLoader>
 
-            {/* --- PHƯƠNG THỨC THANH TOÁN & XU HƯỚNG --- */}
+            {/* --- PHƯƠNG THỨC THANH TOÁN & XU HƯỚNG - LAZY LOAD --- */}
             <SectionTitle>Phương thức thanh toán & Xu hướng</SectionTitle>
-            <DashboardRow>
-                <PaymentBox chart={charts.payment} sourceOptions={sourceOptions} />
-                <HourlyBox chart={charts.hourly} sourceOptions={sourceOptions} />
-            </DashboardRow>
+            <LazyLoader height={400}>
+                <DashboardRow>
+                    <PaymentBox chart={charts.payment} sourceOptions={sourceOptions} />
+                    <HourlyBox chart={charts.hourly} sourceOptions={sourceOptions} />
+                </DashboardRow>
+            </LazyLoader>
 
-            {/* --- PHÂN BỔ ĐỊA LÝ & NỀN TẢNG --- */}
+            {/* --- PHÂN BỔ ĐỊA LÝ & NỀN TẢNG - LAZY LOAD --- */}
             <SectionTitle>Phân bổ Địa lý & Nền tảng</SectionTitle>
-            <DashboardRow>
-                <GeoMapBox chart={charts.geo} sourceOptions={sourceOptions} />
-                <PlatformBox chart={charts.platform} sourceOptions={sourceOptions} />
-            </DashboardRow>
+            <LazyLoader height={600}>
+                <DashboardRow>
+                    <GeoMapBox chart={charts.geo} sourceOptions={sourceOptions} />
+                    <PlatformBox chart={charts.platform} sourceOptions={sourceOptions} />
+                </DashboardRow>
+            </LazyLoader>
 
         </Box>
     );

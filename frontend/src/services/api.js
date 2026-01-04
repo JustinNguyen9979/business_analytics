@@ -39,6 +39,50 @@ export const fetchCustomerMap = async (brandSlug, startDate, endDate, status = [
     }
 };
 
+export const fetchTopProducts = async (brandSlug, startDate, endDate, limit = 10, sources = [], signal) => {
+    try {
+        const params = { start_date: startDate, end_date: endDate, limit };
+        if (sources && sources.length > 0) {
+            if (sources.includes('all')) {
+                params.source = ['all'];
+            } else {
+                params.source = sources;
+            }
+        }
+
+        const response = await apiClient.get(`/brands/${brandSlug}/top-products`, {
+            params,
+            signal
+        });
+        return response.data;
+    } catch (error) {
+        if (!axios.isCancel(error)) {
+            console.error(`Error fetching top products for brand ${brandSlug}:`, error);
+        }
+        throw error;
+    }
+};
+
+export const fetchDailyKpisAPI = async (brandSlug, startDate, endDate, sources = [], signal) => {
+    try {
+        const params = { start_date: startDate, end_date: endDate };
+        if (sources && sources.length > 0) {
+            if (sources.includes('all')) {
+                params.source = ['all'];
+            } else {
+                params.source = sources;
+            }
+        }
+        const response = await apiClient.get(`/brands/${brandSlug}/daily-kpis`, { params, signal });
+        return response.data; // Trả về { data: [...] }
+    } catch (error) {
+        if (!axios.isCancel(error)) {
+            console.error(`Error fetching daily kpis for brand ${brandSlug}:`, error);
+        }
+        throw error;
+    }
+};
+
 /**
  * Gửi yêu cầu tính toán dữ liệu đến backend.
  * @param {string} requestType - Loại dữ liệu cần tính (kpi_summary, daily_kpis_chart, ...).

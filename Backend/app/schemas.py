@@ -190,6 +190,16 @@ class DailyKpi(BaseModel):
     ad_spend: float = 0
     cogs: float = 0
     execution_cost: float = 0
+    
+    # Operational metrics
+    total_orders: int = 0
+    completed_orders: int = 0
+    cancelled_orders: int = 0
+    refunded_orders: int = 0
+    bomb_orders: int = 0
+    total_quantity_sold: int = 0
+    avg_processing_time: float = 0
+    avg_shipping_time: float = 0
 
 class DailyKpiResponse(BaseModel):
     """Cấu trúc dữ liệu trả về cho API biểu đồ."""
@@ -199,6 +209,7 @@ class TopProduct(BaseModel):
     sku: str
     name: Optional[str] = None
     total_quantity: int
+    revenue: float = 0.0
 
     model_config = ConfigDict(from_attributes=True)
 

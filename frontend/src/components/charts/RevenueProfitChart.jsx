@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import {
-    ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area
+    ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, Bar
 } from 'recharts';
 import { useTheme } from '@mui/material/styles';
 import { Box, Typography, Paper } from '@mui/material';
@@ -10,7 +10,7 @@ import { formatCurrency } from '../../utils/formatters';
 
 dayjs.extend(isoWeek);
 
-function RevenueProfitChart({ data, comparisonData, series = [], aggregationType, isLoading }) {
+function RevenueProfitChart({ data, comparisonData, series = [], aggregationType, isLoading, unit = 'đ' }) {
     const theme = useTheme();
 
     // 1. CHUẨN BỊ DỮ LIỆU
@@ -33,14 +33,16 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
 
             // Map các chỉ số chính (Current)
             series.forEach(s => {
-                dataPoint[s.key] = Number(item[s.key]) || 0;
+                const key = s.key || s.dataKey;
+                dataPoint[key] = Number(item[key]) || 0;
             });
 
             // Map dữ liệu so sánh (Previous) - Ghép theo index
             // Lưu ý: Cách ghép này giả định số lượng điểm dữ liệu tương đương nhau
             if (comparisonData && comparisonData[index]) {
                 series.forEach(s => {
-                    dataPoint[`${s.key}_prev`] = Number(comparisonData[index][s.key]) || 0;
+                    const key = s.key || s.dataKey;
+                    dataPoint[`${key}_prev`] = Number(comparisonData[index][key]) || 0;
                 });
             }
 
@@ -54,8 +56,9 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
         let max = 0;
         chartData.forEach(point => {
             series.forEach(s => {
-                const val = point[s.key] || 0;
-                const prevVal = point[`${s.key}_prev`] || 0;
+                const key = s.key || s.dataKey;
+                const val = point[key] || 0;
+                const prevVal = point[`${key}_prev`] || 0;
                 max = Math.max(max, val, prevVal);
             });
         });
@@ -64,10 +67,10 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
 
     // 2. CONFIG FORMAT TRỤC
     const formatYAxis = (value) => {
-        if (value >= 1000000000) return (value / 1000000000).toFixed(1) + 'B';
-        if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M';
-        if (value >= 1000) return (value / 1000).toFixed(0) + 'k';
-        return value;
+        if (value >= 1000000000) return (value / 1000000000).toFixed(1) + 'B' + unit;
+        if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M' + unit;
+        if (value >= 1000) return (value / 1000).toFixed(0) + 'k' + unit;
+        return value.toLocaleString() + unit;
     };
 
     // 3. CUSTOM TOOLTIP
@@ -97,8 +100,8 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                         
                         const isComparison = entry.dataKey.endsWith('_prev');
                         const baseKey = isComparison ? entry.dataKey.replace('_prev', '') : entry.dataKey;
-                        const seriesConfig = series.find(s => s.key === baseKey);
-                        const name = seriesConfig ? seriesConfig.name : entry.name;
+                        const seriesConfig = series.find(s => (s.key || s.dataKey) === baseKey);
+                        const name = seriesConfig ? (seriesConfig.name || seriesConfig.label) : entry.name;
                         
                         return (
                             <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, gap: 2 }}>
@@ -114,7 +117,7 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                                     </Typography>
                                 </Box>
                                 <Typography variant="body2" sx={{ fontWeight: 600, color: entry.color }}>
-                                    {formatCurrency(entry.value)}
+                                    {entry.value.toLocaleString()}{unit}
                                 </Typography>
                             </Box>
                         );
@@ -179,42 +182,73 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                         }}
                     />
 
-                    {/* Render Lines */}
-                    {series.map(s => (
-                        <React.Fragment key={s.key}>
-                            {/* Đường kỳ trước (Nét đứt, mờ hơn) */}
-                            <Line
-                                type="monotone"
-                                dataKey={`${s.key}_prev`}
-                                name={`${s.name} (Kỳ trước)`}
-                                stroke={s.color}
-                                strokeWidth={2}
-                                strokeDasharray="4 4"
-                                opacity={0.6}
-                                dot={false}
-                                activeDot={false}
-                            />
-                            
-                            {/* Đường hiện tại (Nét liền, đậm) */}
-                            <defs>
-                                <linearGradient id={`color-${s.key}`} x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={s.color} stopOpacity={0.2}/>
-                                    <stop offset="95%" stopColor={s.color} stopOpacity={0}/>
-                                </linearGradient>
-                            </defs>
-                            
-                            <Line
-                                type="monotone"
-                                dataKey={s.key}
-                                name={s.name}
-                                stroke={s.color}
-                                strokeWidth={3}
-                                dot={{ r: 3, strokeWidth: 0, fill: s.color }}
-                                activeDot={{ r: 6, strokeWidth: 0, fill: s.color }}
-                                animationDuration={1500}
-                            />
-                        </React.Fragment>
-                    ))}
+                    {/* Render Lines / Areas */}
+                    {series.map(s => {
+                        const key = s.key || s.dataKey;
+                        const name = s.name || s.label;
+
+                        return (
+                            <React.Fragment key={key}>
+                                {/* Đường kỳ trước (Nét đứt, mờ hơn) - CHỈ RENDER NẾU CÓ DỮ LIỆU SO SÁNH */}
+                                {comparisonData && comparisonData.length > 0 && (
+                                    <Line
+                                        type="monotone"
+                                        dataKey={`${key}_prev`}
+                                        name={`${name} (Kỳ trước)`}
+                                        stroke={s.color}
+                                        strokeWidth={2}
+                                        strokeDasharray="4 4"
+                                        opacity={0.6}
+                                        dot={false}
+                                        activeDot={false}
+                                    />
+                                )}
+                                
+                                {/* Đường hiện tại (Nét liền, đậm) */}
+                                <defs>
+                                    <linearGradient id={`color-${key}`} x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="5%" stopColor={s.color} stopOpacity={0.2}/>
+                                        <stop offset="95%" stopColor={s.color} stopOpacity={0}/>
+                                    </linearGradient>
+                                </defs>
+                                
+                                {s.type === 'bar' ? (
+                                    <Bar
+                                        dataKey={key}
+                                        name={name}
+                                        fill={s.color}
+                                        radius={[4, 4, 0, 0]}
+                                        barSize={20}
+                                        animationDuration={1500}
+                                    />
+                                ) : s.area ? (
+                                    <Area
+                                        type="monotone"
+                                        dataKey={key}
+                                        name={name}
+                                        stroke={s.color}
+                                        strokeWidth={3}
+                                        fillOpacity={1}
+                                        fill={`url(#color-${key})`}
+                                        dot={{ r: 3, strokeWidth: 0, fill: s.color }}
+                                        activeDot={{ r: 6, strokeWidth: 0, fill: s.color }}
+                                        animationDuration={1500}
+                                    />
+                                ) : (
+                                    <Line
+                                        type="monotone"
+                                        dataKey={key}
+                                        name={name}
+                                        stroke={s.color}
+                                        strokeWidth={3}
+                                        dot={{ r: 3, strokeWidth: 0, fill: s.color }}
+                                        activeDot={{ r: 6, strokeWidth: 0, fill: s.color }}
+                                        animationDuration={1500}
+                                    />
+                                )}
+                            </React.Fragment>
+                        );
+                    })}
                 </ComposedChart>
             </ResponsiveContainer>
         </Box>

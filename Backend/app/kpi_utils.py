@@ -395,8 +395,17 @@ def _calculate_top_products(orders: List[models.Order], limit=10) -> List[Dict]:
             for item in order.details['items']:
                 sku = item.get('sku')
                 if sku:
-                    product_stats[sku]["quantity"] += int(item.get('quantity', 0))
+                    try:
+                        qty = int(float(item.get('quantity', 0) or 0))
+                    except (ValueError, TypeError):
+                        qty = 0
+                    
+                    price = float(item.get('price', 0) or 0)
+                    
+                    product_stats[sku]["quantity"] += qty
+                    product_stats[sku]["revenue"] += qty * price
                     product_stats[sku]["name"] = item.get('name', sku)
+    
     sorted_products = sorted(product_stats.items(), key=lambda x: x[1]['quantity'], reverse=True)[:limit]
     return [{"sku": sku, "name": data["name"], "quantity": data["quantity"], "revenue": data["revenue"]} for sku, data in sorted_products]
 
