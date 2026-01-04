@@ -249,7 +249,8 @@ export const useDashboardData = (brandSlug, filters) => {
                     brandSlug, 
                     start.format('YYYY-MM-DD'), 
                     end.format('YYYY-MM-DD'), 
-                    ['completed'],
+                    ['completed', 'cancelled', 'bomb', 'refunded'], 
+                    [],
                     controller.signal
                 );
                 updateState('map', { data: result, loading: false });

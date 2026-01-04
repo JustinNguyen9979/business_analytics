@@ -160,6 +160,11 @@ const GeoMapChart = ({
                 textStyle: { color: '#fff' },
                 borderWidth: 1,
                 formatter: (params) => {
+                    // Check an toàn cho params và params.data
+                    if (!params || !params.data || !params.data.rawData) {
+                        return params.name || '';
+                    }
+                    
                     const raw = params.data.rawData;
                     if (!raw) return params.name;
 
