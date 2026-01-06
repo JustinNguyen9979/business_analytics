@@ -155,6 +155,9 @@ class DailyStat(Base):
     unique_skus_sold = Column(Integer, default=0)
     total_quantity_sold = Column(Integer, default=0)
     total_customers = Column(Integer, default=0)
+    
+    new_customers = Column(Integer, default=0)
+    returning_customers = Column(Integer, default=0)
 
     # === CÁC CỘT JSONB MỚI (ĐỂ LƯU FULL DATA TỔNG HỢP) ===
     hourly_breakdown = Column(JSONB, nullable=True)
@@ -163,6 +166,7 @@ class DailyStat(Base):
     location_distribution = Column(JSONB, nullable=True)
     top_products = Column(JSONB, nullable=True)
     top_refunded_products = Column(JSONB, nullable=True)
+    frequency_distribution = Column(JSONB, nullable=True)
 
     # Đảm bảo mỗi brand chỉ có 1 dòng dữ liệu cho 1 ngày (Chống trùng lặp)
     __table_args__ = (
@@ -286,6 +290,8 @@ class DailyAnalytics(Base):
     
     # Top sản phẩm hoàn (Mới)
     top_refunded_products = Column(JSONB, nullable=True)
+    
+    frequency_distribution = Column(JSONB, nullable=True)
 
     # Nhật ký tài chính chi tiết (Log tiền về/hoàn tiền theo ngày thực tế):
     # [{"date": "2023-12-18", "type": "income", "amount": 150000, "order_code": "A"}, ...]

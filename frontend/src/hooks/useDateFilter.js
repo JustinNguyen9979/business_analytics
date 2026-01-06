@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { dateShortcuts } from '../config/dashboardConfig';
@@ -89,7 +89,7 @@ export const useDateFilter = ({ defaultType, useUrl = false, urlPrefix = '' }) =
     }, [useUrl, urlPrefix, setSearchParams, handleClose]);
     
     // Trả về một object chứa tất cả các props cần thiết
-    return {
+    return useMemo(() => ({
         // Dữ liệu
         filter,
         // Props cho nút bấm
@@ -105,5 +105,5 @@ export const useDateFilter = ({ defaultType, useUrl = false, urlPrefix = '' }) =
             initialDateRange: filter.range,
             onApply: handleApply,
         }
-    };
+    }), [filter, dateLabel, handleOpen, anchorEl, handleClose, handleApply]);
 };

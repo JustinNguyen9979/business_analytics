@@ -14,12 +14,6 @@ class CRUDProduct(CRUDBase[Product, ProductBase, ProductBase]):
             self.model.sku == sku
         ).first()
 
-    def get_multi_by_brand(self, db: Session, *, brand_id: int, skip: int = 0, limit: int = 100) -> list[Product]:
-        """
-        Lấy danh sách các sản phẩm thuộc về một Brand cụ thể (hỗ trợ phân trang).
-        """
-        return db.query(self.model).filter(self.model.brand_id == brand_id).offset(skip).limit(limit).all()
-
     def upsert(self, db: Session, *, brand_id: int, sku: str, name: str, cost_price: int) -> Product:
         """
         Tìm sản phẩm bằng SKU và Brand ID.

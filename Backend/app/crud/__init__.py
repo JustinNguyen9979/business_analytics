@@ -28,9 +28,11 @@ def get_sources_for_brand(db, brand_id):
 from services.dashboard_service import (
     get_daily_kpis_for_range,
     get_aggregated_operation_kpis,
+    get_aggregated_customer_kpis,
     get_top_selling_products,
     get_kpis_by_platform,
-    get_aggregated_location_distribution
+    get_aggregated_location_distribution,
+    get_brand_details
 )
 from services.data_service import (
     update_daily_stats,

@@ -342,3 +342,26 @@ export const fetchOperationKpisAPI = async (brandSlug, startDate, endDate, sourc
         throw error;
     }
 };
+
+export const fetchCustomerKpisAPI = async (brandSlug, startDate, endDate, sources = []) => {
+    try {
+        const params = {
+            start_date: startDate,
+            end_date: endDate
+        };
+
+        if (sources && sources.length > 0) {
+            if (sources.includes('all')) {
+                params.source = ['all'];
+            } else {
+                params.source = sources;
+            }
+        }
+
+        const response = await apiClient.get(`/brands/${brandSlug}/kpis/customer`, { params });
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching customer KPIs for brand ${brandSlug}:`, error);
+        throw error;
+    }
+};

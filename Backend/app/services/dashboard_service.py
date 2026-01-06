@@ -2,12 +2,14 @@ from datetime import date, timedelta
 from typing import List, Dict, Any, Optional
 import json
 from decimal import Decimal
+from collections import defaultdict
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 import pandas as pd
 
 import models
+import schemas
 import kpi_utils
 from cache import redis_client
 from province_centroids import PROVINCE_CENTROIDS
@@ -80,6 +82,11 @@ def get_daily_kpis_for_range(
                 "refunded_orders": stat.refunded_orders, "bomb_orders": stat.bomb_orders, "total_orders": stat.total_orders,
                 "total_quantity_sold": stat.total_quantity_sold, "unique_skus_sold": stat.unique_skus_sold,
                 "total_customers": stat.total_customers,
+                
+                # Bổ sung dữ liệu khách hàng chi tiết (Lấy trực tiếp từ DailyStat)
+                "new_customers": int(stat.new_customers or 0),
+                "returning_customers": int(stat.returning_customers or 0),
+                
                 "impressions": stat.impressions, "clicks": stat.clicks, "conversions": stat.conversions,
                 # Copy nguyên các chỉ số tỷ lệ đã tính sẵn trong DB
                 "roi": stat.roi, "aov": stat.aov, "upt": stat.upt, "ctr": stat.ctr, "cpc": stat.cpc,
@@ -91,6 +98,7 @@ def get_daily_kpis_for_range(
                 "cancel_reason_breakdown": stat.cancel_reason_breakdown,
                 "top_refunded_products": stat.top_refunded_products,
                 "payment_method_breakdown": stat.payment_method_breakdown,
+                "frequency_distribution": stat.frequency_distribution,
             }
 
     elif strategy == kpi_utils.STRATEGY_FILTERED:
@@ -117,6 +125,13 @@ def get_daily_kpis_for_range(
                 "bomb_orders": record.bomb_orders,
                 "total_quantity_sold": record.total_quantity_sold, "unique_skus_sold": record.unique_skus_sold,
                 "total_customers": record.new_customers + record.returning_customers,
+                
+                # Bổ sung mapping rõ ràng cho filtered strategy
+                "new_customers": record.new_customers,
+                "returning_customers": record.returning_customers,
+                "new_customer_revenue": record.new_customer_revenue,
+                "returning_customer_revenue": record.returning_customer_revenue,
+
                 "impressions": record.impressions, "clicks": record.clicks, "conversions": record.conversions,
                 "avg_processing_time": record.avg_processing_time, "avg_shipping_time": record.avg_shipping_time,
                 # JSON fields
@@ -125,6 +140,7 @@ def get_daily_kpis_for_range(
                 "cancel_reason_breakdown": getattr(record, 'cancel_reason_breakdown', {}),
                 "top_refunded_products": getattr(record, 'top_refunded_products', []),
                 "payment_method_breakdown": getattr(record, 'payment_method_breakdown', {}),
+                "frequency_distribution": getattr(record, 'frequency_distribution', {}),
             })
             
         # Aggregate từng ngày
@@ -252,6 +268,38 @@ def get_top_selling_products(
     
     return result[:limit]
 
+def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: date):
+    """
+    Lấy thông tin chi tiết của Brand kèm theo KPI tổng hợp trong khoảng thời gian.
+    Dùng cho Dashboard Header & Summary Cards.
+    """
+    # 1. Lấy thông tin Brand cơ bản
+    brand = db.query(models.Brand).filter(models.Brand.id == brand_id).first()
+    if not brand:
+        return None, False
+
+    # 2. Lấy dữ liệu Daily (đã bao gồm logic lấy customer breakdown từ Analytics)
+    # Mặc định lấy ALL source cho Dashboard tổng
+    daily_kpis = get_daily_kpis_for_range(db, brand_id, start_date, end_date, source_list=None)
+    
+    # 3. Aggregate lại thành 1 cục duy nhất
+    if not daily_kpis:
+        # Trả về KPI rỗng nếu không có dữ liệu
+        empty_kpi = kpi_utils.calculate_derived_metrics({})
+        setattr(brand, 'kpis', empty_kpi)
+        return brand, False
+
+    aggregated = kpi_utils.aggregate_data_points(daily_kpis)
+    final_kpis = kpi_utils.calculate_derived_metrics(aggregated)
+    
+    # 4. Gán KPI vào object Brand (để Pydantic serialize)
+    # Lưu ý: Brand model gốc không có field 'kpis', nhưng Pydantic schema BrandWithKpis thì có.
+    # Ta gán dynamic attribute vào instance SQLAlchemy.
+    setattr(brand, 'kpis', final_kpis)
+    
+    # Cache status (Tạm thời luôn trả về False hoặc check Redis nếu cần optimization sâu hơn)
+    return brand, False
+
 def get_kpis_by_platform(
     db: Session, 
     brand_id: int, 
@@ -364,6 +412,93 @@ def get_kpis_by_platform(
         final_data.insert(0, total_summary)
         
     return final_data
+
+def get_aggregated_customer_kpis(
+    db: Session, 
+    brand_id: int, 
+    start_date: date, 
+    end_date: date, 
+    source_list: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Service lấy KPI Khách hàng tổng hợp và dữ liệu cho các biểu đồ CustomerPage.
+    """
+    # 1. Lấy dữ liệu Daily
+    daily_kpis = get_daily_kpis_for_range(db, brand_id, start_date, end_date, source_list)
+    
+    # 2. Aggregate cho các chỉ số tổng (Kpi Card)
+    aggregated = kpi_utils.aggregate_data_points(daily_kpis)
+    aggregated = kpi_utils.calculate_derived_metrics(aggregated)
+    
+    # --- 2.1 Tính toán dữ liệu kỳ trước (Comparison) ---
+    # Logic: Lấy khoảng thời gian tương đương ngay trước đó
+    duration = end_date - start_date
+    prev_end_date = start_date - timedelta(days=1)
+    prev_start_date = prev_end_date - duration
+    
+    prev_daily_kpis = get_daily_kpis_for_range(db, brand_id, prev_start_date, prev_end_date, source_list)
+    prev_aggregated = kpi_utils.aggregate_data_points(prev_daily_kpis)
+    prev_aggregated = kpi_utils.calculate_derived_metrics(prev_aggregated)
+
+    # --- 2.2 TÍNH TOÁN DỰA TRÊN DỮ LIỆU ĐÃ TỔNG HỢP (Pre-computed) ---
+    # Lấy frequency map đã được merge từ các ngày (đã được kpi_utils.aggregate_data_points xử lý)
+    freq_map_raw = aggregated.get('frequency_distribution', {}) or {}
+    
+    # Convert key từ string (do JSON lưu key là string) sang int để sort và so sánh
+    freq_map = {}
+    if freq_map_raw:
+        for k, v in freq_map_raw.items():
+            try:
+                freq_map[int(k)] = v
+            except (ValueError, TypeError):
+                continue
+
+    frequency_data = []
+    
+    if freq_map:
+        max_freq = max(freq_map.keys())
+        
+        # LOGIC DYNAMIC 7 CỘT (Theo yêu cầu User)
+        # Case 1: Max <= 7 -> Hiển thị từ 1 đến Max
+        if max_freq <= 7:
+            for i in range(1, max_freq + 1):
+                val = freq_map.get(i, 0)
+                frequency_data.append({"range": f"{i} đơn", "value": val})
+                
+        # Case 2: Max > 7 -> Hiển thị 1-6, và gộp 7+
+        else:
+            for i in range(1, 7):
+                val = freq_map.get(i, 0)
+                frequency_data.append({"range": f"{i} đơn", "value": val})
+            
+            # Cột thứ 7: Tổng hợp tất cả >= 7
+            count_7_plus = sum(v for k, v in freq_map.items() if k >= 7)
+            frequency_data.append({"range": "≥ 7 đơn", "value": count_7_plus})
+
+    # 3. Chuẩn bị dữ liệu trả về
+    response = {
+        "total_customers": aggregated.get("total_customers", 0),
+        "new_customers": aggregated.get("new_customers", 0),
+        "returning_customers": aggregated.get("returning_customers", 0),
+        "retention_rate": aggregated.get("retention_rate", 0),
+        "arpu": aggregated.get("arpu", 0),
+        "ltv": aggregated.get("ltv", 0),
+        
+        "previous_period": prev_aggregated,
+        "trend_data": daily_kpis,
+        
+        # Dữ liệu phân khúc (Vẫn để mock hoặc tính sau nếu cần)
+        "segment_data": [
+            {"name": "VIP (>5tr)", "value": int(aggregated.get("total_customers", 0) * 0.1)},
+            {"name": "Tiềm năng (1-5tr)", "value": int(aggregated.get("total_customers", 0) * 0.3)},
+            {"name": "Phổ thông (<1tr)", "value": int(aggregated.get("total_customers", 0) * 0.6)},
+        ],
+        
+        # Dữ liệu thật đã tính toán
+        "frequency_data": frequency_data
+    }
+    
+    return response
 
 def get_aggregated_location_distribution(
     db: Session, 
@@ -488,5 +623,5 @@ def _create_empty_daily_stat(date_obj):
         "avg_processing_time": 0, "avg_shipping_time": 0,
         "hourly_breakdown": {}, "top_products": [], "location_distribution": [],
         "payment_method_breakdown": {}, "cancel_reason_breakdown": {},
-        "top_refunded_products": [], "financial_events": []
+        "top_refunded_products": [], "financial_events": [], "frequency_distribution": {}
     }

@@ -157,6 +157,16 @@ def calculate_derived_metrics(data: Dict[str, Any]) -> Dict[str, Any]:
     day_count = data.get("_day_count", 1)
     data["avg_daily_orders"] = total_orders / day_count if day_count > 0 else 0
 
+    # 6. Customer Metrics (Aggregate)
+    # Lưu ý: total_customers ở đây là tổng các phiên khách hàng (sessions) nếu aggregate nhiều ngày
+    total_cust = data.get("total_customers", 0) or 0
+    new_cust = data.get("new_customers", 0) or 0
+    returning_cust = data.get("returning_customers", 0) or 0
+    
+    data["arpu"] = int(round(net_revenue / total_cust)) if total_cust > 0 else 0
+    data["ltv"] = int(round(profit / total_cust)) if total_cust > 0 else 0 # Simple LTV based on period profit
+    data["retention_rate"] = (returning_cust / total_cust * 100) if total_cust > 0 else 0
+
     return data
 
 def merge_json_counters(dict_list: List[Dict[str, int]]) -> Dict[str, int]:
@@ -239,9 +249,12 @@ def aggregate_data_points(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         "completed_orders": 0, "cancelled_orders": 0, "refunded_orders": 0, 
         "bomb_orders": 0, "total_orders": 0,
         "unique_skus_sold": 0, "total_quantity_sold": 0, "total_customers": 0,
+        "new_customers": 0, "returning_customers": 0,
+        "new_customer_revenue": 0, "returning_customer_revenue": 0,
         "impressions": 0, "clicks": 0, "conversions": 0, "reach": 0,
         "hourly_breakdown": [], "cancel_reason_breakdown": [], "top_refunded_products": [],
         "payment_method_breakdown": [], "location_distribution": [],
+        "frequency_distribution": [], # List để gom các dict con lại
         "_sum_processing_time": 0, "_sum_shipping_time": 0, "_count_processing": 0, "_count_shipping": 0
     }
     
@@ -250,6 +263,7 @@ def aggregate_data_points(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
     refund_product_lists = []
     payment_jsons = []
     location_lists = []
+    freq_jsons = [] # List chứa các frequency map từ daily stats
 
     for item in data_list:
         for key in aggregated:
@@ -269,6 +283,7 @@ def aggregate_data_points(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         if item.get('top_refunded_products'): refund_product_lists.append(item['top_refunded_products'])
         if item.get('payment_method_breakdown'): payment_jsons.append(item['payment_method_breakdown'])
         if item.get('location_distribution'): location_lists.append(item['location_distribution'])
+        if item.get('frequency_distribution'): freq_jsons.append(item['frequency_distribution'])
 
     aggregated['hourly_breakdown'] = merge_json_counters(hourly_jsons)
     aggregated['cancel_reason_breakdown'] = merge_json_counters(cancel_jsons)
@@ -276,6 +291,7 @@ def aggregate_data_points(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
     aggregated['top_refunded_products'] = merge_product_breakdown_structure(refund_product_lists)
     aggregated['payment_method_breakdown'] = merge_json_counters(payment_jsons)
     aggregated['location_distribution'] = merge_location_lists(location_lists)
+    aggregated['frequency_distribution'] = merge_json_counters(freq_jsons) # Sử dụng lại hàm merge counter đơn giản
 
     return aggregated
 
@@ -737,6 +753,59 @@ def calculate_daily_kpis(
         if db_session:
             data.update(_calculate_customer_retention(target_orders, date_to_calculate, db_session))
             data["total_customers"] = len({o.username for o in target_orders if o.username})
+            
+            # --- TÍNH TOÁN PHÂN BỔ TẦN SUẤT (Frequency Distribution) ---
+            try:
+                # 1. Lọc đơn thành công trong ngày (dựa vào map order_has_refund đã tính ở trên)
+                success_orders_today = [
+                    o for o in target_orders 
+                    if _classify_order_status(o, order_has_refund.get(o.order_code, False)) == 'completed' 
+                    and o.username
+                ]
+                
+                if success_orders_today:
+                    # Sắp xếp theo thời gian để xác định thứ tự trong ngày
+                    success_orders_today.sort(key=lambda x: x.order_date or getattr(x, 'id', 0))
+                    
+                    target_usernames = {o.username for o in success_orders_today}
+                    
+                    # 2. Query số lượng đơn thành công trong QUÁ KHỨ (Trước ngày tính toán)
+                    # Sử dụng text search đơn giản cho status để tối ưu
+                    past_counts_query = db_session.query(
+                        models.Order.username, 
+                        func.count(models.Order.id)
+                    ).filter(
+                        models.Order.username.in_(target_usernames),
+                        models.Order.order_date < datetime.combine(date_to_calculate, datetime.min.time()),
+                        # Filter đơn thành công (Không phải Hủy/Bom/Hoàn/Fail)
+                        ~models.Order.status.ilike('%huy%'),
+                        ~models.Order.status.ilike('%cancel%'),
+                        ~models.Order.status.ilike('%fail%'),
+                        ~models.Order.status.ilike('%bom%'),
+                        ~models.Order.status.ilike('%hoan%')
+                    ).group_by(models.Order.username)
+                    
+                    past_counts_map = {r[0]: r[1] for r in past_counts_query.all()}
+                    
+                    freq_dist = defaultdict(int)
+                    current_day_counts = defaultdict(int) 
+                    
+                    for order in success_orders_today:
+                        user = order.username
+                        past_count = past_counts_map.get(user, 0)
+                        
+                        # Thứ tự mua hàng = Đã mua quá khứ + Đã mua trước đó trong ngày + 1 (đơn hiện tại)
+                        nth_purchase = past_count + current_day_counts[user] + 1
+                        
+                        freq_dist[str(nth_purchase)] += 1
+                        current_day_counts[user] += 1
+                        
+                    data["frequency_distribution"] = dict(freq_dist)
+                else:
+                    data["frequency_distribution"] = {}
+            except Exception as e:
+                print(f"Error calculating frequency_distribution: {e}")
+                data["frequency_distribution"] = {}
 
         return data
     except Exception as e:

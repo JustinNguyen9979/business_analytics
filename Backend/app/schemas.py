@@ -164,13 +164,16 @@ class KpiSet(BaseModel):
     cac: float = 0
     retention_rate: float = 0
     ltv: float = 0
+    arpu: float = 0 # Added
     
     # --- 5. BREAKDOWNS (Biểu đồ chi tiết - JSONB) ---
     hourly_breakdown: Optional[Dict[str, int]] = {}             
     payment_method_breakdown: Optional[Dict[str, int]] = {}      
     cancel_reason_breakdown: Optional[Dict[str, int]] = {}       
     location_distribution: Optional[List[LocationItem]] = []    
-    top_products: Optional[List[ProductItem]] = []              
+    top_products: Optional[List[ProductItem]] = [] 
+    top_refunded_products: Optional[Dict[str, List[Dict[str, Any]]]] = {}
+    frequency_distribution: Optional[Dict[str, int]] = {}
     
     # --- 6. LOG TÀI CHÍNH (Chỉ có ở DailyAnalytics) ---
     financial_events: Optional[List[FinancialEventItem]] = []
@@ -200,6 +203,10 @@ class DailyKpi(BaseModel):
     total_quantity_sold: int = 0
     avg_processing_time: float = 0
     avg_shipping_time: float = 0
+    
+    # Customer metrics (cho biểu đồ trend)
+    new_customers: int = 0
+    returning_customers: int = 0
 
 class DailyKpiResponse(BaseModel):
     """Cấu trúc dữ liệu trả về cho API biểu đồ."""
@@ -250,3 +257,26 @@ class OperationKpisResponse(BaseModel):
 
     class config:
         from_attributes = True
+
+class CustomerKpisResponse(BaseModel):
+    total_customers: int = 0
+    new_customers: int = 0
+    returning_customers: int = 0
+    retention_rate: float = 0
+    arpu: float = 0
+    ltv: float = 0
+    
+    # Dữ liệu cho các biểu đồ trong page
+    # Biểu đồ xu hướng (Trend)
+    trend_data: List[DailyKpi] = []
+    
+    # Biểu đồ phân khúc (Segment) - Tạm thời trả về dict đơn giản
+    segment_data: List[Dict[str, Any]] = []
+    
+    # Biểu đồ tần suất (Frequency)
+    frequency_data: List[Dict[str, Any]] = []
+    
+    # Dữ liệu so sánh kỳ trước
+    previous_period: Optional[Dict[str, Any]] = {}
+
+    model_config = ConfigDict(from_attributes=True)

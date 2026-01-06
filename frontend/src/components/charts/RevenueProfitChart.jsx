@@ -10,7 +10,7 @@ import { formatCurrency } from '../../utils/formatters';
 
 dayjs.extend(isoWeek);
 
-function RevenueProfitChart({ data, comparisonData, series = [], aggregationType, isLoading, unit = 'đ' }) {
+function RevenueProfitChart({ data, comparisonData, series = [], aggregationType, isLoading, unit = 'đ', xKey = 'date', hideTooltip = false, showBarLabel = false }) {
     const theme = useTheme();
 
     // 1. CHUẨN BỊ DỮ LIỆU
@@ -19,16 +19,25 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
 
         // Map dữ liệu hiện tại
         return data.map((item, index) => {
-            const dateStr = item.date;
-            const dataPoint = {
-                date: dateStr,
-                // Format ngày hiển thị cho trục X
-                displayDate: aggregationType === 'month' 
-                    ? dayjs(dateStr).format('MM/YYYY') 
+            const xValue = item[xKey];
+            
+            let displayLabel = xValue;
+            let fullLabel = xValue;
+
+            // Chỉ format ngày tháng nếu xKey là 'date' (mặc định)
+            if (xKey === 'date') {
+                displayLabel = aggregationType === 'month' 
+                    ? dayjs(xValue).format('MM/YYYY') 
                     : aggregationType === 'week' 
-                        ? `W${dayjs(dateStr).isoWeek()}` 
-                        : dayjs(dateStr).format('DD/MM'),
-                originalDate: dayjs(dateStr), // Dùng để sort nếu cần
+                        ? `W${dayjs(xValue).isoWeek()}` 
+                        : dayjs(xValue).format('DD/MM');
+                fullLabel = dayjs(xValue);
+            }
+
+            const dataPoint = {
+                [xKey]: xValue,
+                displayDate: displayLabel, // Recharts sẽ dùng key này để hiển thị tick
+                originalDate: fullLabel, // Dùng cho tooltip
             };
 
             // Map các chỉ số chính (Current)
@@ -38,7 +47,6 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
             });
 
             // Map dữ liệu so sánh (Previous) - Ghép theo index
-            // Lưu ý: Cách ghép này giả định số lượng điểm dữ liệu tương đương nhau
             if (comparisonData && comparisonData[index]) {
                 series.forEach(s => {
                     const key = s.key || s.dataKey;
@@ -48,7 +56,7 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
 
             return dataPoint;
         });
-    }, [data, comparisonData, series, aggregationType]);
+    }, [data, comparisonData, series, aggregationType, xKey]);
 
     // 1.5 TÍNH TOÁN MAX VALUE ĐỂ SCALE TRỤC Y THỦ CÔNG (An toàn hơn callback của Recharts)
     const maxYValue = useMemo(() => {
@@ -76,11 +84,15 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
     // 3. CUSTOM TOOLTIP
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload && payload.length) {
-            // Lấy ngày đầy đủ từ payload đầu tiên
-            const fullDate = payload[0].payload.date;
-            const dateLabel = aggregationType === 'month' 
-                ? dayjs(fullDate).format('Tháng MM, YYYY')
-                : dayjs(fullDate).format('DD/MM/YYYY');
+            // Lấy label từ payload
+            const rawLabel = payload[0].payload.originalDate || payload[0].payload[xKey];
+            
+            let dateLabel = rawLabel;
+            if (xKey === 'date') {
+                dateLabel = aggregationType === 'month' 
+                    ? dayjs(rawLabel).format('Tháng MM, YYYY')
+                    : dayjs(rawLabel).format('DD/MM/YYYY');
+            }
 
             return (
                 <Box sx={{ 
@@ -169,7 +181,9 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                         tickCount={10}
                     />
                     
-                    <Tooltip content={<CustomTooltip />} cursor={{ stroke: theme.palette.divider, strokeWidth: 1, strokeDasharray: '4 4' }} />
+                    {!hideTooltip && (
+                        <Tooltip content={<CustomTooltip />} cursor={{ stroke: theme.palette.divider, strokeWidth: 1, strokeDasharray: '4 4' }} />
+                    )}
                     
                     <Legend 
                         verticalAlign="bottom" 
@@ -220,6 +234,12 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                                         radius={[4, 4, 0, 0]}
                                         barSize={20}
                                         animationDuration={1500}
+                                        label={showBarLabel ? { 
+                                            position: 'top', 
+                                            fill: theme.palette.text.primary, 
+                                            fontSize: 11,
+                                            formatter: (value) => value > 0 ? value.toLocaleString() : ''
+                                        } : false}
                                     />
                                 ) : s.area ? (
                                     <Area

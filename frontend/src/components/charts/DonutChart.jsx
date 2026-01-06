@@ -71,7 +71,7 @@ function DonutChart({
                             {formatter(value)}{unit}
                         </Typography>
                         <Typography variant="caption" sx={{ color: theme.palette.grey[400] }}>
-                            ({(percent * 100).toFixed(1)}%)
+                            ({(percent * 100).toFixed(2)}%)
                         </Typography>
                     </Box>
                 </Box>
@@ -114,7 +114,7 @@ function DonutChart({
                                     dominantBaseline="central"
                                     style={{ fontSize: '14px', fontWeight: 600 }}
                                   >
-                                    {`${(percent * 100).toFixed(1)}%`}
+                                    {`${(percent * 100).toFixed(2)}%`}
                                   </text>
                                 );
                             }}

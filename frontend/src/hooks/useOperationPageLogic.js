@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from '@mui/material/styles';
+import { processChartData } from '../utils/chartDataProcessor'; // Import Processor
 import { useDateFilter } from './useDateFilter'; 
 import { useChartFilter } from './useChartFilter';
 import { fetchOperationKpisAPI, getSourcesForBrand, fetchCustomerMap, fetchTopProducts, fetchDailyKpisAPI } from '../services/api'; 
@@ -36,19 +37,24 @@ const useChartBoxLogic = (globalFilterState, brandSlug, dataKey) => {
                 const res = await fetchDailyKpisAPI(brandSlug, start, end, sources);
                 const dailyList = res.data || [];
                 
+                // --- SỬ DỤNG PROCESSOR ĐỂ GOM NHÓM DỮ LIỆU (TUẦN/THÁNG) ---
+                // Chuẩn bị object filter giả lập cho processor (chỉ cần range)
+                const chartFilter = { range: filter.dateRange };
+                const { aggregatedData } = processChartData(dailyList, chartFilter);
+
                 if (dataKey === 'orderTrend') {
-                    setData(dailyList.map(d => ({
-                        date: d.date,
+                    setData(aggregatedData.map(d => ({
+                        date: d.date, // Date đã được processor chuyển thành startOf('week') hoặc 'month'
                         total: d.total_orders,
-                        completed: d.completed_orders || 0 // Cần đảm bảo backend trả về field này
+                        completed: d.completed_orders || 0
                     })));
                 } else if (dataKey === 'speedTrend') {
-                    setData(dailyList.map(d => ({
+                    setData(aggregatedData.map(d => ({
                         date: d.date,
                         value: d.avg_processing_time || 0
                     })));
                 } else if (dataKey === 'uptTrend') {
-                    setData(dailyList.map(d => ({
+                    setData(aggregatedData.map(d => ({
                         date: d.date,
                         value: (d.completed_orders > 0) ? parseFloat((d.total_quantity_sold / d.completed_orders).toFixed(2)) : 0
                     })));

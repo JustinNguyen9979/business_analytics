@@ -66,7 +66,9 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                     func.sum(models.DailyStat.refunded_orders).label('refunded_orders'),
                     func.sum(models.DailyStat.unique_skus_sold).label('unique_skus_sold'),
                     func.sum(models.DailyStat.total_quantity_sold).label('total_quantity_sold'),
-                    func.sum(models.DailyStat.total_customers).label('total_customers')
+                    func.sum(models.DailyStat.total_customers).label('total_customers'),
+                    func.sum(models.DailyStat.new_customers).label('new_customers'),
+                    func.sum(models.DailyStat.returning_customers).label('returning_customers')
                 ).filter(
                     models.DailyStat.brand_id == brand_id,
                     models.DailyStat.date.between(start_date, end_date)
@@ -81,7 +83,8 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                         'net_revenue': 0, 'gmv': 0, 'profit': 0, 'total_cost': 0, 'ad_spend': 0,
                         'total_orders': 0, 'cogs': 0, 'execution_cost': 0, 
                         'completed_orders': 0, 'cancelled_orders': 0, 'refunded_orders': 0,
-                        'unique_skus_sold': 0, 'total_quantity_sold': 0, 'total_customers': 0
+                        'unique_skus_sold': 0, 'total_quantity_sold': 0, 'total_customers': 0,
+                        'new_customers': 0, 'returning_customers': 0
                     }
 
                 # BƯỚC 3: TÍNH TOÁN LẠI CÁC TỶ LỆ (%) DỰA TRÊN TỔNG
@@ -113,22 +116,8 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                 result_data = d
                 
                 # CÁC CHỈ SỐ MỚI (TÍNH TOÁN NHANH) VẪN GIỮ LẠI
-                # Đếm khách hàng mới (New Customers)
-                first_order_subquery = db.query(
-                    models.Order.username, 
-                    func.min(models.Order.order_date).label('first_order_date')
-                ).filter(models.Order.brand_id == brand_id).group_by(models.Order.username).subquery()
-                
-                new_customers = db.query(func.count(first_order_subquery.c.username)).filter(
-                    first_order_subquery.c.first_order_date.between(start_date, end_date)
-                ).scalar() or 0
-
-                returning_customers = result_data['total_customers'] - new_customers
-                
-                result_data['new_customers'] = new_customers
-                result_data['returning_customers'] = returning_customers if returning_customers > 0 else 0
-                result_data['cac'] = (result_data['ad_spend'] / new_customers) if new_customers > 0 else 0
-                result_data['retention_rate'] = (returning_customers / result_data['total_customers']) if result_data['total_customers'] > 0 else 0
+                result_data['cac'] = (result_data['ad_spend'] / result_data['new_customers']) if result_data['new_customers'] > 0 else 0
+                result_data['retention_rate'] = (result_data['returning_customers'] / result_data['total_customers']) if result_data['total_customers'] > 0 else 0
                 result_data['ltv'] = (result_data['profit'] / result_data['total_customers']) if result_data['total_customers'] > 0 else 0
                 result_data['cpo'] = (result_data['ad_spend'] / result_data['total_orders']) if result_data['total_orders'] else 0
                 result_data['roas'] = (result_data['gmv'] / result_data['ad_spend']) if result_data['ad_spend'] else 0

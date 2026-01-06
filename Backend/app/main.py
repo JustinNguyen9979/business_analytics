@@ -353,3 +353,29 @@ def get_operation_kpis (
 
     # Convert kết quả dict thành Pydantic model response
     return operation_kpis
+
+@app.get("/brands/{brand_slug}/kpis/customer", response_model=schemas.CustomerKpisResponse)
+@limiter.limit("30/minute")
+def get_customer_kpis (
+    request: Request,
+    brand_slug: str,
+    start_date: date = Query(..., description="Ngày bắt đầu (YYYY-MM-DD)"),
+    end_date: date = Query(..., description="Ngày kết thúc (YYYY-MM-DD)"),
+    source: List[str] = Query(None, description="Danh sách nguồn dữ liệu"),
+    db: Session = Depends(get_db),
+):
+    """
+    Lấy các chỉ số KPI khách hàng cho CustomerPage.
+    """
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    if not db_brand:
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
+        
+    customer_kpis = crud.get_aggregated_customer_kpis(
+        db,
+        db_brand.id,
+        start_date,
+        end_date,
+        source_list=source
+    )
+    return customer_kpis
