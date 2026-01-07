@@ -292,12 +292,151 @@ def aggregate_data_points(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
     aggregated['payment_method_breakdown'] = merge_json_counters(payment_jsons)
     aggregated['location_distribution'] = merge_location_lists(location_lists)
     aggregated['frequency_distribution'] = merge_json_counters(freq_jsons) # Sử dụng lại hàm merge counter đơn giản
+    
+    # Merge Customer Segment Distribution
+    # Logic: Gom nhóm theo Key (vip, potential, mass) và cộng Value
+    seg_map = defaultdict(int)
+    seg_labels = {} # Lưu label cuối cùng (hoặc logic lấy max/avg threshold)
+    
+    for item in data_list:
+        seg_dist = item.get('customer_segment_distribution')
+        if not seg_dist or not isinstance(seg_dist, list): continue
+        
+        for segment in seg_dist:
+            key = segment.get('key')
+            val = segment.get('value', 0)
+            if key:
+                seg_map[key] += val
+                # Lấy label của ngày gần nhất (hoặc bất kỳ) để hiển thị
+                if segment.get('name'):
+                    seg_labels[key] = segment.get('name')
+
+    # Reconstruct list
+    aggregated['customer_segment_distribution'] = []
+    # Định nghĩa thứ tự hiển thị chuẩn
+    order_keys = ['vip', 'potential', 'mass']
+    for k in order_keys:
+        if k in seg_map:
+            aggregated['customer_segment_distribution'].append({
+                "key": k,
+                "name": seg_labels.get(k, k.upper()), # Fallback name
+                "value": seg_map[k]
+            })
 
     return aggregated
 
 # ==============================================================================
 # PHẦN 2: LOGIC XỬ LÝ DỮ LIỆU THÔ
 # ==============================================================================
+
+def _calculate_customer_segment_distribution(
+    orders: List[models.Order], 
+    date_to_calculate: date, 
+    db_session: Session
+) -> List[Dict]:
+    """
+    Phân loại khách hàng mua trong ngày (VIP, Tiềm năng, Phổ thông)
+    dựa trên TỔNG CHI TIÊU TÍCH LŨY (LTV) của họ tính đến thời điểm đó.
+    Sử dụng phương pháp Percentile (20/30/50) trên nhóm khách hàng này.
+    """
+    if not orders or not db_session: return []
+    
+    # 1. Lấy danh sách khách hàng mua trong ngày
+    target_usernames = list({o.username for o in orders if o.username})
+    if not target_usernames: return []
+
+    try:
+        # 2. Tính LTV (Tổng chi tiêu tích lũy) của những khách này
+        # Query Order để sum selling_price (hoặc gmv/net_revenue tùy định nghĩa)
+        # Ở đây dùng selling_price (Doanh thu khách trả)
+        ltv_query = db_session.query(
+            models.Order.username,
+            func.sum(models.Order.selling_price)
+        ).filter(
+            models.Order.username.in_(target_usernames),
+            models.Order.order_date <= datetime.combine(date_to_calculate, datetime.max.time()),
+            # Chỉ tính đơn thành công? 
+            # Thường segmentation tính trên đơn thành công.
+            # Tuy nhiên, nếu lọc ở đây sẽ phức tạp vì text search.
+            # Tạm thời tính ALL đơn hoặc reuse logic status keywords.
+            # Để đơn giản và nhanh cho worker, ta lọc đơn status thành công cơ bản.
+             ~models.Order.status.ilike('%huy%'),
+             ~models.Order.status.ilike('%cancel%'),
+             ~models.Order.status.ilike('%fail%'),
+             ~models.Order.status.ilike('%bom%')
+        ).group_by(models.Order.username).all()
+        
+        user_ltv = {row[0]: float(row[1] or 0) for row in ltv_query}
+        
+        # Những user không tìm thấy (có thể do order hiện tại chưa commit?), gán bằng đơn hiện tại
+        # (Lưu ý: orders input chưa chắc đã commit vào DB nếu đang trong transaction của worker)
+        # Nhưng thường worker query orders từ DB nên OK.
+        
+        # Tạo danh sách giá trị để tính percentile
+        values = sorted([v for v in user_ltv.values() if v > 0], reverse=True)
+        count = len(values)
+        
+        if count == 0: return []
+        
+        # 3. Xác định ngưỡng (Thresholds)
+        # Top 20% -> VIP
+        # Next 30% -> Tiềm năng
+        # Rest 50% -> Phổ thông
+        
+        idx_vip = int(count * 0.2) # Top 20%
+        idx_potential = int(count * 0.5) # Top 50% (20+30)
+        
+        # Giá trị chặn (Min value to be in segment)
+        # values đã sort desc: [100tr, 50tr, ... 100k]
+        threshold_vip = values[idx_vip] if idx_vip < count else values[-1]
+        threshold_potential = values[idx_potential] if idx_potential < count else values[-1]
+        
+        # Handle edge case: ít user quá
+        if count < 5:
+            # Nếu ít khách, dùng ngưỡng cứng tạm thời hoặc chỉ 1 nhóm
+            threshold_vip = 5000000
+            threshold_potential = 1000000
+
+        # 4. Gom nhóm & Đếm
+        def fmt(v):
+            if v >= 1_000_000:
+                return f"{v/1_000_000:g}tr"
+            return f"{int(v/1000)}k"
+
+        groups = {
+            "vip": {"count": 0, "label": f"VIP (>{fmt(threshold_vip)})"},
+            "potential": {"count": 0, "label": f"Tiềm năng ({fmt(threshold_potential)}-{fmt(threshold_vip)})"},
+            "mass": {"count": 0, "label": f"Phổ thông (<{fmt(threshold_potential)})"}
+        }
+        
+        # Duyệt lại từng user trong batch hiện tại để phân loại
+        # Lưu ý: user_ltv chứa LTV toàn thời gian.
+        for user in target_usernames:
+            ltv = user_ltv.get(user, 0)
+            
+            # Fallback: Nếu không có trong DB (VD đơn chưa commit), tính tạm từ đơn hiện tại
+            if ltv == 0:
+                current_orders_val = sum(o.selling_price or 0 for o in orders if o.username == user)
+                ltv = current_orders_val
+            
+            if ltv >= threshold_vip:
+                groups["vip"]["count"] += 1
+            elif ltv >= threshold_potential:
+                groups["potential"]["count"] += 1
+            else:
+                groups["mass"]["count"] += 1
+                
+        # 5. Format Output
+        result = []
+        result.append({"key": "vip", "name": groups["vip"]["label"], "value": groups["vip"]["count"]})
+        result.append({"key": "potential", "name": groups["potential"]["label"], "value": groups["potential"]["count"]})
+        result.append({"key": "mass", "name": groups["mass"]["label"], "value": groups["mass"]["count"]})
+        
+        return result
+
+    except Exception as e:
+        print(f"Error calculating customer segment: {e}")
+        return []
 
 def _matches_keywords(text: str, keywords: List[str]) -> bool:
     if not text: return False
@@ -806,6 +945,11 @@ def calculate_daily_kpis(
             except Exception as e:
                 print(f"Error calculating frequency_distribution: {e}")
                 data["frequency_distribution"] = {}
+
+            # --- TÍNH PHÂN KHÚC KHÁCH HÀNG (Mới) ---
+            data["customer_segment_distribution"] = _calculate_customer_segment_distribution(
+                target_orders, date_to_calculate, db_session
+            )
 
         return data
     except Exception as e:

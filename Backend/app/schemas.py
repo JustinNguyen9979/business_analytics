@@ -174,6 +174,7 @@ class KpiSet(BaseModel):
     top_products: Optional[List[ProductItem]] = [] 
     top_refunded_products: Optional[Dict[str, List[Dict[str, Any]]]] = {}
     frequency_distribution: Optional[Dict[str, int]] = {}
+    customer_segment_distribution: Optional[List[Dict[str, Any]]] = []
     
     # --- 6. LOG TÀI CHÍNH (Chỉ có ở DailyAnalytics) ---
     financial_events: Optional[List[FinancialEventItem]] = []

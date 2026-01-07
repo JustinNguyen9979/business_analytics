@@ -195,6 +195,7 @@ const CustomerSegmentBox = React.memo(({ chart, sourceOptions }) => (
                 centerLabel="TỔNG" 
                 unit=" khách"
                 height="100%"
+                hideTooltip={true}
             />
         </Suspense>
     </DashboardBox>

@@ -30,7 +30,6 @@ def get_daily_kpis_for_range(
     source_list: Optional[List[str]] = None
 ) -> List[Dict[str, Any]]:
     """
-    Service lấy dữ liệu KPI theo ngày để vẽ biểu đồ (Chart).
     Sử dụng chiến lược Hybrid:
     - ALL sources -> Query bảng DailyStat.
     - Filtered sources -> Query DailyAnalytics & Aggregate.
@@ -72,34 +71,12 @@ def get_daily_kpis_for_range(
         ).all()
         
         for stat in stats:
-            # Map model object -> dict
-            date_map[stat.date] = {
-                "date": stat.date.isoformat(),
-                "net_revenue": stat.net_revenue, "gmv": stat.gmv, "profit": stat.profit,
-                "total_cost": stat.total_cost, "ad_spend": stat.ad_spend, "cogs": stat.cogs,
-                "execution_cost": stat.execution_cost,
-                "completed_orders": stat.completed_orders, "cancelled_orders": stat.cancelled_orders,
-                "refunded_orders": stat.refunded_orders, "bomb_orders": stat.bomb_orders, "total_orders": stat.total_orders,
-                "total_quantity_sold": stat.total_quantity_sold, "unique_skus_sold": stat.unique_skus_sold,
-                "total_customers": stat.total_customers,
-                
-                # Bổ sung dữ liệu khách hàng chi tiết (Lấy trực tiếp từ DailyStat)
-                "new_customers": int(stat.new_customers or 0),
-                "returning_customers": int(stat.returning_customers or 0),
-                
-                "impressions": stat.impressions, "clicks": stat.clicks, "conversions": stat.conversions,
-                # Copy nguyên các chỉ số tỷ lệ đã tính sẵn trong DB
-                "roi": stat.roi, "aov": stat.aov, "upt": stat.upt, "ctr": stat.ctr, "cpc": stat.cpc,
-                "completion_rate": stat.completion_rate, "cancellation_rate": stat.cancellation_rate,
-                "avg_processing_time": stat.avg_processing_time, "avg_shipping_time": stat.avg_shipping_time,
-                # JSON fields (cho chi tiết nếu cần)
-                "hourly_breakdown": stat.hourly_breakdown, "top_products": stat.top_products,
-                "location_distribution": stat.location_distribution,
-                "cancel_reason_breakdown": stat.cancel_reason_breakdown,
-                "top_refunded_products": stat.top_refunded_products,
-                "payment_method_breakdown": stat.payment_method_breakdown,
-                "frequency_distribution": stat.frequency_distribution,
-            }
+            # Map model object -> dict (Optimized with Pydantic)
+            # Use KpiSet schema to validate and dump all matching fields automatically
+            kpi_data = schemas.KpiSet.model_validate(stat).model_dump()
+            kpi_data['date'] = stat.date.isoformat()
+            
+            date_map[stat.date] = kpi_data
 
     elif strategy == kpi_utils.STRATEGY_FILTERED:
         # Query DailyAnalytics và cộng gộp theo ngày
@@ -116,32 +93,7 @@ def get_daily_kpis_for_range(
             if d not in data_by_date: data_by_date[d] = []
             
             # Convert record to dict
-            data_by_date[d].append({
-                "net_revenue": record.net_revenue, "gmv": record.gmv, "profit": record.profit,
-                "total_cost": record.total_cost, "ad_spend": record.ad_spend, "cogs": record.cogs,
-                "execution_cost": record.execution_cost,
-                "completed_orders": record.completed_orders, "total_orders": record.total_orders,
-                "cancelled_orders": record.cancelled_orders, "refunded_orders": record.refunded_orders,
-                "bomb_orders": record.bomb_orders,
-                "total_quantity_sold": record.total_quantity_sold, "unique_skus_sold": record.unique_skus_sold,
-                "total_customers": record.new_customers + record.returning_customers,
-                
-                # Bổ sung mapping rõ ràng cho filtered strategy
-                "new_customers": record.new_customers,
-                "returning_customers": record.returning_customers,
-                "new_customer_revenue": record.new_customer_revenue,
-                "returning_customer_revenue": record.returning_customer_revenue,
-
-                "impressions": record.impressions, "clicks": record.clicks, "conversions": record.conversions,
-                "avg_processing_time": record.avg_processing_time, "avg_shipping_time": record.avg_shipping_time,
-                # JSON fields
-                "hourly_breakdown": getattr(record, 'hourly_breakdown', {}),
-                "top_products": getattr(record, 'top_products', []),
-                "cancel_reason_breakdown": getattr(record, 'cancel_reason_breakdown', {}),
-                "top_refunded_products": getattr(record, 'top_refunded_products', []),
-                "payment_method_breakdown": getattr(record, 'payment_method_breakdown', {}),
-                "frequency_distribution": getattr(record, 'frequency_distribution', {}),
-            })
+            data_by_date[d].append(schemas.KpiSet.model_validate(record).model_dump())
             
         # Aggregate từng ngày
         for d, records in data_by_date.items():
@@ -487,12 +439,8 @@ def get_aggregated_customer_kpis(
         "previous_period": prev_aggregated,
         "trend_data": daily_kpis,
         
-        # Dữ liệu phân khúc (Vẫn để mock hoặc tính sau nếu cần)
-        "segment_data": [
-            {"name": "VIP (>5tr)", "value": int(aggregated.get("total_customers", 0) * 0.1)},
-            {"name": "Tiềm năng (1-5tr)", "value": int(aggregated.get("total_customers", 0) * 0.3)},
-            {"name": "Phổ thông (<1tr)", "value": int(aggregated.get("total_customers", 0) * 0.6)},
-        ],
+        # Dữ liệu phân khúc thật từ DB
+        "segment_data": aggregated.get("customer_segment_distribution", []) or [],
         
         # Dữ liệu thật đã tính toán
         "frequency_data": frequency_data
@@ -610,18 +558,8 @@ def get_aggregated_location_distribution(
         return []
 
 def _create_empty_daily_stat(date_obj):
-    """Helper tạo data rỗng mặc định."""
-    return {
-        "date": date_obj.isoformat(),
-        "net_revenue": 0, "gmv": 0, "profit": 0, "total_cost": 0, "ad_spend": 0,
-        "cogs": 0, "execution_cost": 0, "roi": 0,
-        "completed_orders": 0, "cancelled_orders": 0, "refunded_orders": 0, "bomb_orders": 0, "total_orders": 0,
-        "aov": 0, "upt": 0, "unique_skus_sold": 0, "total_quantity_sold": 0,
-        "completion_rate": 0, "cancellation_rate": 0, "refund_rate": 0, "bomb_rate": 0, "total_customers": 0,
-        "impressions": 0, "clicks": 0, "conversions": 0, "cpc": 0,
-        "cpa": 0, "cpm": 0, "ctr": 0, "reach": 0, "frequency": 0,
-        "avg_processing_time": 0, "avg_shipping_time": 0,
-        "hourly_breakdown": {}, "top_products": [], "location_distribution": [],
-        "payment_method_breakdown": {}, "cancel_reason_breakdown": {},
-        "top_refunded_products": [], "financial_events": [], "frequency_distribution": {}
-    }
+    """Helper tạo data rỗng mặc định dùng Schema chuẩn."""
+    # Tạo object rỗng từ Schema, tự động có đủ các trường với giá trị default (0)
+    empty_data = schemas.KpiSet().model_dump()
+    empty_data['date'] = date_obj.isoformat()
+    return empty_data
