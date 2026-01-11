@@ -32,10 +32,12 @@ const CustomerTable = ({ data }) => {
                         <TableCell>Khách hàng</TableCell>
                         <TableCell>Số điện thoại</TableCell>
                         <TableCell align="center">Tổng đơn</TableCell>
+                        <TableCell align="center">Thành công</TableCell>
+                        <TableCell align="center">Hủy</TableCell>
+                        <TableCell align="center">Bom</TableCell>
                         <TableCell align="right">Tổng chi tiêu</TableCell>
                         <TableCell align="right">Trung bình/Đơn</TableCell>
                         <TableCell align="center">Rủi ro</TableCell>
-                        <TableCell align="center">Hành động</TableCell>
                     </TableRow>
                 </TableHead>
                 <TableBody>

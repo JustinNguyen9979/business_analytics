@@ -42,6 +42,15 @@ class Customer(Base):
     district = Column(String, nullable=True, index=True) 
     source = Column(String, nullable=True, index=True) # Nguồn khách hàng (Shopee, TikTok...)
     
+    # === KPI TÍCH LŨY (SINGLE CUSTOMER VIEW) ===
+    total_spent = Column(Float, default=0.0)      # Tổng chi tiêu tích lũy
+    total_orders = Column(Integer, default=0)     # Tổng số đơn hàng
+    last_order_date = Column(DateTime, nullable=True) # Ngày mua gần nhất
+    
+    cancelled_orders = Column(Integer, default=0) # Tổng đơn hủy
+    bomb_orders = Column(Integer, default=0)      # Tổng đơn bom
+    refunded_orders = Column(Integer, default=0)  # Tổng đơn hoàn
+
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
 
     owner_brand = relationship("Brand", back_populates="customers")
