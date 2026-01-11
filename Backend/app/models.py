@@ -146,6 +146,7 @@ class DailyStat(Base):
     # === KPI VẬN HÀNH ===
     avg_processing_time = Column(Float, default=0.0) # Thời gian xử lý TB (Giờ)
     avg_shipping_time = Column(Float, default=0.0)   # Thời gian giao hàng TB (Ngày)
+    avg_repurchase_cycle = Column(Float, default=0.0) # Chu kỳ mua lại TB (Ngày)
     
     completed_orders = Column(Integer, default=0)
     cancelled_orders = Column(Integer, default=0)
@@ -158,6 +159,7 @@ class DailyStat(Base):
     
     new_customers = Column(Integer, default=0)
     returning_customers = Column(Integer, default=0)
+    churn_rate = Column(Float, default=0.0) # Tỷ lệ rời bỏ (%)
 
     # === CÁC CỘT JSONB MỚI (ĐỂ LƯU FULL DATA TỔNG HỢP) ===
     hourly_breakdown = Column(JSONB, nullable=True)
@@ -256,6 +258,7 @@ class DailyAnalytics(Base):
     # === KPI VẬN HÀNH (THÊM MỚI / CHỈNH SỬA) ===
     avg_processing_time = Column(Float, default=0.0)  # Thời gian xử lý TB (Giờ)
     avg_shipping_time = Column(Float, default=0.0)    # Thời gian giao hàng TB (Ngày)
+    avg_repurchase_cycle = Column(Float, default=0.0) # Chu kỳ mua lại TB (Ngày)
     avg_fulfillment_time = Column(Float, default=0.0) # (Legacy) Giữ lại nếu chưa muốn xóa ngay, hoặc xóa luôn cũng được. Em cứ để tạm.
 
     # ==========================================
@@ -265,6 +268,7 @@ class DailyAnalytics(Base):
     returning_customers = Column(Integer, default=0)  # Số khách quay lại mua
     new_customer_revenue = Column(Float, default=0.0) # Doanh thu từ khách mới
     returning_customer_revenue = Column(Float, default=0.0) # Doanh thu từ khách cũ
+    churn_rate = Column(Float, default=0.0) # Tỷ lệ rời bỏ (%)
     
     aov = Column(Float, default=0.0)             # Average Order Value (Giá trị đơn TB)
     upt = Column(Float, default=0.0)             # Units Per Transaction (Số SP/đơn TB)

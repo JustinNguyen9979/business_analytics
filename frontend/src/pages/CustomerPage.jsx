@@ -219,9 +219,9 @@ const CustomerFrequencyBox = React.memo(({ chart, sourceOptions }) => {
 
     return (
         <DashboardBox 
-            minWidth="350px"
+            minWidth="120px"
             flex={2}
-            title="Phân bổ Tần suất Mua hàng"
+            title="Tần suất Mua hàng"
             loading={chart.loading}
             hasData={chart.data.length > 0}
             action={<CustomerBoxControl filter={chart.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
@@ -258,6 +258,29 @@ const CustomerCycleBox = React.memo(({ chart, sourceOptions }) => {
         </DashboardBox>
     );
 });
+
+const CustomerChurnBox = React.memo(({ chart, sourceOptions }) => (
+    <DashboardBox 
+        minWidth="300px"
+        flex={1}
+        title="Tỷ lệ Rời bỏ"
+        loading={chart.loading}
+        hasData={chart.data.length > 0}
+        action={<CustomerBoxControl filter={chart.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
+    >
+        <Suspense fallback={<ChartSkeleton />}>
+            <RevenueProfitChart 
+                data={chart.data}
+                series={[
+                    { dataKey: 'value', label: 'Tỷ lệ rời bỏ', color: '#FF5252', area: true }
+                ]}
+                unit="%"
+                xKey="date"
+                height="100%"
+            />
+        </Suspense>
+    </DashboardBox>
+));
 
 const CustomerTableBox = React.memo(({ data, loading }) => (
     <DashboardBox 
@@ -347,6 +370,7 @@ function CustomerPage() {
                 <DashboardRow>
                     <CustomerFrequencyBox chart={charts.frequency} sourceOptions={sourceOptions} />
                     <CustomerCycleBox chart={charts.cycle} sourceOptions={sourceOptions} />
+                    <CustomerChurnBox chart={charts.churn} sourceOptions={sourceOptions} />
                 </DashboardRow>
             </LazyLoader>
 

@@ -163,8 +163,10 @@ class KpiSet(BaseModel):
     returning_customers: int = 0
     cac: float = 0
     retention_rate: float = 0
+    churn_rate: float = 0 # Added
     ltv: float = 0
     arpu: float = 0 # Added
+    avg_repurchase_cycle: float = 0 # Added
     
     # --- 5. BREAKDOWNS (Biểu đồ chi tiết - JSONB) ---
     hourly_breakdown: Optional[Dict[str, int]] = {}             
@@ -208,6 +210,8 @@ class DailyKpi(BaseModel):
     # Customer metrics (cho biểu đồ trend)
     new_customers: int = 0
     returning_customers: int = 0
+    avg_repurchase_cycle: float = 0
+    churn_rate: float = 0 # Added
 
 class DailyKpiResponse(BaseModel):
     """Cấu trúc dữ liệu trả về cho API biểu đồ."""
@@ -264,6 +268,7 @@ class CustomerKpisResponse(BaseModel):
     new_customers: int = 0
     returning_customers: int = 0
     retention_rate: float = 0
+    churn_rate: float = 0 # Added
     arpu: float = 0
     ltv: float = 0
     

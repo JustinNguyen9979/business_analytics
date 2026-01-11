@@ -82,9 +82,22 @@ export const processChartData = (dailyData, chartDateRange) => {
     });
     const numericKeys = Array.from(numericKeysSet);
 
+    // DANH SÁCH CÁC TRƯỜNG CẦN TÍNH TRUNG BÌNH (Thay vì cộng dồn)
+    const AVERAGE_KEYS = new Set([
+        'avg_repurchase_cycle', 
+        'avg_order_value', 
+        'retention_rate', 
+        'conversion_rate', 
+        'roi', 
+        'roas',
+        'aov',
+        'churn_rate'
+    ]);
+
     // TH2: Tổng hợp theo THÁNG (khi xem theo NĂM)
     if (aggregationType === 'month') {
         const monthlyMap = new Map();
+        const countMap = new Map(); // Map để đếm số lượng bản ghi cho việc tính trung bình
 
         // 1. Tạo khung dữ liệu theo tháng, đảm bảo an toàn
         let cursorDate = startDate.clone().startOf('month');
@@ -96,8 +109,15 @@ export const processChartData = (dailyData, chartDateRange) => {
             // }
             const key = cursorDate.format('YYYY-MM');
             const newEntry = { date: cursorDate.toDate() };
-            numericKeys.forEach(k => newEntry[k] = 0);
+            const newCount = {};
+
+            numericKeys.forEach(k => {
+                newEntry[k] = 0;
+                newCount[k] = 0;
+            });
+
             monthlyMap.set(key, newEntry);
+            countMap.set(key, newCount);
             cursorDate = cursorDate.add(1, 'month');
         }
 
@@ -106,23 +126,37 @@ export const processChartData = (dailyData, chartDateRange) => {
             const key = dayjs(day.date).format('YYYY-MM');
             if (monthlyMap.has(key)) {
                 const monthEntry = monthlyMap.get(key);
+                const countEntry = countMap.get(key);
+
                 numericKeys.forEach(k => {
-                    // if (typeof day[k] === 'number') {
-                    //     monthEntry[k] += day[k];
-                    // }
                     const val = Number(day[k]);
                     if (!isNaN(val)) {
                         monthEntry[k] += val;
+                        if (AVERAGE_KEYS.has(k)) {
+                            countEntry[k] += 1;
+                        }
                     }
                 });
             }
         }
+
+        // 3. Tính lại trung bình cho các key đặc biệt
+        monthlyMap.forEach((entry, key) => {
+            const countEntry = countMap.get(key);
+            numericKeys.forEach(k => {
+                if (AVERAGE_KEYS.has(k) && countEntry[k] > 0) {
+                    entry[k] = entry[k] / countEntry[k];
+                }
+            });
+        });
+        
         return { aggregatedData: Array.from(monthlyMap.values()), aggregationType };
     }
 
     // TH3: Tổng hợp theo TUẦN (khi xem theo QUÝ hoặc 3+ THÁNG)
     if (aggregationType === 'week') {
         const weeklyMap = new Map();
+        const countMap = new Map();
         
         // 3.1. Tạo khung dữ liệu theo tuần
         let cursorDate = startDate.clone().startOf('isoWeek');
@@ -134,8 +168,15 @@ export const processChartData = (dailyData, chartDateRange) => {
             // }
             const key = cursorDate.format('YYYY-MM-DD');
             const newEntry = { date: cursorDate.toDate() };
-            numericKeys.forEach(k => newEntry[k] = 0);
+            const newCount = {};
+
+            numericKeys.forEach(k => {
+                newEntry[k] = 0;
+                newCount[k] = 0;
+            });
+
             weeklyMap.set(key, newEntry);
+            countMap.set(key, newCount);
             cursorDate = cursorDate.add(1, 'week');
         }
 
@@ -145,17 +186,30 @@ export const processChartData = (dailyData, chartDateRange) => {
             const key = weekStartDate.format('YYYY-MM-DD');
             if (weeklyMap.has(key)) {
                 const weekEntry = weeklyMap.get(key);
+                const countEntry = countMap.get(key);
+
                 numericKeys.forEach(k => {
-                    // if (typeof day[k] === 'number') {
-                    //     weekEntry[k] += day[k];
-                    // }
                     const val = Number(day[k]);
                     if (!isNaN(val)) {
                         weekEntry[k] += val;
+                        if (typeof AVERAGE_KEYS !== 'undefined' && AVERAGE_KEYS.has(k)) {
+                             countEntry[k] += 1;
+                        }
                     }
                 });
             }
         }
+
+        // 3.3. Tính lại trung bình
+        weeklyMap.forEach((entry, key) => {
+            const countEntry = countMap.get(key);
+            numericKeys.forEach(k => {
+                if (typeof AVERAGE_KEYS !== 'undefined' && AVERAGE_KEYS.has(k) && countEntry[k] > 0) {
+                    entry[k] = entry[k] / countEntry[k];
+                }
+            });
+        });
+
         return { aggregatedData: Array.from(weeklyMap.values()), aggregationType };
     }
     

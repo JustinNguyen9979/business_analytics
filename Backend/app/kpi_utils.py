@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Tuple, Optional, Set
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from collections import defaultdict
 from unidecode import unidecode
 from sqlalchemy.orm import Session
@@ -255,7 +255,9 @@ def aggregate_data_points(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         "hourly_breakdown": [], "cancel_reason_breakdown": [], "top_refunded_products": [],
         "payment_method_breakdown": [], "location_distribution": [],
         "frequency_distribution": [], # List để gom các dict con lại
-        "_sum_processing_time": 0, "_sum_shipping_time": 0, "_count_processing": 0, "_count_shipping": 0
+        "_sum_processing_time": 0, "_sum_shipping_time": 0, "_count_processing": 0, "_count_shipping": 0,
+        "_sum_repurchase_cycle": 0, "_count_returning_transactions": 0, # Biến tạm tính Weighted Avg Cycle
+        "_sum_churn_weighted": 0, "_sum_cust_for_churn": 0 # Biến tạm tính Weighted Churn Rate
     }
     
     hourly_jsons = []
@@ -277,6 +279,32 @@ def aggregate_data_points(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
             aggregated['_count_processing'] += n_orders
             aggregated['_sum_shipping_time'] += ((item.get('avg_shipping_time', 0) or 0) * n_orders)
             aggregated['_count_shipping'] += n_orders
+            
+        # Weighted Average logic cho Repurchase Cycle (Trọng số là số khách quay lại)
+        n_returning = item.get('returning_customers', 0) or 0
+        cycle = item.get('avg_repurchase_cycle', 0) or 0
+        
+        # [MODIFIED] Logic kép: Vừa tính Weighted, vừa tính Simple để fallback
+        if n_returning > 0:
+            aggregated['_sum_repurchase_cycle'] += (cycle * n_returning)
+            aggregated['_count_returning_transactions'] += n_returning
+        
+        if cycle > 0:
+            aggregated['_sum_repurchase_simple'] = aggregated.get('_sum_repurchase_simple', 0) + cycle
+            aggregated['_count_repurchase_simple'] = aggregated.get('_count_repurchase_simple', 0) + 1
+
+        # Weighted Average logic cho Churn Rate (Trọng số là Total Customers)
+        n_cust = item.get('total_customers', 0) or 0
+        churn = item.get('churn_rate', 0) or 0
+        
+        # [MODIFIED] Logic kép: Vừa tính Weighted, vừa tính Simple để fallback
+        if n_cust > 0:
+            aggregated['_sum_churn_weighted'] += (churn * n_cust)
+            aggregated['_sum_cust_for_churn'] += n_cust
+            
+        if churn > 0:
+            aggregated['_sum_churn_simple'] = aggregated.get('_sum_churn_simple', 0) + churn
+            aggregated['_count_churn_simple'] = aggregated.get('_count_churn_simple', 0) + 1
 
         if item.get('hourly_breakdown'): hourly_jsons.append(item['hourly_breakdown'])
         if item.get('cancel_reason_breakdown'): cancel_jsons.append(item['cancel_reason_breakdown'])
@@ -284,6 +312,22 @@ def aggregate_data_points(data_list: List[Dict[str, Any]]) -> Dict[str, Any]:
         if item.get('payment_method_breakdown'): payment_jsons.append(item['payment_method_breakdown'])
         if item.get('location_distribution'): location_lists.append(item['location_distribution'])
         if item.get('frequency_distribution'): freq_jsons.append(item['frequency_distribution'])
+    
+    # Tính Weighted Averages
+    aggregated['avg_repurchase_cycle'] = 0
+    if aggregated['_count_returning_transactions'] > 0:
+        aggregated['avg_repurchase_cycle'] = aggregated['_sum_repurchase_cycle'] / aggregated['_count_returning_transactions']
+    # [FALLBACK] Nếu không có khách quay lại trong ngày (weight=0), dùng simple avg
+    elif aggregated.get('_count_repurchase_simple', 0) > 0:
+        aggregated['avg_repurchase_cycle'] = aggregated['_sum_repurchase_simple'] / aggregated['_count_repurchase_simple']
+
+    # Tính Churn Rate trung bình
+    aggregated['churn_rate'] = 0
+    if aggregated['_sum_cust_for_churn'] > 0:
+        aggregated['churn_rate'] = aggregated['_sum_churn_weighted'] / aggregated['_sum_cust_for_churn']
+    # [FALLBACK] Nếu không có khách mua hàng trong ngày (weight=0), dùng simple avg
+    elif aggregated.get('_count_churn_simple', 0) > 0:
+        aggregated['churn_rate'] = aggregated['_sum_churn_simple'] / aggregated['_count_churn_simple']
 
     aggregated['hourly_breakdown'] = merge_json_counters(hourly_jsons)
     aggregated['cancel_reason_breakdown'] = merge_json_counters(cancel_jsons)
@@ -766,9 +810,127 @@ def _calculate_payment_method_breakdown(orders: List[models.Order]) -> Dict[str,
                 if not found_group: method_counts["Khác"] += 1
     return dict(method_counts)
 
+def _calculate_repurchase_cycle(
+    orders: List[models.Order], 
+    date_to_calculate: date, 
+    db_session: Session
+) -> float:
+    """
+    Tính chu kỳ mua lại trung bình (Average Repurchase Cycle) trong ngày.
+    Chỉ tính trên các đơn hàng THÀNH CÔNG của KHÁCH QUAY LẠI.
+    """
+    if not orders or not db_session: return 0.0
+
+    # 1. Lọc ra các đơn thành công trong ngày
+    # Reuse logic lọc cơ bản để tránh phụ thuộc phức tạp
+    success_orders = [
+        o for o in orders 
+        if o.username 
+        and not _matches_keywords(o.status, ORDER_STATUS_KEYWORDS["cancel_status"])
+        and not _matches_keywords(o.status, ORDER_STATUS_KEYWORDS["bomb_status"])
+    ]
+    
+    if not success_orders: return 0.0
+    
+    target_usernames = list({o.username for o in success_orders})
+    if not target_usernames: return 0.0
+    
+    # 2. Tìm ngày mua gần nhất trước đó của các user này
+    # Query: SELECT username, MAX(order_date) FROM orders WHERE username IN (...) AND date < current_date GROUP BY username
+    try:
+        prev_orders_query = db_session.query(
+            models.Order.username,
+            func.max(models.Order.order_date)
+        ).filter(
+            models.Order.username.in_(target_usernames),
+            models.Order.order_date < datetime.combine(date_to_calculate, datetime.min.time()),
+            # Filter đơn thành công quá khứ
+            ~models.Order.status.ilike('%huy%'),
+            ~models.Order.status.ilike('%cancel%'),
+            ~models.Order.status.ilike('%fail%'),
+            ~models.Order.status.ilike('%bom%')
+        ).group_by(models.Order.username).all()
+        
+        prev_date_map = {row[0]: row[1] for row in prev_orders_query}
+        
+        cycles = []
+        for order in success_orders:
+            prev_date = prev_date_map.get(order.username)
+            if prev_date and order.order_date:
+                diff = (order.order_date - prev_date).days
+                # Chỉ tính nếu diff hợp lệ (>= 0). 0 ngày có thể do mua 2 đơn cùng ngày -> Vẫn tính là 0 để phản ánh tần suất cao
+                if diff >= 0:
+                    cycles.append(diff)
+                    
+        if not cycles: return 0.0
+        
+        return sum(cycles) / len(cycles)
+    except Exception as e:
+        print(f"Error calculating repurchase cycle: {e}")
+        return 0.0
+
 # ==============================================================================
 # HÀM CHÍNH CHO WORKER (Hợp nhất Bước 3 luôn)
 # ==============================================================================
+
+def _calculate_churn_rate(
+    date_to_calculate: date, 
+    db_session: Session,
+    brand_id: int,
+    source: str = None,
+    churn_days: int = 90
+) -> float:
+    """
+    Tính tỷ lệ rời bỏ (Churn Rate).
+    Churn Rate = (Số khách hàng rời bỏ / Tổng số khách hàng từng hoạt động) * 100
+    Khách hàng rời bỏ: Là khách từng mua thành công trước đây, nhưng không có đơn nào trong 'churn_days' vừa qua.
+    
+    Cập nhật: Hỗ trợ lọc theo brand_id và source.
+    """
+    if not db_session or not brand_id: return 0.0
+    
+    try:
+        churn_threshold_date = datetime.combine(date_to_calculate - timedelta(days=churn_days), datetime.min.time())
+        end_date_time = datetime.combine(date_to_calculate, datetime.max.time())
+        
+        # Helper build query
+        def build_cust_query(date_filter_condition):
+            q = db_session.query(
+                func.count(func.distinct(models.Order.username))
+            ).filter(
+                models.Order.brand_id == brand_id,
+                date_filter_condition,
+                ~models.Order.status.ilike('%huy%'),
+                ~models.Order.status.ilike('%cancel%'),
+                ~models.Order.status.ilike('%fail%'),
+                ~models.Order.status.ilike('%bom%')
+            )
+            if source:
+                q = q.filter(models.Order.source == source)
+            return q
+
+        # 1. Tổng số khách hàng từng mua thành công tính đến thời điểm xem xét
+        total_active_customers = build_cust_query(
+            models.Order.order_date < end_date_time
+        ).scalar() or 0
+        
+        if total_active_customers == 0: return 0.0
+        
+        # 2. Số khách hàng CÓ phát sinh đơn trong churn_days vừa qua
+        customers_with_recent_orders = build_cust_query(
+            (models.Order.order_date >= churn_threshold_date) & 
+            (models.Order.order_date < end_date_time)
+        ).scalar() or 0
+        
+        # 3. Số khách rời bỏ = Tổng khách - Khách có đơn gần đây
+        churned_customers = total_active_customers - customers_with_recent_orders
+        
+        if churned_customers < 0: churned_customers = 0
+        
+        return (churned_customers / total_active_customers) * 100
+    except Exception as e:
+        print(f"Error calculating churn rate: {e}")
+        return 0.0
 
 def calculate_daily_kpis(
     orders_in_day: List[models.Order], 
@@ -776,13 +938,19 @@ def calculate_daily_kpis(
     marketing_spends: List[models.MarketingSpend],
     creation_date_order_codes: Set[str],
     date_to_calculate: date,
-    db_session: Session = None
+    db_session: Session = None,
+    brand_id: int = None,
+    source: str = None
 ) -> dict:
     """
     Tính toán KPI cho MỘT ngày. 
     Hợp nhất: Sử dụng hàm calculate_derived_metrics để tính tỷ lệ.
     """
     try:
+        # Nếu không truyền brand_id, cố gắng lấy từ orders (Fallback)
+        if not brand_id and orders_in_day:
+            brand_id = orders_in_day[0].brand_id
+
         # 1. Sàng lọc dữ liệu mục tiêu
         target_orders = [o for o in orders_in_day if o.order_code in creation_date_order_codes]
         valid_revenues = [r for r in revenues_in_day if r.order_code in creation_date_order_codes]
@@ -892,6 +1060,13 @@ def calculate_daily_kpis(
         if db_session:
             data.update(_calculate_customer_retention(target_orders, date_to_calculate, db_session))
             data["total_customers"] = len({o.username for o in target_orders if o.username})
+            
+            # --- TÍNH TOÁN CHU KỲ MUA LẠI TRUNG BÌNH ---
+            data["avg_repurchase_cycle"] = _calculate_repurchase_cycle(target_orders, date_to_calculate, db_session)
+            
+            # --- TÍNH TOÁN TỶ LỆ RỜI BỎ (CHURN RATE) ---
+            # Truyền brand_id và source để tính chính xác ngữ cảnh
+            data["churn_rate"] = _calculate_churn_rate(date_to_calculate, db_session, brand_id, source)
             
             # --- TÍNH TOÁN PHÂN BỔ TẦN SUẤT (Frequency Distribution) ---
             try:

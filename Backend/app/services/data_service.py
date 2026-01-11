@@ -69,7 +69,8 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
 
         kpis = kpi_utils.calculate_daily_kpis(
             filtered_orders, filtered_revenues, filtered_marketing, 
-            filtered_codes, target_date, db_session=db
+            filtered_codes, target_date, db_session=db,
+            brand_id=brand_id, source=current_source
         )
 
         analytics_entry = db.query(models.DailyAnalytics).filter(
@@ -87,12 +88,18 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
             for key, value in kpis.items():
                 if hasattr(analytics_entry, key):
                     setattr(analytics_entry, key, value)
+            db.add(analytics_entry)
 
     # 4. Tính toán tổng hợp (DailyStat)
     total_kpis = kpi_utils.calculate_daily_kpis(
         orders_created_today, revenues, marketing_spends, 
-        created_today_codes, target_date, db_session=db
+        created_today_codes, target_date, db_session=db,
+        brand_id=brand_id
     )
+    
+    # # DEBUG CHURN RATE
+    # if total_kpis and 'churn_rate' in total_kpis:
+    #     print(f"[DEBUG] Date: {target_date} | Churn Rate: {total_kpis['churn_rate']}% | Total Orders: {len(orders_created_today)}")
 
     stat_entry = db.query(models.DailyStat).filter(
         models.DailyStat.brand_id == brand_id,
@@ -108,6 +115,7 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
         for key, value in total_kpis.items():
             if hasattr(stat_entry, key):
                 setattr(stat_entry, key, value)
+        db.add(stat_entry)
     
     # Commit handled by caller or worker logic usually, but here we add objects to session.
     # Worker utils usually commit.

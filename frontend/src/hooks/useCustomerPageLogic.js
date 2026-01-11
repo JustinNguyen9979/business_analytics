@@ -41,10 +41,22 @@ const useChartBoxLogic = (globalFilterState, brandSlug, dataKey) => {
             } else if (dataKey === 'frequency') {
                 setData(response.frequency_data || []);
             } else if (dataKey === 'cycle') {
-                 // Placeholder: Cycle chưa có trong response chuẩn, dùng tạm mock hoặc logic từ trend
-                 setData(Array.from({ length: 6 }).map((_, i) => ({
-                    date: `2024-0${i + 1}-01`,
-                    value: Math.floor(30 + Math.random() * 10),
+                // Map DailyKpi -> Chart Data cho Chu kỳ mua lại
+                const chartFilter = { range: filter.dateRange };
+                const { aggregatedData } = processChartData(response.trend_data, chartFilter);
+
+                setData(aggregatedData.map(d => ({
+                    date: d.date,
+                    value: d.avg_repurchase_cycle || 0
+                })));
+            } else if (dataKey === 'churn') {
+                // Map DailyKpi -> Chart Data cho Tỷ lệ rời bỏ
+                const chartFilter = { range: filter.dateRange };
+                const { aggregatedData } = processChartData(response.trend_data, chartFilter);
+
+                setData(aggregatedData.map(d => ({
+                    date: d.date,
+                    value: parseFloat((d.churn_rate || 0).toFixed(2))
                 })));
             }
         } catch (err) {
@@ -106,6 +118,7 @@ export const useCustomerPageLogic = () => {
     // New Charts
     const frequencyChart = useChartBoxLogic(globalFilterState, brandSlug, 'frequency');
     const cycleChart = useChartBoxLogic(globalFilterState, brandSlug, 'cycle');
+    const churnChart = useChartBoxLogic(globalFilterState, brandSlug, 'churn');
 
     // 3. Logic cho KPI Tổng quan
     const kpiConfig = useMemo(() => [
@@ -168,8 +181,9 @@ export const useCustomerPageLogic = () => {
         trend: trendChart,
         segment: segmentChart,
         frequency: frequencyChart,
-        cycle: cycleChart
-    }), [trendChart, segmentChart, frequencyChart, cycleChart]);
+        cycle: cycleChart,
+        churn: churnChart
+    }), [trendChart, segmentChart, frequencyChart, cycleChart, churnChart]);
 
     return {
         dateRange: globalDateFilter.filter.range,
