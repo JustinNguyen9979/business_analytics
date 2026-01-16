@@ -22,6 +22,15 @@ class CustomerBase(BaseModel):
     username: str
     city: Optional[str] = None
     district: Optional[str] = None
+    
+    # Các trường tích lũy (Aggregated)
+    total_spent: float = 0.0
+    total_orders: int = 0
+    completed_orders: int = 0
+    cancelled_orders: int = 0
+    bomb_orders: int = 0
+    refunded_orders: int = 0
+    last_order_date: Optional[datetime] = None
 
 class CustomerCreate(CustomerBase):
     pass

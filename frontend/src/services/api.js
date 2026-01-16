@@ -365,3 +365,18 @@ export const fetchCustomerKpisAPI = async (brandSlug, startDate, endDate, source
         throw error;
     }
 };
+
+export const fetchTopCustomersAPI = async (brandSlug, limit = 50, sortBy = 'total_spent', order = 'desc') => {
+    try {
+        const params = {
+            limit: limit,
+            sort_by: sortBy,
+            order: order
+        };
+        const response = await apiClient.get(`/brands/${brandSlug}/customers`, { params });
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching top customers for brand ${brandSlug}:`, error);
+        throw error;
+    }
+};

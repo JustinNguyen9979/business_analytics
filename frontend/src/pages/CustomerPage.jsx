@@ -282,13 +282,15 @@ const CustomerChurnBox = React.memo(({ chart, sourceOptions }) => (
     </DashboardBox>
 ));
 
-const CustomerTableBox = React.memo(({ data, loading }) => (
+const CustomerTableBox = React.memo(({ tableData, sourceOptions }) => (
     <DashboardBox 
         title="Danh sách Khách hàng Tiêu biểu"
-        loading={loading}
-        hasData={data.length > 0}
+        loading={tableData.loading}
+        hasData={tableData.data.length > 0}
+        height={850}
+        action={<CustomerBoxControl filter={tableData.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
     >
-        <CustomerTable data={data} />
+        <CustomerTable data={tableData.data} />
     </DashboardBox>
 ));
 
@@ -311,7 +313,8 @@ function CustomerPage() {
         kpiData,
         sourceOptions,
         charts,
-        customerList
+        customerList,
+        tableData
     } = useCustomerPageLogic();
 
     return (
@@ -376,9 +379,9 @@ function CustomerPage() {
 
             {/* --- SECTION 4: TABLE --- */}
             <SectionTitle>Chi tiết Khách hàng</SectionTitle>
-            <LazyLoader height={500}>
-                <CustomerTableBox data={customerList} loading={globalLoading} />
-            </LazyLoader>
+            <Box sx={{ mb: 4 }}>
+                <CustomerTableBox tableData={tableData} sourceOptions={sourceOptions} />
+            </Box>
         </Box>
     );
 }

@@ -1,6 +1,6 @@
 # FILE: Backend/app/models.py
 
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float, Index, UniqueConstraint, DateTime
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float, Index, UniqueConstraint, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB 
 from database import Base
@@ -50,6 +50,7 @@ class Customer(Base):
     cancelled_orders = Column(Integer, default=0) # Tổng đơn hủy
     bomb_orders = Column(Integer, default=0)      # Tổng đơn bom
     refunded_orders = Column(Integer, default=0)  # Tổng đơn hoàn
+    completed_orders = Column(Integer, default=0) # Tổng đơn thành công
 
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
 

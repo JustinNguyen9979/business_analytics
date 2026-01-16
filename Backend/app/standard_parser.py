@@ -156,6 +156,9 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
         order_sheet = find_sheet_name(sheet_names, ['đơn hàng', 'order'])
         revenue_sheet = find_sheet_name(sheet_names, ['doanh thu', 'revenue'])
         marketing_sheet = find_sheet_name(sheet_names, ['marketing'])
+        
+        # Danh sách username cần cập nhật metrics (thu thập trong quá trình xử lý đơn hàng)
+        usernames_to_update = set()
 
         # --- BƯỚC 1: XỬ LÝ SHEET GIÁ VỐN ---
         if cost_sheet:
@@ -196,21 +199,40 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                 print(f"Tìm thấy {len(df_new_orders['order_id'].unique())} đơn hàng mới cần import.")
                 
                 orders_to_insert = []
-                for order_code, group in df_new_orders.groupby('order_id'):
-                    first_row = group.iloc[0]
-                    username = first_row.get('username')
-                    if username:
-                         # Chuẩn hóa tên tỉnh thành trước khi lưu
-                         raw_province = str(first_row.get('province', ''))
+                
+                # --- BƯỚC 2.1: TÁCH RIÊNG XỬ LÝ KHÁCH HÀNG (DEDUPLICATE) ---
+                # Gom nhóm theo username để đảm bảo mỗi khách chỉ được xử lý 1 lần duy nhất trong file này
+                unique_customers_map = {}
+                for _, row in df_new_orders.iterrows():
+                    u_name = row.get('username')
+                    if u_name:
+                        # Lưu vào map, key là username -> Tự động loại bỏ trùng lặp
+                        # Row sau sẽ ghi đè row trước -> Lấy thông tin địa chỉ mới nhất
+                        unique_customers_map[u_name] = row
+
+                if unique_customers_map:
+                    print(f"Đang cập nhật thông tin cho {len(unique_customers_map)} khách hàng duy nhất...")
+                    for u_name, row in unique_customers_map.items():
+                         raw_province = str(row.get('province', ''))
                          normalized_city = get_new_province_name(raw_province)
                          
                          customer_data = {
-                             'username': username, 
-                             'city': normalized_city, # Lưu tên chuẩn (Ví dụ: Hà Nội, TP. Hồ Chí Minh...)
-                             'district': first_row.get('district'),
+                             'username': u_name, 
+                             'city': normalized_city,
+                             'district': row.get('district'),
                              'source': source 
                          }
                          crud.get_or_create_customer(db, customer_data=customer_data, brand_id=brand_id)
+                    
+                    # Flush ngay lập tức để đảm bảo Session nhận diện được các Customer vừa tương tác
+                    # Tránh lỗi duplicate key nếu DB có ràng buộc chặt hoặc logic insert phía sau
+                    db.flush()
+
+                # --- BƯỚC 2.2: XỬ LÝ ĐƠN HÀNG ---
+                for order_code, group in df_new_orders.groupby('order_id'):
+                    first_row = group.iloc[0]
+                    username = first_row.get('username')
+                    # KHÔNG GỌI TẠO CUSTOMER Ở ĐÂY NỮA
 
                     order_cogs, total_quantity = 0, 0
                     items_list = [] # Danh sách item đã chuẩn hóa
@@ -263,6 +285,10 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                         # delivered_date cấp root JSON vẫn giữ cho đồng bộ nếu cần, nhưng đã có cột riêng
                         "delivered_date": delivered_date_val.isoformat() if delivered_date_val else None
                     }
+
+                    # --- THÊM USERNAME VÀO DANH SÁCH CẦN UPDATE ---
+                    if username:
+                        usernames_to_update.add(username)
 
                     orders_to_insert.append({ 
                         "order_code": order_code, 
@@ -403,6 +429,15 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
         print("Đang thực hiện commit dữ liệu vào DB...")
         db.commit()
         print("COMMIT THÀNH CÔNG!")
+        
+        # --- BƯỚC 6: GỌI WORKER CẬP NHẬT CHỈ SỐ KHÁCH HÀNG (SAU KHI COMMIT) ---
+        if usernames_to_update:
+            try:
+                from celery_worker import task_update_customer_metrics
+                task_update_customer_metrics.delay(brand_id, list(usernames_to_update))
+                print(f"Đã gửi yêu cầu cập nhật Metrics cho {len(usernames_to_update)} khách hàng tới Worker.")
+            except Exception as e_worker:
+                print(f"CẢNH BÁO: Không thể gọi Worker cập nhật khách hàng: {e_worker}")
         
         return {"status": "success", "message": "Xử lý file và nạp dữ liệu thành công!", "details": results}
 

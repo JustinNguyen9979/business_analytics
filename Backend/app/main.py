@@ -379,3 +379,33 @@ def get_customer_kpis (
         source_list=source
     )
     return customer_kpis
+
+@app.get("/brands/{brand_slug}/customers", response_model=List[schemas.CustomerBase])
+@limiter.limit("30/minute")
+def get_top_customers(
+    request: Request,
+    brand_slug: str,
+    limit: int = 50,
+    sort_by: str = Query("total_spent", description="Trường cần sắp xếp: total_spent, total_orders, bomb_orders..."),
+    order: str = Query("desc", description="Thứ tự: asc hoặc desc"),
+    db: Session = Depends(get_db),
+):
+    """
+    Lấy danh sách Top Khách hàng theo tiêu chí sắp xếp.
+    Dữ liệu lấy trực tiếp từ bảng Customer (đã được tính toán sẵn).
+    """
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    if not db_brand:
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
+    
+    # Logic sắp xếp
+    from sqlalchemy import desc, asc
+    sort_column = getattr(models.Customer, sort_by, models.Customer.total_spent)
+    sort_obj = desc(sort_column) if order == "desc" else asc(sort_column)
+
+    # Query
+    customers = db.query(models.Customer).filter(
+        models.Customer.brand_id == db_brand.id
+    ).order_by(sort_obj).limit(limit).all()
+    
+    return customers

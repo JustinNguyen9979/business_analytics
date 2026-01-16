@@ -3,7 +3,7 @@ import { useTheme } from '@mui/material/styles';
 import { processChartData } from '../utils/chartDataProcessor'; // Import Processor
 import { useDateFilter } from './useDateFilter'; 
 import { useChartFilter } from './useChartFilter';
-import { getSourcesForBrand, fetchCustomerKpisAPI } from '../services/api'; 
+import { getSourcesForBrand, fetchCustomerKpisAPI, fetchTopCustomersAPI } from '../services/api'; 
 import { useBrand } from '../context/BrandContext'; 
 
 // --- Helper Hook: Quản lý logic cho từng Box biểu đồ ---
@@ -74,14 +74,6 @@ const useChartBoxLogic = (globalFilterState, brandSlug, dataKey) => {
     return useMemo(() => ({ filter, data, loading }), [filter, data, loading]);
 };
 
-// 4. Mock Customer List (Static)
-const customerList = [
-    { name: 'Nguyễn Văn A', phone: '090***123', total_orders: 15, total_spent: 15000000, avg_order_value: 1000000, risk: 'low' },
-    { name: 'Trần Thị B', phone: '091***456', total_orders: 2, total_spent: 500000, avg_order_value: 250000, risk: 'high' },
-    { name: 'Lê Văn C', phone: '093***789', total_orders: 5, total_spent: 2500000, avg_order_value: 500000, risk: 'medium' },
-    { name: 'Phạm Thị D', phone: '098***111', total_orders: 8, total_spent: 8000000, avg_order_value: 1000000, risk: 'low' },
-];
-
 export const useCustomerPageLogic = () => {
     const theme = useTheme();
     const { slug: brandSlug } = useBrand(); 
@@ -139,8 +131,6 @@ export const useCustomerPageLogic = () => {
             setGlobalLoading(true);
             try {
                 const [start, end] = globalFilterState.dateRange;
-                // Fetch KPI tổng (không lọc source, hoặc lọc theo logic global nếu có selector global - hiện tại customer page chưa có global source selector rõ ràng ngoài chart, nhưng mock có sourceOptions)
-                // Giả sử lấy 'all' source cho KPI tổng quan
                 const data = await fetchCustomerKpisAPI(
                     brandSlug, 
                     start.format('YYYY-MM-DD'), 
@@ -152,12 +142,10 @@ export const useCustomerPageLogic = () => {
                     let val = data[c.key] || 0;
                     let prevVal = 0;
 
-                    // Lấy dữ liệu kỳ trước nếu có
                     if (data.previous_period && typeof data.previous_period[c.key] !== 'undefined') {
                         prevVal = data.previous_period[c.key];
                     }
 
-                    // Format lại số nếu cần (ví dụ tỉ lệ %)
                     if (c.key === 'retention_rate') {
                         val = parseFloat(val.toFixed(2));
                         prevVal = parseFloat(prevVal.toFixed(2));
@@ -176,7 +164,41 @@ export const useCustomerPageLogic = () => {
         fetchGlobalKpis();
     }, [brandSlug, globalFilterState.dateRange, kpiConfig]);
 
-    // 4. Return Value (Memoized)
+    // 4. Logic cho Bảng Top Khách hàng (DỮ LIỆU THẬT + CÓ FILTER)
+    const tableFilter = useChartFilter(globalFilterState);
+    const [customerList, setCustomerList] = useState([]);
+    const [listLoading, setListLoading] = useState(false);
+
+    useEffect(() => {
+        const fetchTopCustomers = async () => {
+            if (!brandSlug) return;
+            setListLoading(true);
+            try {
+                // Hiện tại API lấy Top Customer là dữ liệu tích lũy (Lifetime) nên chưa support lọc theo DateRange
+                // Tuy nhiên, ta có thể support lọc theo Source nếu Backend hỗ trợ (Hiện tại Backend chưa, nhưng Frontend chuẩn bị sẵn)
+                // const sources = tableFilter.selectedSources; 
+                
+                const data = await fetchTopCustomersAPI(brandSlug, 20, 'total_spent', 'desc');
+                setCustomerList(data);
+            } catch (err) {
+                console.error("Error fetching top customers:", err);
+                setCustomerList([]);
+            } finally {
+                setListLoading(false);
+            }
+        };
+
+        fetchTopCustomers();
+    }, [brandSlug, tableFilter.selectedSources]); // Reload khi source thay đổi (nếu có logic filter)
+
+    // Gom nhóm lại thành object tableData chuẩn để UI dùng
+    const tableData = useMemo(() => ({
+        data: customerList,
+        loading: listLoading,
+        filter: tableFilter
+    }), [customerList, listLoading, tableFilter]);
+
+    // 5. Return Value (Memoized)
     const charts = useMemo(() => ({
         trend: trendChart,
         segment: segmentChart,
@@ -194,8 +216,8 @@ export const useCustomerPageLogic = () => {
         handleApplyDateRange: globalDateFilter.menuProps.onApply,
         sourceOptions,
         kpiData,
-        globalLoading,
+        globalLoading, // Dùng chung cho KPI cards
         charts,
-        customerList
+        tableData,     // Thay vì trả về customerList rời rạc, trả về object trọn gói
     };
 };
