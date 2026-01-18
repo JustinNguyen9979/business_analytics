@@ -116,6 +116,35 @@ def get_daily_kpis_for_range(
 
     return result_data
 
+def _fetch_and_aggregate_kpis(
+    db: Session, 
+    brand_id: int, 
+    start_date: date, 
+    end_date: date, 
+    source_list: Optional[List[str]] = None
+) -> Dict[str, Any]:
+    """
+    Helper function: 
+    1. Lấy dữ liệu KPI theo ngày (get_daily_kpis_for_range).
+    2. Cộng dồn lại thành 1 cục tổng (aggregate_data_points).
+    3. Tính toán các chỉ số phái sinh (calculate_derived_metrics).
+    """
+    # 1. Lấy dữ liệu Daily
+    daily_kpis = get_daily_kpis_for_range(db, brand_id, start_date, end_date, source_list)
+    
+    if not daily_kpis:
+        # Trả về object rỗng nếu không có dữ liệu
+        return kpi_utils.calculate_derived_metrics({})
+
+    # 2. Aggregate
+    aggregated = kpi_utils.aggregate_data_points(daily_kpis)
+    
+    # 3. Tính toán metrics
+    aggregated['_day_count'] = (end_date - start_date).days + 1
+    final_kpis = kpi_utils.calculate_derived_metrics(aggregated)
+    
+    return final_kpis
+
 def get_aggregated_operation_kpis(
     db: Session, 
     brand_id: int, 
@@ -127,18 +156,8 @@ def get_aggregated_operation_kpis(
     Service lấy KPI vận hành tổng hợp (1 cục duy nhất) cho toàn bộ khoảng thời gian.
     Dùng cho các Card chỉ số tổng quan ở đầu Dashboard.
     """
-    # Logic tương tự hàm trên nhưng gom tất cả các ngày lại thành 1 cục
-    kpis_list = get_daily_kpis_for_range(db, brand_id, start_date, end_date, source_list)
-    
-    # KPI list đã là list các dict đã aggregated theo ngày. Giờ ta aggregate tiếp theo range.
-    # Tuy nhiên, hàm get_daily_kpis_for_range trả về cả những ngày trống (0).
-    # Ta lọc bỏ ngày trống để tính avg chính xác hơn (nếu cần), hoặc cứ để kpi_utils xử lý.
-    
-    aggregated_range = kpi_utils.aggregate_data_points(kpis_list)
-    
-    # Tính lại derived metrics (VD: ROI của cả tháng, chứ không phải avg ROI của từng ngày)
-    aggregated_range['_day_count'] = (end_date - start_date).days + 1
-    final_kpis = kpi_utils.calculate_derived_metrics(aggregated_range)
+    # Sử dụng helper function đã refactor
+    final_kpis = _fetch_and_aggregate_kpis(db, brand_id, start_date, end_date, source_list)
     
     # Thêm dữ liệu so sánh platform
     final_kpis['platform_comparison'] = get_kpis_by_platform(db, brand_id, start_date, end_date, source_list)
@@ -230,23 +249,11 @@ def get_brand_details(db: Session, brand_id: int, start_date: date, end_date: da
     if not brand:
         return None, False
 
-    # 2. Lấy dữ liệu Daily (đã bao gồm logic lấy customer breakdown từ Analytics)
+    # 2. Lấy dữ liệu KPI tổng hợp (Sử dụng Helper mới)
     # Mặc định lấy ALL source cho Dashboard tổng
-    daily_kpis = get_daily_kpis_for_range(db, brand_id, start_date, end_date, source_list=None)
+    final_kpis = _fetch_and_aggregate_kpis(db, brand_id, start_date, end_date, source_list=None)
     
-    # 3. Aggregate lại thành 1 cục duy nhất
-    if not daily_kpis:
-        # Trả về KPI rỗng nếu không có dữ liệu
-        empty_kpi = kpi_utils.calculate_derived_metrics({})
-        setattr(brand, 'kpis', empty_kpi)
-        return brand, False
-
-    aggregated = kpi_utils.aggregate_data_points(daily_kpis)
-    final_kpis = kpi_utils.calculate_derived_metrics(aggregated)
-    
-    # 4. Gán KPI vào object Brand (để Pydantic serialize)
-    # Lưu ý: Brand model gốc không có field 'kpis', nhưng Pydantic schema BrandWithKpis thì có.
-    # Ta gán dynamic attribute vào instance SQLAlchemy.
+    # 3. Gán KPI vào object Brand (để Pydantic serialize)
     setattr(brand, 'kpis', final_kpis)
     
     # Cache status (Tạm thời luôn trả về False hoặc check Redis nếu cần optimization sâu hơn)
@@ -365,6 +372,37 @@ def get_kpis_by_platform(
         
     return final_data
 
+def _process_frequency_data(freq_map_raw: Dict[str, int]) -> List[Dict[str, Any]]:
+    """Helper xử lý Frequency Distribution thành buckets hiển thị (1-6, 7+)."""
+    # Convert key từ string (do JSON lưu key là string) sang int
+    freq_map = {}
+    if freq_map_raw:
+        for k, v in freq_map_raw.items():
+            try:
+                freq_map[int(k)] = v
+            except (ValueError, TypeError):
+                continue
+
+    frequency_data = []
+    if freq_map:
+        max_freq = max(freq_map.keys())
+        
+        # LOGIC DYNAMIC 7 CỘT
+        if max_freq <= 7:
+            for i in range(1, max_freq + 1):
+                val = freq_map.get(i, 0)
+                frequency_data.append({"range": f"{i} đơn", "value": val})
+        else:
+            for i in range(1, 7):
+                val = freq_map.get(i, 0)
+                frequency_data.append({"range": f"{i} đơn", "value": val})
+            
+            # Cột thứ 7: Tổng hợp tất cả >= 7
+            count_7_plus = sum(v for k, v in freq_map.items() if k >= 7)
+            frequency_data.append({"range": "≥ 7 đơn", "value": count_7_plus})
+            
+    return frequency_data
+
 def get_aggregated_customer_kpis(
     db: Session, 
     brand_id: int, 
@@ -375,57 +413,26 @@ def get_aggregated_customer_kpis(
     """
     Service lấy KPI Khách hàng tổng hợp và dữ liệu cho các biểu đồ CustomerPage.
     """
-    # 1. Lấy dữ liệu Daily
+    # 1. Lấy dữ liệu Aggregate hiện tại (KPI Card & Segment Data)
+    aggregated = _fetch_and_aggregate_kpis(db, brand_id, start_date, end_date, source_list)
+    
+    # Lấy thêm dữ liệu Daily để vẽ biểu đồ Trend
+    # (Lưu ý: _fetch_and_aggregate_kpis không trả về daily_list, nên ta gọi lại hàm lấy list nếu cần trend)
+    # Tuy nhiên, để tối ưu ta có thể sửa _fetch_and_aggregate_kpis để trả về cả 2, 
+    # NHƯNG để an toàn và giữ code đơn giản như cam kết, ta gọi lại get_daily_kpis_for_range 
+    # (Do có Redis cache nên lần gọi thứ 2 sẽ rất nhanh, không đáng lo ngại)
     daily_kpis = get_daily_kpis_for_range(db, brand_id, start_date, end_date, source_list)
-    
-    # 2. Aggregate cho các chỉ số tổng (Kpi Card)
-    aggregated = kpi_utils.aggregate_data_points(daily_kpis)
-    aggregated = kpi_utils.calculate_derived_metrics(aggregated)
-    
+
     # --- 2.1 Tính toán dữ liệu kỳ trước (Comparison) ---
-    # Logic: Lấy khoảng thời gian tương đương ngay trước đó
     duration = end_date - start_date
     prev_end_date = start_date - timedelta(days=1)
     prev_start_date = prev_end_date - duration
     
-    prev_daily_kpis = get_daily_kpis_for_range(db, brand_id, prev_start_date, prev_end_date, source_list)
-    prev_aggregated = kpi_utils.aggregate_data_points(prev_daily_kpis)
-    prev_aggregated = kpi_utils.calculate_derived_metrics(prev_aggregated)
+    # Sử dụng helper mới cho kỳ trước
+    prev_aggregated = _fetch_and_aggregate_kpis(db, brand_id, prev_start_date, prev_end_date, source_list)
 
-    # --- 2.2 TÍNH TOÁN DỰA TRÊN DỮ LIỆU ĐÃ TỔNG HỢP (Pre-computed) ---
-    # Lấy frequency map đã được merge từ các ngày (đã được kpi_utils.aggregate_data_points xử lý)
-    freq_map_raw = aggregated.get('frequency_distribution', {}) or {}
-    
-    # Convert key từ string (do JSON lưu key là string) sang int để sort và so sánh
-    freq_map = {}
-    if freq_map_raw:
-        for k, v in freq_map_raw.items():
-            try:
-                freq_map[int(k)] = v
-            except (ValueError, TypeError):
-                continue
-
-    frequency_data = []
-    
-    if freq_map:
-        max_freq = max(freq_map.keys())
-        
-        # LOGIC DYNAMIC 7 CỘT (Theo yêu cầu User)
-        # Case 1: Max <= 7 -> Hiển thị từ 1 đến Max
-        if max_freq <= 7:
-            for i in range(1, max_freq + 1):
-                val = freq_map.get(i, 0)
-                frequency_data.append({"range": f"{i} đơn", "value": val})
-                
-        # Case 2: Max > 7 -> Hiển thị 1-6, và gộp 7+
-        else:
-            for i in range(1, 7):
-                val = freq_map.get(i, 0)
-                frequency_data.append({"range": f"{i} đơn", "value": val})
-            
-            # Cột thứ 7: Tổng hợp tất cả >= 7
-            count_7_plus = sum(v for k, v in freq_map.items() if k >= 7)
-            frequency_data.append({"range": "≥ 7 đơn", "value": count_7_plus})
+    # --- 2.2 Xử lý Frequency Data (Sử dụng Helper mới) ---
+    frequency_data = _process_frequency_data(aggregated.get('frequency_distribution', {}))
 
     # 3. Chuẩn bị dữ liệu trả về
     response = {

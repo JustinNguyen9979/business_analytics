@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from collections import defaultdict
 from unidecode import unidecode
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, and_
 
 import models
 from province_centroids import PROVINCE_CENTROIDS
@@ -21,6 +21,18 @@ ORDER_STATUS_KEYWORDS = {
     "cancel_status": ["huy", "cancel"],
     "success_status": ["hoan thanh", "complete", "deliver", "success", "da nhan", "thanh cong", "da giao", "giao thanh cong", "shipped", "finish", "done", "hoan tat"]
 }
+
+def get_active_order_filters(model):
+    """
+    Trả về điều kiện lọc chung để loại bỏ các đơn hàng không hợp lệ (Hủy, Bom, Fail).
+    Giúp đồng bộ logic lọc đơn 'Active' hoặc 'Successful' cơ bản trên toàn hệ thống.
+    """
+    return and_(
+        ~model.status.ilike('%huy%'),
+        ~model.status.ilike('%cancel%'),
+        ~model.status.ilike('%fail%'),
+        ~model.status.ilike('%bom%')
+    )
 
 CANCEL_REASON_MAPPING = {
     "Giao thất bại (Bom hàng)": [
@@ -404,10 +416,7 @@ def _calculate_customer_segment_distribution(
             # Tuy nhiên, nếu lọc ở đây sẽ phức tạp vì text search.
             # Tạm thời tính ALL đơn hoặc reuse logic status keywords.
             # Để đơn giản và nhanh cho worker, ta lọc đơn status thành công cơ bản.
-             ~models.Order.status.ilike('%huy%'),
-             ~models.Order.status.ilike('%cancel%'),
-             ~models.Order.status.ilike('%fail%'),
-             ~models.Order.status.ilike('%bom%')
+             get_active_order_filters(models.Order)
         ).group_by(models.Order.username).all()
         
         user_ltv = {row[0]: float(row[1] or 0) for row in ltv_query}
@@ -845,10 +854,7 @@ def _calculate_repurchase_cycle(
             models.Order.username.in_(target_usernames),
             models.Order.order_date < datetime.combine(date_to_calculate, datetime.min.time()),
             # Filter đơn thành công quá khứ
-            ~models.Order.status.ilike('%huy%'),
-            ~models.Order.status.ilike('%cancel%'),
-            ~models.Order.status.ilike('%fail%'),
-            ~models.Order.status.ilike('%bom%')
+            get_active_order_filters(models.Order)
         ).group_by(models.Order.username).all()
         
         prev_date_map = {row[0]: row[1] for row in prev_orders_query}
@@ -900,10 +906,7 @@ def _calculate_churn_rate(
             ).filter(
                 models.Order.brand_id == brand_id,
                 date_filter_condition,
-                ~models.Order.status.ilike('%huy%'),
-                ~models.Order.status.ilike('%cancel%'),
-                ~models.Order.status.ilike('%fail%'),
-                ~models.Order.status.ilike('%bom%')
+                get_active_order_filters(models.Order)
             )
             if source:
                 q = q.filter(models.Order.source == source)
@@ -955,72 +958,98 @@ def calculate_daily_kpis(
         target_orders = [o for o in orders_in_day if o.order_code in creation_date_order_codes]
         valid_revenues = [r for r in revenues_in_day if r.order_code in creation_date_order_codes]
         
-        # 2. Tính toán số liệu thô (Sum)
-        data = {
-            "provisional_revenue": sum((o.selling_price or 0) for o in target_orders),
-            "subsidy_amount": sum((o.subsidy_amount or 0) for o in target_orders),
-            "gmv": sum((r.gmv or 0) for r in valid_revenues),
-            "net_revenue": sum(r.net_revenue for r in valid_revenues),
-            "execution_cost": abs(sum(r.total_fees for r in valid_revenues)),
-            "ad_spend": sum(m.ad_spend for m in marketing_spends),
-            "total_orders": len(target_orders),
-            "total_quantity_sold": sum((o.total_quantity or 0) for o in target_orders),
-            "impressions": sum(m.impressions for m in marketing_spends),
-            "clicks": sum(m.clicks for m in marketing_spends),
-            "conversions": sum(m.conversions for m in marketing_spends),
-            "reach": sum(m.reach for m in marketing_spends),
-            "unique_skus_sold": len(set(item['sku'] for o in target_orders if o.details and o.details.get('items') for item in o.details['items'] if item.get('sku')))
+        # --- BƯỚC 2: SINGLE PASS CALCULATION (GOM NHÓM TÍNH TOÁN) ---
+        # Khởi tạo biến cộng dồn
+        sums = {
+            "provisional_revenue": 0, "subsidy_amount": 0, "total_quantity_sold": 0,
+            "cogs": 0, "proc_time": 0, "proc_count": 0, "ship_time": 0, "ship_count": 0
         }
+        counters = {"completed": 0, "cancelled": 0, "bomb": 0, "refunded": 0}
+        unique_skus = set()
 
-        # 3. Xử lý trạng thái vận hành
-        # Tính tổng Net Revenue và Refund theo từng Order Code để xác định chính xác Đơn Hoàn
+        # Chuẩn bị Map cho Refund (Do phụ thuộc bảng Revenues, không phải Orders)
         rev_summary = defaultdict(lambda: {"net": 0.0, "refund": 0.0})
         for r in valid_revenues:
             rev_summary[r.order_code]["net"] += (r.net_revenue or 0)
             rev_summary[r.order_code]["refund"] += (r.refund or 0)
 
-        # Chỉ những đơn có Refund âm VÀ Net Revenue âm mới được coi là Đơn Hoàn (Refunded)
-        # Những đơn Refund âm nhưng Net = 0 thường là đơn Hủy (đã được lọc ở bước Status Hủy)
+        # Logic xác định đơn hoàn tiền (Refunded)
         order_has_refund = {
             code: True 
             for code, val in rev_summary.items() 
-            if val["refund"] < -0.1 and val["net"] < -0.1 # Dùng -0.1 để tránh lỗi float rounding
+            if val["refund"] < -0.1 and val["net"] < -0.1 
         }
 
-        counters = {"completed": 0, "cancelled": 0, "bomb": 0, "refunded": 0}
-        for order in target_orders:
-            cat = _classify_order_status(order, order_has_refund.get(order.order_code, False))
-            if cat in counters: counters[cat] += 1
-        
-        data.update({
+        # VÒNG LẶP CHÍNH (Duyệt Orders 1 lần duy nhất)
+        for o in target_orders:
+            # 2.1. Cộng dồn doanh thu/số lượng cơ bản
+            sums["provisional_revenue"] += (o.selling_price or 0)
+            sums["subsidy_amount"] += (o.subsidy_amount or 0)
+            sums["total_quantity_sold"] += (o.total_quantity or 0)
+            
+            # 2.2. Lấy Unique SKUs
+            if o.details and isinstance(o.details.get('items'), list):
+                for item in o.details['items']:
+                    if item.get('sku'): unique_skus.add(item['sku'])
+
+            # 2.3. Phân loại trạng thái (Status Classification)
+            cat = _classify_order_status(o, order_has_refund.get(o.order_code, False))
+            if cat in counters: 
+                counters[cat] += 1
+            
+            # 2.4. Tính Giá vốn (COGS) - Chỉ tính cho đơn không bị Hủy/Bom/Hoàn
+            if cat not in ['cancelled', 'bomb', 'refunded']:
+                sums["cogs"] += (o.cogs or 0)
+
+            # 2.5. Tính thời gian vận hành (Processing Time)
+            if o.shipped_time and o.order_date:
+                diff = (o.shipped_time - o.order_date).total_seconds() / 3600
+                if diff > 0: 
+                    sums["proc_time"] += diff
+                    sums["proc_count"] += 1
+            
+            # 2.6. Tính thời gian giao hàng (Shipping Time)
+            if o.delivered_date and o.shipped_time:
+                diff = (o.delivered_date - o.shipped_time).total_seconds() / 86400
+                if diff > 0: 
+                    sums["ship_time"] += diff
+                    sums["ship_count"] += 1
+
+        # --- BƯỚC 3: TỔNG HỢP KẾT QUẢ ---
+        data = {
+            # Từ vòng lặp Orders
+            "provisional_revenue": sums["provisional_revenue"],
+            "subsidy_amount": sums["subsidy_amount"],
+            "total_quantity_sold": sums["total_quantity_sold"],
+            "unique_skus_sold": len(unique_skus),
             "completed_orders": counters["completed"],
             "cancelled_orders": counters["cancelled"],
             "refunded_orders": counters["refunded"],
-            "bomb_orders": counters["bomb"]
-        })
+            "bomb_orders": counters["bomb"],
+            "cogs": sums["cogs"],
+            "_sum_processing_time": sums["proc_time"],
+            "_count_processing": sums["proc_count"],
+            "_sum_shipping_time": sums["ship_time"],
+            "_count_shipping": sums["ship_count"],
 
-        # 4. Tính Giá vốn (COGS) - Chỉ tính cho đơn không bị Hủy/Hoàn
-        bad_codes = {o.order_code for o in target_orders if _classify_order_status(o, order_has_refund.get(o.order_code, False)) in ['cancelled', 'bomb', 'refunded']}
-        data["cogs"] = sum((o.cogs or 0) for o in target_orders if o.order_code not in bad_codes)
-        
-        # --- BỔ SUNG TÍNH TỔNG CHI PHÍ ---
-        # Total Cost = COGS + Ad Spend + Execution Cost
+            # Từ bảng Revenues (Aggregated)
+            "gmv": sum((r.gmv or 0) for r in valid_revenues),
+            "net_revenue": sum(r.net_revenue for r in valid_revenues),
+            "execution_cost": abs(sum(r.total_fees for r in valid_revenues)),
+            
+            # Từ bảng Marketing Spends
+            "ad_spend": sum(m.ad_spend for m in marketing_spends),
+            "impressions": sum(m.impressions for m in marketing_spends),
+            "clicks": sum(m.clicks for m in marketing_spends),
+            "conversions": sum(m.conversions for m in marketing_spends),
+            "reach": sum(m.reach for m in marketing_spends),
+            
+            "total_orders": len(target_orders),
+        }
+
+        # Tính Total Cost & Profit
         data["total_cost"] = data["cogs"] + data["ad_spend"] + data["execution_cost"]
-        
         data["profit"] = data["net_revenue"] - data["cogs"] - data["ad_spend"]
-
-        # 5. Xử lý thời gian vận hành
-        t_proc = 0; c_proc = 0; t_ship = 0; c_ship = 0
-        for o in target_orders:
-            if o.shipped_time and o.order_date:
-                diff = (o.shipped_time - o.order_date).total_seconds() / 3600
-                if diff > 0: t_proc += diff; c_proc += 1
-            if o.delivered_date and o.shipped_time:
-                diff = (o.delivered_date - o.shipped_time).total_seconds() / 86400
-                if diff > 0: t_ship += diff; c_ship += 1
-        
-        data["_sum_processing_time"] = t_proc; data["_count_processing"] = c_proc
-        data["_sum_shipping_time"] = t_ship; data["_count_shipping"] = c_ship
 
         # 6. GỌI HÀM CÔNG THỨC CHUNG (Hợp nhất logic)
         data = calculate_derived_metrics(data)
@@ -1092,10 +1121,7 @@ def calculate_daily_kpis(
                         models.Order.username.in_(target_usernames),
                         models.Order.order_date < datetime.combine(date_to_calculate, datetime.min.time()),
                         # Filter đơn thành công (Không phải Hủy/Bom/Hoàn/Fail)
-                        ~models.Order.status.ilike('%huy%'),
-                        ~models.Order.status.ilike('%cancel%'),
-                        ~models.Order.status.ilike('%fail%'),
-                        ~models.Order.status.ilike('%bom%'),
+                        get_active_order_filters(models.Order),
                         ~models.Order.status.ilike('%hoan%')
                     ).group_by(models.Order.username)
                     
