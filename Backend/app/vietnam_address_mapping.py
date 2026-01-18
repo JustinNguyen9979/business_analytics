@@ -107,6 +107,9 @@ def get_new_province_name(old_name: str):
     for prefix in prefixes:
         if cleaned_name.startswith(prefix):
             cleaned_name = cleaned_name[len(prefix):].strip()
+            
+    if not cleaned_name:
+        return None
     
     # 2. Tra cứu chính xác
     if cleaned_name in OLD_TO_NEW_MAPPING:

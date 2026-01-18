@@ -191,19 +191,6 @@ export const useCustomerPageLogic = () => {
                     page: page,
                     // source đã được xử lý trong api.js, nhưng cần truyền params thêm nếu hàm hỗ trợ
                 };
-
-                // Hàm fetchTopCustomersPeriodAPI cần hỗ trợ truyền thêm params page/limit
-                // Trong api.js hiện tại hàm này nhận (brandSlug, dateRange, limit, sources)
-                // Ta cần update logic gọi hàm này hoặc sửa api.js. 
-                // Tạm thời truyền object params vào tham số limit nếu sửa api.js, 
-                // hoặc sửa hook gọi đúng format mới nếu api.js đã sửa.
-                // Ở bước trước ta chưa sửa api.js hàm fetchTopCustomersPeriodAPI để nhận page.
-                // TA CẦN SỬA API.JS TRƯỚC HOẶC TRUYỀN QUA ĐỐI SỐ params thứ 3.
-                
-                // Giả định api.js sẽ được update để nhận object options hoặc ta truyền limit là object
-                // Tuy nhiên, để an toàn, ta gọi fetchAsyncData trực tiếp hoặc sửa api.js sau.
-                // Ở đây ta gọi hàm wrapper đã có, nhưng hàm đó đang hardcode params.
-                // => TA SẼ CẦN SỬA API.JS. Nhưng trước mắt cứ gọi với logic mới.
                 
                 const response = await fetchTopCustomersPeriodAPI(
                     brandSlug, 
@@ -269,8 +256,8 @@ export const useCustomerPageLogic = () => {
         handleApplyDateRange: globalDateFilter.menuProps.onApply,
         sourceOptions,
         kpiData,
-        globalLoading, // Dùng chung cho KPI cards
+        globalLoading,
         charts,
-        tableData,     // Thay vì trả về customerList rời rạc, trả về object trọn gói
+        tableData,     
     };
 };

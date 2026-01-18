@@ -1,159 +1,45 @@
 from sqlalchemy.orm import Session
-from .base import CRUDBase
-from models import Customer
-from schemas import CustomerBase, CustomerCreate
-from typing import Optional
-from datetime import date # Import date here
+from sqlalchemy import func, desc
+from datetime import date
+from kpi_utils import _classify_order_status
+from collections import defaultdict
+from models import Order, Revenue
+import sys
+import os
 
-class CRUDCustomer(CRUDBase[Customer, CustomerCreate, CustomerBase]):
-    def get_by_username(self, db: Session, *, brand_id: int, username: str) -> Optional[Customer]:
+# Import helper chuẩn hóa địa chỉ (Fallback logic)
+try:
+    from vietnam_address_mapping import get_new_province_name
+except ImportError:
+    try:
+        from app.vietnam_address_mapping import get_new_province_name
+    except ImportError:
+        sys.path.append("..")
+        from vietnam_address_mapping import get_new_province_name
+
+class CRUDCustomer:
+    """
+    CRUDCustomer mới: Không còn thao tác với bảng 'customers'.
+    Tất cả dữ liệu được tính toán dynamic từ 'orders'.
+    """
+
+    def _extract_location_data(self, details: dict):
         """
-        Tìm kiếm khách hàng theo username và brand_id.
+        Helper function: Trích xuất và chuẩn hóa Province/District từ JSON details của Order.
+        Trả về tuple (province, district) hoặc (None, None).
         """
-        return db.query(self.model).filter(
-            self.model.brand_id == brand_id, 
-            self.model.username == username
-        ).first()
-
-    def get_or_create(self, db: Session, *, brand_id: int, customer_data: dict) -> Customer:
-        """
-        Tìm customer theo username + brand_id.
-        - Nếu có: Cập nhật thông tin (city, district) nếu thiếu hoặc thay đổi.
-        - Nếu không: Tạo mới.
-        """
-        username = customer_data.get("username")
-        if not username:
-            return None # Should probably raise an error or handle this case
-
-        db_customer = self.get_by_username(db, brand_id=brand_id, username=username)
-        
-        city = customer_data.get("city")
-        district = customer_data.get("district")
-        source = customer_data.get("source")
-
-        if db_customer:
-            # Update info if provided and different (basic logic, can be improved)
-            if city and db_customer.city != city:
-                db_customer.city = city
-            if district and db_customer.district != district:
-                db_customer.district = district
-            if source and not db_customer.source: # Chỉ update source nếu chưa có (first touch)
-                db_customer.source = source
-        else:
-            # Create new
-            db_customer = self.model(
-                brand_id=brand_id,
-                username=username,
-                city=city,
-                district=district,
-                source=source
-            )
-            db.add(db_customer)
-            # Tương tự như product, ta chưa commit ở đây để caller quản lý transaction lớn.
-        
-        return db_customer
-
-    def update_aggregated_data(self, db: Session, *, brand_id: int, usernames: list[str]):
-        """
-        Tính toán lại toàn bộ chỉ số tích lũy (Total Spent, Total Orders, Risk...) 
-        cho danh sách users được chỉ định dựa trên lịch sử đơn hàng.
-        Logic: Re-calculate từ đầu -> Ghi đè (Idempotent).
-        Sử dụng hàm phân loại chuẩn từ kpi_utils để đồng bộ với Dashboard.
-        """
-        from models import Order, Revenue
-        from kpi_utils import _classify_order_status
-        from collections import defaultdict
-
-        if not usernames:
-            return
-
-        # 1. Lấy toàn bộ đơn hàng của các khách hàng này
-        # Cần load cả details để check lý do hủy/bom
-        orders = db.query(Order).filter(
-            Order.brand_id == brand_id,
-            Order.username.in_(usernames)
-        ).all()
-        
-        if not orders:
-            return
+        if not details or not isinstance(details, dict):
+            return None, None
             
-        # --- BƯỚC BỔ SUNG: Kiểm tra dữ liệu Hoàn Tiền từ bảng Revenue ---
-        order_codes = [o.order_code for o in orders if o.order_code]
-        refunded_codes = set()
+        raw_prov = details.get('province')
+        raw_dist = details.get('district')
         
-        if order_codes:
-            refund_records = db.query(Revenue.order_code).filter(
-                Revenue.brand_id == brand_id,
-                Revenue.order_code.in_(order_codes),
-                Revenue.refund < -0.1 # Logic check refund âm
-            ).all()
-            refunded_codes = {r.order_code for r in refund_records}
-
-        # 2. Gom nhóm & Tính toán trong RAM (Python Dictionary)
-        # Key: username, Value: Dict các chỉ số
-        customer_stats = defaultdict(lambda: {
-            "spent": 0.0, 
-            "total_count": 0, 
-            "cancel": 0, 
-            "bomb": 0, 
-            "refund": 0,
-            "success_count": 0, # Đếm số đơn thành công để đối chiếu
-            "last_date": None
-        })
-
-        for order in orders:
-            if not order.username:
-                continue
-            
-            stats = customer_stats[order.username]
-            
-            # Kiểm tra xem đơn này có bị hoàn tiền tài chính không
-            is_refunded_financial = order.order_code in refunded_codes
-            
-            # --- LOGIC PHÂN LOẠI CHUẨN ---
-            # Lưu ý: is_financial_refund=False vì ta đang tính sơ bộ từ Order.
-            # Nếu muốn chính xác Refund tài chính, cần join bảng Revenue, nhưng ở cấp Customer view 
-            # thì Refund trạng thái (đơn hoàn) quan trọng hơn.
-            category = _classify_order_status(order, is_financial_refund=is_refunded_financial)
-            
-            # Cập nhật ngày mua gần nhất
-            if order.order_date:
-                if not stats["last_date"] or order.order_date > stats["last_date"]:
-                    stats["last_date"] = order.order_date
-
-            # Cộng dồn chỉ số (Aggregation)
-            stats["total_count"] += 1 # Tổng đơn phát sinh (All status)
-
-            if category == 'completed':
-                stats["spent"] += (order.selling_price or 0.0)
-                stats["success_count"] += 1
-            elif category == 'cancelled':
-                stats["cancel"] += 1
-            elif category == 'bomb':
-                stats["bomb"] += 1
-            elif category == 'refunded':
-                stats["refund"] += 1
-            # Category 'other' (đang giao, chờ xác nhận...) -> Chỉ tính vào total_count, không cộng tiền/bom/hủy
-
-        # 3. Cập nhật vào Database (Ghi đè - Idempotent Update)
-        for username, data in customer_stats.items():
-            db_customer = self.get_by_username(db, brand_id=brand_id, username=username)
-            if db_customer:
-                db_customer.total_spent = data["spent"]
-                db_customer.total_orders = data["total_count"]
-                db_customer.cancelled_orders = data["cancel"]
-                db_customer.bomb_orders = data["bomb"]
-                db_customer.refunded_orders = data["refund"]
-                db_customer.completed_orders = data["success_count"] # Cập nhật cột mới
-                db_customer.last_order_date = data["last_date"]
+        if raw_prov:
+            mapped_prov = get_new_province_name(raw_prov)
+            if mapped_prov:
+                return mapped_prov, raw_dist
         
-        # Flush để đẩy dữ liệu vào transaction hiện tại
-        db.flush()
-
-    def _is_status_match(self, column, keywords):
-        # Hàm cũ không dùng nữa, nhưng giữ lại nếu cần tham khảo hoặc xóa sau
-        from sqlalchemy import or_
-        return or_(*[column.ilike(f"%{k}%") for k in keywords])
+        return None, None
 
     def get_top_customers_in_period(
         self, 
@@ -161,23 +47,16 @@ class CRUDCustomer(CRUDBase[Customer, CustomerCreate, CustomerBase]):
         brand_id: int, 
         start_date: date, 
         end_date: date, 
-        limit: int = 20000, # Increased safety cap
+        limit: int = 20000, 
         page: int = 1,
         page_size: int = 20,
         source_list: list[str] = None
     ):
         """
         Lấy danh sách Top khách hàng dựa trên giao dịch TRONG KỲ (Orders).
-        Sử dụng logic phân loại chuẩn từ kpi_utils (Python-side aggregation) để đảm bảo chính xác.
-        Hỗ trợ Pagination Server-side.
+        Dữ liệu Location (City/District) được lấy từ đơn hàng mới nhất của khách trong kỳ.
         """
-        from models import Order, Customer, Revenue
-        from sqlalchemy import func, desc
-        from kpi_utils import _classify_order_status
-        from collections import defaultdict
-
         # 1. Query Raw Data từ bảng Orders
-        # Cần lấy đủ các trường để chạy hàm _classify_order_status
         filters = [
             Order.brand_id == brand_id,
             func.date(Order.order_date) >= start_date,
@@ -188,10 +67,9 @@ class CRUDCustomer(CRUDBase[Customer, CustomerCreate, CustomerBase]):
         if source_list and 'all' not in source_list:
             filters.append(Order.source.in_(source_list))
 
-        # Lấy danh sách đơn hàng thô
-        # Lưu ý: Việc lấy ALL orders có thể nặng nếu date range quá rộng.
-        # Tuy nhiên để sort đúng theo 'total_spent' trong kỳ, ta bắt buộc phải aggregate hết.
-        orders = db.query(Order).filter(*filters).all()
+        # Sắp xếp theo ngày tăng dần để đảm bảo logic cập nhật địa chỉ hoạt động đúng
+        # (Lấy địa chỉ từ đơn cũ, giữ nguyên nếu đơn mới không có địa chỉ)
+        orders = db.query(Order).filter(*filters).order_by(Order.order_date).all()
 
         # 2. Python-side Aggregation
         customer_stats = defaultdict(lambda: {
@@ -201,40 +79,45 @@ class CRUDCustomer(CRUDBase[Customer, CustomerCreate, CustomerBase]):
             "cancelled_orders": 0,
             "bomb_orders": 0,
             "refunded_orders": 0,
-            "last_date": None
+            "last_date": None,
+            "province": None,      # Lưu địa chỉ từ đơn mới nhất
+            "district": None
         })
 
         for order in orders:
             stats = customer_stats[order.username]
             
             # Phân loại trạng thái chuẩn
-            # is_financial_refund=False: Chỉ dựa vào status text và cancel reason
             category = _classify_order_status(order, is_financial_refund=False)
             
             # Aggregation
             stats["total_orders"] += 1
             
-            if category == 'completed':
+            if category == 'completed' or category == 'processing':
                 stats["completed_orders"] += 1
-                # Cộng doanh thu (Ưu tiên Net Revenue > GMV > Selling Price)
-                # Ở đây dùng GMV cho thống nhất hiển thị "Chi tiêu"
-                stats["total_spent"] += (order.gmv or 0)
+                # Ưu tiên GMV/Selling Price để tính doanh thu
+                stats["total_spent"] += (order.gmv or order.selling_price or 0.0)
             elif category == 'cancelled':
                 stats["cancelled_orders"] += 1
             elif category == 'bomb':
                 stats["bomb_orders"] += 1
             elif category == 'refunded':
                 stats["refunded_orders"] += 1
-            # 'other' không cộng vào các metric hiển thị chính (ngoài total_orders)
             
-            # Update Last Date
+            # Update Last Date & Location
             if order.order_date:
                 o_date = order.order_date.date()
-                if stats["last_date"] is None or o_date > stats["last_date"]:
+                # Nếu đơn này mới hơn đơn đã lưu -> Cập nhật Location theo đơn này
+                if stats["last_date"] is None or o_date >= stats["last_date"]:
                     stats["last_date"] = o_date
+                    
+                    # [UPDATED] Sử dụng Helper chung
+                    prov, dist = self._extract_location_data(order.details)
+                    if prov:
+                        stats["province"] = prov
+                        stats["district"] = dist
 
         # 3. Convert to List & Sort
-        # Chuyển đổi thành list dict để sort
         results = []
         for username, data in customer_stats.items():
             completed = data["completed_orders"]
@@ -250,13 +133,14 @@ class CRUDCustomer(CRUDBase[Customer, CustomerCreate, CustomerBase]):
                 "bomb_orders": data["bomb_orders"],
                 "refunded_orders": data["refunded_orders"],
                 "aov": aov,
-                "last_order_date": data["last_date"]
+                "last_order_date": data["last_date"],
+                "province": data["province"] or "---", # Trả về placeholder
+                "district": data["district"] or "---"
             })
 
         # Sort theo total_spent giảm dần
         results.sort(key=lambda x: x["total_spent"], reverse=True)
         
-        # Cắt bớt nếu vượt quá safety limit (ví dụ tính 10k user nhưng chỉ lấy top 5000)
         total_found = len(results)
         if total_found > limit:
             results = results[:limit]
@@ -267,51 +151,120 @@ class CRUDCustomer(CRUDBase[Customer, CustomerCreate, CustomerBase]):
         end_idx = start_idx + page_size
         paginated_results = results[start_idx:end_idx]
 
-        # 5. Bổ sung thông tin Location (City/District) CHỈ CHO TRANG HIỆN TẠI
-        top_usernames = [r["username"] for r in paginated_results]
-        customer_info_map = {}
-        
-        if top_usernames:
-            cust_infos = db.query(Customer.username, Customer.city, Customer.district).filter(
-                Customer.brand_id == brand_id,
-                Customer.username.in_(top_usernames)
-            ).all()
-            customer_info_map = {c.username: {'city': c.city, 'district': c.district} for c in cust_infos}
-
-        # Merge Location info
-        for r in paginated_results:
-            info = customer_info_map.get(r["username"], {})
-            r["city"] = info.get("city")
-            r["district"] = info.get("district")
-
         return {
             "data": paginated_results,
             "total": total_found,
             "page": page,
-            "limit": page_size # Trả về page_size hiện tại
+            "limit": page_size
         }
 
     def get_customer_detail_with_orders(self, db: Session, *, brand_id: int, username: str):
         """
         Lấy thông tin chi tiết khách hàng và lịch sử đơn hàng.
+        [UPDATED] Tính toán chỉ số 'nóng' (Real-time) từ bảng Order/Revenue thay vì đọc bảng Customer.
+        Đảm bảo chính xác tuyệt đối tại thời điểm xem.
         """
-        from models import Order
-        from sqlalchemy import desc
         
-        # 1. Lấy thông tin khách hàng
-        customer = self.get_by_username(db, brand_id=brand_id, username=username)
-        if not customer:
-            return None
-            
-        # 2. Lấy lịch sử đơn hàng
+        # 1. Lấy lịch sử đơn hàng
         orders = db.query(Order).filter(
             Order.brand_id == brand_id,
             Order.username == username
         ).order_by(desc(Order.order_date)).all()
         
+        if not orders:
+            return None
+
+        # 2. Lấy thông tin Revenue (Net Revenue & Refund)
+        order_codes = [o.order_code for o in orders if o.order_code]
+        revenue_map = {} # Map: order_code -> net_revenue
+        refunded_codes = set()
+        
+        if order_codes:
+            # Query lấy order_code, net_revenue, refund
+            rev_records = db.query(
+                Revenue.order_code, 
+                Revenue.net_revenue, 
+                Revenue.refund
+            ).filter(
+                Revenue.brand_id == brand_id,
+                Revenue.order_code.in_(order_codes)
+            ).all()
+            
+            for r in rev_records:
+                revenue_map[r.order_code] = r.net_revenue or 0.0
+                if (r.refund or 0) < -0.1:
+                    refunded_codes.add(r.order_code)
+
+        # 3. Tính toán nóng (On-the-fly Calculation)
+        stats = {
+            "total_spent": 0.0,
+            "total_orders": 0,
+            "completed_orders": 0,
+            "cancelled_orders": 0,
+            "bomb_orders": 0,
+            "refunded_orders": 0,
+            "last_order_date": None
+        }
+        
+        province = None
+        district = None
+
+        # [UPDATED] Loop tìm địa chỉ từ đơn mới nhất có thông tin
+        # Orders đã được sort desc (mới nhất đầu tiên)
+        for order in orders:
+            # Chỉ lấy địa chỉ nếu chưa tìm thấy (nghĩa là lấy từ đơn mới nhất có địa chỉ)
+            if not province:
+                 prov, dist = self._extract_location_data(order.details)
+                 if prov:
+                     province = prov
+                     district = dist
+
+            # Phân loại
+            is_refunded = order.order_code in refunded_codes
+            category = _classify_order_status(order, is_financial_refund=is_refunded)
+            
+            # [BONUS] Gắn Category vào object Order để Frontend dùng
+            setattr(order, "category", category)
+            
+            # [BONUS] Gắn Net Revenue vào object Order để trả về Frontend
+            setattr(order, "net_revenue", revenue_map.get(order.order_code, 0.0))
+            
+            # Cộng dồn
+            stats["total_orders"] += 1
+            
+            if category == 'completed' or category == 'processing':
+                stats["completed_orders"] += 1
+                # [UPDATED] Lấy Net Revenue từ bảng Revenue. Nếu chưa có dữ liệu tài chính => 0
+                stats["total_spent"] += revenue_map.get(order.order_code, 0.0)
+            elif category == 'cancelled':
+                stats["cancelled_orders"] += 1
+            elif category == 'bomb':
+                stats["bomb_orders"] += 1
+            elif category == 'refunded':
+                stats["refunded_orders"] += 1
+            
+            # Last Date
+            if order.order_date:
+                if not stats["last_order_date"] or order.order_date > stats["last_order_date"]:
+                    stats["last_order_date"] = order.order_date
+
+        # 4. Giả lập đối tượng Customer
+        mock_customer_info = {
+            "username": username,
+            "province": province or "---",      # Lấy từ logic extraction ở trên
+            "district": district or "---",
+            "total_spent": stats["total_spent"],
+            "total_orders": stats["total_orders"],
+            "completed_orders": stats["completed_orders"],
+            "cancelled_orders": stats["cancelled_orders"],
+            "bomb_orders": stats["bomb_orders"],
+            "refunded_orders": stats["refunded_orders"],
+            "last_order_date": stats["last_order_date"]
+        }
+        
         return {
-            "info": customer,
+            "info": mock_customer_info,
             "orders": orders
         }
 
-customer = CRUDCustomer(Customer)
+customer = CRUDCustomer()

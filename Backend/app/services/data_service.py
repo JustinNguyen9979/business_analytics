@@ -146,37 +146,14 @@ def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end
         if source: ord_q = ord_q.filter(models.Order.source == source)
         target_order_codes.update({r[0] for r in ord_q.distinct().all() if r[0]})
 
-        # 2. Xóa Customer cô lập (Nếu khách đó chỉ có đơn nằm trong danh sách xóa)
+        # 2. Xóa Orders
         if target_order_codes:
-            affected_users = db.query(models.Order.username).filter(
-                models.Order.brand_id == brand_id,
-                models.Order.order_code.in_(target_order_codes)
-            ).distinct().all()
-            affected_usernames = {u[0] for u in affected_users if u[0]}
-
-            if affected_usernames:
-                # Tìm những khách CÒN đơn hàng khác (giữ lại)
-                keeping_users = db.query(models.Order.username).filter(
-                    models.Order.brand_id == brand_id,
-                    models.Order.username.in_(affected_usernames),
-                    ~models.Order.order_code.in_(target_order_codes)
-                ).distinct().all()
-                keeping_usernames = {u[0] for u in keeping_users}
-                
-                users_to_delete = affected_usernames - keeping_usernames
-                if users_to_delete:
-                    db.query(models.Customer).filter(
-                        models.Customer.brand_id == brand_id,
-                        models.Customer.username.in_(users_to_delete)
-                    ).delete(synchronize_session=False)
-
-            # 3. Xóa Orders
             db.query(models.Order).filter(
                 models.Order.brand_id == brand_id,
                 models.Order.order_code.in_(target_order_codes)
             ).delete(synchronize_session=False)
 
-        # 4. Xóa Revenue
+        # 3. Xóa Revenue
         del_rev = db.query(models.Revenue).filter(
             models.Revenue.brand_id == brand_id,
             models.Revenue.transaction_date.between(start_date, end_date)

@@ -18,7 +18,7 @@ class Product(ProductBase):
 
 class CustomerBase(BaseModel):
     username: str
-    city: Optional[str] = None; district: Optional[str] = None
+    province: Optional[str] = None; district: Optional[str] = None
     total_spent: float = 0.0; total_orders: int = 0; completed_orders: int = 0
     cancelled_orders: int = 0; bomb_orders: int = 0; refunded_orders: int = 0
     last_order_date: Optional[datetime] = None
@@ -29,7 +29,7 @@ class Customer(CustomerBase):
 class OrderBase(BaseModel):
     order_code: str; order_date: Optional[datetime] = None; status: Optional[str] = None; username: Optional[str] = None
     total_quantity: int = 0; cogs: float = 0.0; details: Optional[Dict[str, Any]] = None
-    gmv: float = 0.0; selling_price: float = 0.0 # Added explicit pricing fields
+    gmv: float = 0.0; selling_price: float = 0.0; net_revenue: float = 0.0; category: Optional[str] = None; tracking_id: Optional[str] = None # Added tracking_id
 class Order(OrderBase):
     id: int; brand_id: int; source: str; model_config = ConfigDict(from_attributes=True)
 
@@ -52,7 +52,7 @@ class BrandInfo(BrandBase):
 class BrandCreate(BrandBase): pass
 class Brand(BrandBase):
     id: int; slug: str
-    products: List[Product] = []; customers: List[Customer] = []; orders: List[Order] = []; revenues: List[Revenue] = []
+    products: List[Product] = []; orders: List[Order] = []; revenues: List[Revenue] = []
     model_config = ConfigDict(from_attributes=True)
 
 # --- SHARED ITEMS (Reused across schemas) ---
@@ -65,7 +65,7 @@ class ProductItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class LocationItem(BaseModel):
-    city: str
+    province: str
     orders: int = 0
     revenue: float = 0.0
     latitude: Optional[float] = None
@@ -171,7 +171,7 @@ class CustomerAnalyticsItem(BaseModel):
     last_order_date: Optional[date] = None
     
     # Các trường bổ sung nếu cần hiển thị trên UI
-    city: Optional[str] = None
+    province: Optional[str] = None
     district: Optional[str] = None
 
 class CustomerAnalyticsResponse(BaseModel):

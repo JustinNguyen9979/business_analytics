@@ -11,7 +11,10 @@ from .crud_customer import customer
 get_all_brands = brand.get_multi
 get_brand_by_slug = brand.get_by_slug
 upsert_product = product.upsert
-get_or_create_customer = customer.get_or_create
+
+def get_or_create_customer(*args, **kwargs):
+    """Legacy dummy function: Table 'customers' is deprecated."""
+    return None
 
 def get_sources_for_brand(db, brand_id):
     """

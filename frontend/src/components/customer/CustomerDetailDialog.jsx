@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { 
     Dialog, DialogTitle, DialogContent, IconButton, Typography, Box, 
-    Grid, Paper, Chip, Table, TableBody, TableCell, TableContainer, 
-    TableHead, TableRow, Avatar, CircularProgress, Divider, Stack 
+    Grid, Paper, Table, TableBody, TableCell, TableContainer, 
+    TableHead, TableRow, Avatar, CircularProgress, Stack 
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import PersonIcon from '@mui/icons-material/Person';
@@ -10,55 +10,67 @@ import LocalMallIcon from '@mui/icons-material/LocalMall';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import WarningIcon from '@mui/icons-material/Warning';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+
+// Tái sử dụng từ dự án
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { useBrand } from '../../context/BrandContext';
 import { fetchCustomerDetailAPI } from '../../services/api';
+import { StatItem } from '../dashboard/StatItem';
 
-// --- STYLES ---
-const glassStyle = {
-    background: 'rgba(255, 255, 255, 0.05)',
-    backdropFilter: 'blur(10px)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    borderRadius: 3,
-    color: '#fff'
-};
-
-const StatItem = ({ icon, label, value, color }) => (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Avatar sx={{ bgcolor: `${color}20`, color: color, width: 48, height: 48 }}>
-            {icon}
-        </Avatar>
-        <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'uppercase', fontWeight: 'bold' }}>
-                {label}
-            </Typography>
-            <Typography variant="h6" fontWeight="bold">
-                {value}
-            </Typography>
-        </Box>
-    </Box>
-);
-
-const OrderStatusChip = ({ status }) => {
-    let color = 'default';
+const OrderStatusChip = ({ status, category }) => {
+    let color = 'text.secondary';
     let label = status;
 
-    const s = status?.toLowerCase() || '';
-    if (s.includes('completed') || s.includes('delivered') || s.includes('thành công')) {
-        color = 'success';
-        label = 'Thành công';
-    } else if (s.includes('cancel') || s.includes('hủy')) {
-        color = 'warning';
-        label = 'Đã hủy';
-    } else if (s.includes('bomb') || s.includes('return') || s.includes('hoàn')) {
-        color = 'error';
-        label = 'Bom/Hoàn';
+    // Ưu tiên dùng Category chuẩn từ Backend nếu có
+    if (category) {
+        switch (category) {
+            case 'completed':
+                color = 'success.main';
+                label = 'Thành công';
+                break;
+            case 'processing':
+                color = 'info.main';
+                label = 'Đang xử lý';
+                break;
+            case 'cancelled':
+                color = 'warning.main';
+                label = 'Đã hủy';
+                break;
+            case 'bomb':
+                color = 'error.main';
+                label = 'Bom hàng';
+                break;
+            case 'refunded':
+                color = 'error.main';
+                label = 'Đơn hoàn';
+                break;
+            default:
+                // Fallback nếu category lạ
+                break;
+        }
     } else {
-        color = 'info';
-        label = 'Đang xử lý';
+        // Logic cũ (Fallback)
+        const s = status?.toLowerCase() || '';
+        if (s.includes('completed') || s.includes('delivered') || s.includes('thành công')) {
+            color = 'success.main';
+            label = 'Thành công';
+        } else if (s.includes('processing') || s.includes('đang') || s.includes('chờ')) {
+            color = 'info.main';
+            label = 'Đang xử lý';
+        } else if (s.includes('cancel') || s.includes('hủy')) {
+            color = 'warning.main';
+            label = 'Đã hủy';
+        } else if (s.includes('bomb') || s.includes('return') || s.includes('hoàn')) {
+            color = 'error.main';
+            label = 'Bom/Hoàn';
+        }
     }
 
-    return <Chip label={label} color={color} size="small" variant="filled" sx={{ fontWeight: 'bold' }} />;
+    return (
+        <Typography variant="caption" sx={{ color, fontWeight: 'bold', textTransform: 'uppercase' }}>
+            {label}
+        </Typography>
+    );
 };
 
 const CustomerDetailDialog = ({ open, onClose, username }) => {
@@ -73,142 +85,111 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
                 .then(res => setData(res))
                 .catch(err => console.error(err))
                 .finally(() => setLoading(false));
-        } else {
-            setData(null);
         }
     }, [open, username, slug]);
-
-    if (!open) return null;
 
     const info = data?.info || {};
     const orders = data?.orders || [];
 
     return (
-        <Dialog 
-            open={open} 
-            onClose={onClose} 
-            maxWidth="md" 
-            fullWidth
-            PaperProps={{
-                sx: { 
-                    ...glassStyle, 
-                    background: '#1e1e2d', // Darker background for readability
-                    minHeight: '600px'
-                }
-            }}
-        >
-            <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', pt: 2, pb: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'left', gap: 2 }}>
-                    <Avatar sx={{ bgcolor: 'primary.main', width: 44, height: 44 }}>
+        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+            {/* Header sử dụng style mặc định của Theme MuiDialogTitle (đã có in hoa, căn giữa, glow) */}
+            <DialogTitle sx={{ m: 0, p: 2, position: 'relative', textAlign: 'left !important', textTransform: 'none !important' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Avatar sx={{ bgcolor: 'primary.main', width: 48, height: 48 }}>
                         <PersonIcon />
                     </Avatar>
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                        <Typography variant="h6" fontWeight="bold" sx={{ lineHeight: 1.2, textAlign: 'left' }}>
+                        <Typography variant="h6" fontWeight="bold" sx={{ color: 'primary.main', textShadow: 'none' }}>
                             Hồ sơ Khách hàng
                         </Typography>
-                        <Typography variant="subtitle2" color="primary.light" fontWeight="600" sx={{ textAlign: 'left' }}>
+                        <Typography variant="subtitle2" color="text.secondary">
                             @{username}
                         </Typography>
                     </Box>
                 </Box>
-                <IconButton onClick={onClose} sx={{ color: 'text.secondary', mt: -1 }}>
+                <IconButton
+                    onClick={onClose}
+                    sx={{ position: 'absolute', right: 16, top: 20, color: 'text.secondary' }}
+                >
                     <CloseIcon />
                 </IconButton>
             </DialogTitle>
             
-            <DialogContent dividers sx={{ borderColor: 'rgba(255,255,255,0.1)' }}>
+            <DialogContent>
                 {loading ? (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 400 }}>
-                        <CircularProgress />
-                    </Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress /></Box>
                 ) : data ? (
-                    <Stack spacing={3}>
-                        {/* 1. INFO CARDS */}
-                        <Paper sx={{ p: 2, bgcolor: 'rgba(0,0,0,0.2)', borderRadius: 2 }}>
-                            <Grid container spacing={3}>
+                    <Stack spacing={4}>
+                        {/* 1. INFO GRID - Sử dụng StatItem đã có sẵn */}
+                        <Paper variant="glass" sx={{ p: 3 }}>
+                            <Grid container spacing={4}>
                                 <Grid item xs={12} sm={4}>
                                     <StatItem 
-                                        icon={<MonetizationOnIcon />} 
-                                        label="Tổng Chi Tiêu" 
-                                        value={formatCurrency(info.total_spent)} 
-                                        color="#00E676" 
+                                        title="Tổng Chi Tiêu" 
+                                        value={info.total_spent} 
+                                        format="currency"
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={4}>
                                     <StatItem 
-                                        icon={<LocalMallIcon />} 
-                                        label="Tổng Đơn Hàng" 
+                                        title="Tổng Đơn Hàng" 
                                         value={info.total_orders} 
-                                        color="#2979FF" 
+                                        format="number"
                                     />
                                 </Grid>
                                 <Grid item xs={12} sm={4}>
-                                    <StatItem 
-                                        icon={info.bomb_orders > 0 ? <WarningIcon /> : <AccessTimeIcon />} 
-                                        label="Uy Tín" 
-                                        value={info.bomb_orders > 0 ? `${info.bomb_orders} đơn bom` : "Tốt"} 
-                                        color={info.bomb_orders > 0 ? "#FF5252" : "#FFC107"} 
-                                    />
+                                    <Box>
+                                        <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'uppercase', fontSize: '0.75rem' }}>Trạng thái</Typography>
+                                        <Typography variant="h6" fontWeight="600" sx={{ color: info.bomb_orders > 0 ? 'error.main' : 'success.main' }}>
+                                            {info.bomb_orders > 0 ? `${info.bomb_orders} Đơn bom` : "Uy tín"}
+                                        </Typography>
+                                    </Box>
                                 </Grid>
                             </Grid>
                             
-                            <Box sx={{ mt: 2, display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                                <Typography variant="body2" color="text.secondary">
-                                    📍 Khu vực: <b>{info.city || '---'}</b> - {info.district || '---'}
+                            <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 4 }}>
+                                <Typography variant="caption" color="text.secondary">
+                                    📍 {[info.district, info.province].filter(Boolean).join(' - ') || '---'}
                                 </Typography>
-                                <Typography variant="body2" color="text.secondary">
-                                    📅 Đơn cuối: <b>{formatDate(info.last_order_date)}</b>
-                                </Typography>
+                                <Typography variant="caption" color="text.secondary">📅 Đơn cuối: {formatDate(info.last_order_date)}</Typography>
                             </Box>
                         </Paper>
 
-                        {/* 2. ORDER HISTORY TABLE */}
+                        {/* 2. ORDER HISTORY - Sử dụng style table chuẩn của dự án */}
                         <Box>
-                            <Typography variant="h6" fontWeight="bold" sx={{ mb: 2 }}>Lịch sử Đơn hàng ({orders.length})</Typography>
-                            <TableContainer component={Paper} sx={{ bgcolor: 'rgba(0,0,0,0.2)', maxHeight: 400 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 2, color: 'primary.main', fontWeight: 'bold' }}>LỊCH SỬ GIAO DỊCH</Typography>
+                            <TableContainer sx={{ maxHeight: 350 }}>
                                 <Table stickyHeader size="small">
                                     <TableHead>
                                         <TableRow>
-                                            <TableCell sx={{ bgcolor: '#2c2c3a' }}>Mã Đơn</TableCell>
-                                            <TableCell sx={{ bgcolor: '#2c2c3a' }}>Ngày đặt</TableCell>
-                                            <TableCell sx={{ bgcolor: '#2c2c3a' }}>Trạng thái</TableCell>
-                                            <TableCell sx={{ bgcolor: '#2c2c3a' }} align="right">Giá trị</TableCell>
-                                            <TableCell sx={{ bgcolor: '#2c2c3a' }}>Nguồn</TableCell>
+                                            <TableCell>Mã Đơn</TableCell>
+                                            <TableCell>Mã Vận Đơn</TableCell>
+                                            <TableCell>Ngày đặt</TableCell>
+                                            <TableCell>Trạng thái</TableCell>
+                                            <TableCell align="right">Giá trị</TableCell>
+                                            <TableCell>Nguồn</TableCell>
                                         </TableRow>
                                     </TableHead>
                                     <TableBody>
                                         {orders.map((order) => (
                                             <TableRow key={order.order_code} hover>
-                                                <TableCell sx={{ fontFamily: 'monospace', fontWeight: 'bold' }}>
-                                                    {order.order_code}
+                                                <TableCell sx={{ fontFamily: 'monospace' }}>{order.order_code}</TableCell>
+                                                <TableCell sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>
+                                                    {order.tracking_id || '---'}
                                                 </TableCell>
                                                 <TableCell>{formatDate(order.order_date)}</TableCell>
-                                                <TableCell>
-                                                    <OrderStatusChip status={order.status} />
-                                                </TableCell>
-                                                <TableCell align="right" sx={{ color: 'primary.light', fontWeight: 'bold' }}>
-                                                    {formatCurrency(order.gmv || order.selling_price || 0)}
-                                                </TableCell>
-                                                <TableCell sx={{ textTransform: 'capitalize' }}>
-                                                    {order.source}
-                                                </TableCell>
+                                                <TableCell><OrderStatusChip status={order.status} category={order.category} /></TableCell>
+                                                <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatCurrency(order.net_revenue || 0)}</TableCell>
+                                                <TableCell sx={{ textTransform: 'capitalize', color: 'text.secondary' }}>{order.source}</TableCell>
                                             </TableRow>
                                         ))}
-                                        {orders.length === 0 && (
-                                            <TableRow>
-                                                <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>
-                                                    Chưa có lịch sử đơn hàng
-                                                </TableCell>
-                                            </TableRow>
-                                        )}
                                     </TableBody>
                                 </Table>
                             </TableContainer>
                         </Box>
                     </Stack>
-                ) : (
-                    <Typography color="error">Không tìm thấy dữ liệu.</Typography>
-                )}
+                ) : null}
             </DialogContent>
         </Dialog>
     );

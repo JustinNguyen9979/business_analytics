@@ -78,7 +78,6 @@ class Brand(Base):
     slug = Column(String, unique=True, index=True)
 
     products = relationship("Product", back_populates="owner_brand", cascade="all, delete-orphan")
-    customers = relationship("Customer", back_populates="owner_brand", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="owner_brand", cascade="all, delete-orphan")
     revenues = relationship("Revenue", back_populates="owner_brand", cascade="all, delete-orphan")
     marketing_spends = relationship("MarketingSpend", back_populates="owner_brand", cascade="all, delete-orphan")
@@ -95,27 +94,6 @@ class Product(Base):
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
     
     owner_brand = relationship("Brand", back_populates="products")
-
-class Customer(Base):
-    __tablename__ = "customers"
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, index=True)
-    city = Column(String, nullable=True, index=True) 
-    district = Column(String, nullable=True, index=True) 
-    source = Column(String, nullable=True, index=True)
-    
-    total_spent = Column(Float, default=0.0)      
-    total_orders = Column(Integer, default=0)     
-    last_order_date = Column(DateTime, nullable=True) 
-    
-    cancelled_orders = Column(Integer, default=0) 
-    bomb_orders = Column(Integer, default=0)      
-    refunded_orders = Column(Integer, default=0)  
-    completed_orders = Column(Integer, default=0) 
-
-    brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
-
-    owner_brand = relationship("Brand", back_populates="customers")
 
 class Order(Base):
     __tablename__ = "orders"

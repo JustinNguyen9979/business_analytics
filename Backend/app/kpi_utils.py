@@ -19,7 +19,8 @@ CANCELLED_STATUSES = {'hủy', 'cancel', 'đã hủy', 'cancelled'}
 ORDER_STATUS_KEYWORDS = {
     "bomb_status": ["fail", "chuyen hoan", "that bai", "khong thanh cong", "khong nhan", "tu choi", "khong lien lac", "thue bao", "tu choi", "khong nghe may", "boom hang", "bom hang", "contact failed"],
     "cancel_status": ["huy", "cancel"],
-    "success_status": ["hoan thanh", "complete", "deliver", "success", "da nhan", "thanh cong", "da giao", "giao thanh cong", "shipped", "finish", "done", "hoan tat"]
+    "success_status": ["hoan thanh", "complete", "deliver", "success", "da nhan", "thanh cong", "da giao", "giao thanh cong", "shipped", "finish", "done", "hoan tat", "nguoi mua xac nhan"],
+    "processing_status": ["dang giao", "dang trung chuyen", "cho giao hang", "cho van chuyen", "dang cho", "chuan bi hang", "pickup", "transitting", "delivery"]
 }
 
 def get_active_order_filters(model):
@@ -555,8 +556,12 @@ def _classify_order_status(order: models.Order, is_financial_refund: bool) -> st
     # Chỉ khi thoát được 3 cửa ải trên mới được tính là Thành công
     if is_success_group:
         return 'completed'
+
+    # Ưu tiên 5: Xử lý Nhóm ĐANG XỬ LÝ (Processing)
+    if _matches_keywords(status, ORDER_STATUS_KEYWORDS["processing_status"]):
+        return 'processing'
         
-    # Ưu tiên 5: CÒN LẠI (An toàn)
+    # Ưu tiên 6: CÒN LẠI (An toàn)
     # Đơn đang giao, chờ xác nhận... -> Không tính toán
     return 'other'
 
@@ -707,71 +712,23 @@ def _calculate_bad_product_breakdown(
 
 def _calculate_location_distribution(
     orders: List[models.Order], 
-    revenue_map: Dict[str, float] = None, # Key: order_code, Value: net_revenue
-    refund_status_map: Dict[str, bool] = None, # Key: order_code, Value: has_refund
+    revenue_map: Dict[str, float] = None,
+    refund_status_map: Dict[str, bool] = None,
     db_session: Session = None
 ) -> List[Dict]:
-    if not db_session or not orders: return []
-    
-    # Structure: City -> { lat, lon, metrics: { status: { orders, revenue } } }
-    city_stats = defaultdict(lambda: {
-        "latitude": None, "longitude": None,
-        "metrics": defaultdict(lambda: {"orders": 0, "revenue": 0})
-    })
+    """
+    [REFACTORED] Tính phân bổ địa lý.
+    Hiện tại bảng Customer đã bị xóa. Dữ liệu địa chỉ cần được lấy từ Order.details.
+    Tuy nhiên, parser hiện tại CHƯA lưu địa chỉ vào Order.details.
+    TODO: Cập nhật Parser để lưu 'city'/'province' vào Order.details.
+    """
+    # Tạm thời trả về rỗng để tránh lỗi query bảng Customer không tồn tại
+    return []
 
-    usernames = {o.username for o in orders if o.username}
-    if not usernames: return []
-
-    try:
-        customers = db_session.query(models.Customer.username, models.Customer.city).filter(models.Customer.username.in_(usernames)).all()
-        user_city_map = {c.username: c.city for c in customers if c.city}
-        
-        for order in orders:
-            if order.username in user_city_map:
-                city = user_city_map[order.username]
-                
-                # Xác định Status
-                is_refunded = refund_status_map.get(order.order_code, False) if refund_status_map else False
-                status = _classify_order_status(order, is_refunded)
-                
-                # Xác định Revenue
-                rev = revenue_map.get(order.order_code, 0) if revenue_map else 0
-                
-                # Cộng dồn
-                city_stats[city]["metrics"][status]["orders"] += 1
-                city_stats[city]["metrics"][status]["revenue"] += rev
-                
-                # Lấy tọa độ (chỉ cần lấy 1 lần)
-                if city_stats[city]["latitude"] is None:
-                    coords = PROVINCE_CENTROIDS.get(city)
-                    if coords:
-                        city_stats[city]["latitude"] = coords[1]
-                        city_stats[city]["longitude"] = coords[0]
-
-        results = []
-        for city, data in city_stats.items():
-            if data["latitude"] is None: continue # Skip if no coords
-            
-            # Tính tổng metrics để sort (mặc định sort theo Completed Orders)
-            total_orders = sum(m["orders"] for m in data["metrics"].values())
-            
-            # Convert metrics dict to standard dict for JSON serialization
-            metrics_clean = {k: dict(v) for k, v in data["metrics"].items()}
-            
-            results.append({
-                "city": city,
-                "metrics": metrics_clean,
-                "longitude": data["longitude"],
-                "latitude": data["latitude"],
-                # Giữ lại các trường legacy để tương thích ngược tạm thời (hoặc hiển thị nhanh)
-                "orders": total_orders, 
-                "revenue": sum(m["revenue"] for m in data["metrics"].values())
-            })
-            
-        return sorted(results, key=lambda x: x["orders"], reverse=True)
-    except Exception as e: 
-        print(f"Warning: Could not calculate location distribution: {e}")
-        return []
+    # --- LOGIC CŨ (Đã vô hiệu hóa) ---
+    # if not db_session or not orders: return []
+    # city_stats = defaultdict(lambda: { ... })
+    # ...
 
 def _calculate_customer_retention(orders: List[models.Order], current_date: date, db_session: Session) -> Dict:
     stats = {"new_customers": 0, "returning_customers": 0, "new_customer_revenue": 0.0, "returning_customer_revenue": 0.0}

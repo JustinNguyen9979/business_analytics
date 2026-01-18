@@ -98,7 +98,13 @@ const CustomerTable = ({ data }) => {
                         {finalRows.map((row, index) => {
                             const risk = getRiskInfo(row);
                             const displayName = row.username || 'Khách vãng lai';
-                            const location = row.city || row.district || '---';
+                            
+                            // Kết hợp Quận/Huyện và Tỉnh/Thành để hiển thị chi tiết
+                            const locationParts = [];
+                            if (row.district && row.district !== '---') locationParts.push(row.district);
+                            if (row.province && row.province !== '---') locationParts.push(row.province);
+                            const location = locationParts.length > 0 ? locationParts.join(' - ') : '---';
+
                             const aov = row.completed_orders > 0 ? (row.total_spent / row.completed_orders) : 0;
                             const bombAndRefund = (row.bomb_orders || 0) + (row.refunded_orders || 0);
 

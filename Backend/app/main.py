@@ -380,7 +380,7 @@ def get_customer_kpis (
     )
     return customer_kpis
 
-@app.get("/brands/{brand_slug}/customers", response_model=List[schemas.CustomerBase])
+@app.get("/brands/{brand_slug}/customers", response_model=List[schemas.CustomerAnalyticsItem])
 @limiter.limit("30/minute")
 def get_top_customers(
     request: Request,
@@ -391,24 +391,29 @@ def get_top_customers(
     db: Session = Depends(get_db),
 ):
     """
-    Lấy danh sách Top Khách hàng theo tiêu chí sắp xếp.
-    Dữ liệu lấy trực tiếp từ bảng Customer (đã được tính toán sẵn).
+    Lấy danh sách Top Khách hàng (Đã chuyển sang tính toán động).
+    Mặc định lấy toàn bộ lịch sử (2020 -> 2030) nếu không có bộ lọc ngày.
     """
     db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     
-    # Logic sắp xếp
-    from sqlalchemy import desc, asc
-    sort_column = getattr(models.Customer, sort_by, models.Customer.total_spent)
-    sort_obj = desc(sort_column) if order == "desc" else asc(sort_column)
-
-    # Query
-    customers = db.query(models.Customer).filter(
-        models.Customer.brand_id == db_brand.id
-    ).order_by(sort_obj).limit(limit).all()
+    # Giả lập khoảng thời gian "Toàn thời gian"
+    start_date = date(2020, 1, 1)
+    end_date = date(2030, 12, 31)
     
-    return customers
+    # Gọi hàm tính toán động
+    # Lưu ý: Hàm này trả về dict {data, total, ...}, ta chỉ cần data
+    result = crud.customer.get_top_customers_in_period(
+        db, 
+        brand_id=db_brand.id, 
+        start_date=start_date, 
+        end_date=end_date, 
+        limit=limit
+    )
+    
+    # Kết quả trả về là List[Dict], Pydantic sẽ tự validate sang List[CustomerAnalyticsItem]
+    return result['data']
 
 @app.get("/brands/{brand_slug}/customers/{username}", response_model=schemas.CustomerDetailResponse)
 def get_customer_detail(
