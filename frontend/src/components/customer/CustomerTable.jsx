@@ -9,6 +9,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import DoNotDisturbOnIcon from '@mui/icons-material/DoNotDisturbOn';
 import { formatCurrency } from '../../utils/formatters';
+import CustomerDetailDialog from './CustomerDetailDialog'; // Import Dialog
 
 const getRiskInfo = (row) => {
     const total = row.total_orders || 0;
@@ -25,15 +26,44 @@ const getRiskInfo = (row) => {
 };
 
 const CustomerTable = ({ data }) => {
-    const [page, setPage] = useState(1); // Pagination dùng index bắt đầu từ 1
-    const rowsPerPage = 10; 
+    // State cho Dialog chi tiết
+    const [selectedUser, setSelectedUser] = useState(null);
 
-    const handleChangePage = (event, newPage) => {
-        setPage(newPage);
+    // Xác định cấu trúc dữ liệu: Array cũ hay Object mới (Server Pagination)
+    const isNewStructure = data && data.pagination;
+    
+    // Lấy list khách hàng
+    const rows = isNewStructure ? data.data : data;
+    
+    // Pagination Props
+    // Server-side dùng 1-based index cho Page, nhưng TablePagination dùng 0-based
+    const page = isNewStructure ? data.pagination.page : 1;
+    const totalCount = isNewStructure ? data.pagination.totalCount : rows.length;
+    const rowsPerPage = isNewStructure ? data.pagination.rowsPerPage : 10;
+    const handleChangePage = isNewStructure ? data.pagination.handleChangePage : () => {};
+
+    // Client-side pagination fallback (cho trường hợp legacy array)
+    const [clientPage, setClientPage] = useState(1);
+    const clientRowsPerPage = 10;
+    
+    // Nếu là Server-side, rows đã được cắt sẵn. Nếu Client-side, cần cắt.
+    const finalRows = isNewStructure 
+        ? rows 
+        : rows.slice((clientPage - 1) * clientRowsPerPage, (clientPage - 1) * clientRowsPerPage + clientRowsPerPage);
+        
+    const handlePageChange = (event, newPage) => {
+        if (isNewStructure) {
+            // Convert 0-based to 1-based for Server
+            handleChangePage(event, newPage);
+        } else {
+            setClientPage(newPage);
+        }
     };
 
-    // Cắt dữ liệu theo trang (chuyển về 0-based index để slice)
-    const visibleRows = data.slice((page - 1) * rowsPerPage, (page - 1) * rowsPerPage + rowsPerPage);
+    const currentPage = isNewStructure ? page : clientPage;
+    const count = isNewStructure
+        ? Math.ceil(totalCount / rowsPerPage)
+        : Math.ceil(rows.length / clientRowsPerPage);
 
     return (
         <Box sx={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -54,18 +84,18 @@ const CustomerTable = ({ data }) => {
                         <TableRow>
                             <TableCell sx={{ bgcolor: 'background.paper', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Khách hàng</TableCell>
                             <TableCell sx={{ bgcolor: 'background.paper', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Khu vực</TableCell>
-                            <TableCell align="center" sx={{ bgcolor: 'background.paper', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Tổng đơn</TableCell>
+                            <TableCell align="center" sx={{ bgcolor: 'background.paper', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Đơn (Kỳ)</TableCell>
                             <TableCell align="center" sx={{ color: '#4caf50', bgcolor: 'background.paper', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Thành công</TableCell>
                             <TableCell align="center" sx={{ color: '#ff9800', bgcolor: 'background.paper', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Hủy</TableCell>
                             <TableCell align="center" sx={{ color: '#f44336', bgcolor: 'background.paper', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Bom/Hoàn</TableCell>
-                            <TableCell align="right" sx={{ bgcolor: 'background.paper', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Tổng chi tiêu</TableCell>
+                            <TableCell align="right" sx={{ bgcolor: 'background.paper', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Chi tiêu (Kỳ)</TableCell>
                             <TableCell align="right" sx={{ bgcolor: 'background.paper', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>TB/Đơn (AOV)</TableCell>
                             <TableCell align="center" sx={{ bgcolor: 'background.paper', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}>Đánh giá</TableCell>
                             <TableCell align="center" sx={{ bgcolor: 'background.paper', borderBottom: '1px solid rgba(255, 255, 255, 0.1)' }}></TableCell>
                         </TableRow>
                     </TableHead>
                     <TableBody>
-                        {visibleRows.map((row, index) => {
+                        {finalRows.map((row, index) => {
                             const risk = getRiskInfo(row);
                             const displayName = row.username || 'Khách vãng lai';
                             const location = row.city || row.district || '---';
@@ -78,13 +108,11 @@ const CustomerTable = ({ data }) => {
                                     sx={{ '&:last-child td, &:last-child th': { border: 0 }, '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.05)' } }}
                                 >
                                     <TableCell component="th" scope="row">
-                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                            <Avatar sx={{ bgcolor: stringToColor(displayName), width: 32, height: 32, fontSize: '0.875rem', fontWeight: 'bold' }}>
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                            <Avatar sx={{ bgcolor: stringToColor(displayName), width: 28, height: 28, fontSize: '0.75rem', fontWeight: 'bold' }}>
                                                 {displayName.charAt(0).toUpperCase()}
                                             </Avatar>
-                                            <Box>
-                                                <Typography variant="body2" fontWeight="600">{displayName}</Typography>
-                                            </Box>
+                                            <Typography variant="body2" fontWeight="600">{displayName}</Typography>
                                         </Box>
                                     </TableCell>
                                     <TableCell>
@@ -114,7 +142,7 @@ const CustomerTable = ({ data }) => {
                                     </TableCell>
                                     <TableCell align="center">
                                         <Tooltip title="Xem chi tiết">
-                                            <IconButton size="small">
+                                            <IconButton size="small" onClick={() => setSelectedUser(row.username)}>
                                                 <VisibilityIcon fontSize="small" />
                                             </IconButton>
                                         </Tooltip>
@@ -126,25 +154,32 @@ const CustomerTable = ({ data }) => {
                 </Table>
             </TableContainer>
             
-            {/* PHẦN PHÂN TRANG (PAGINATION) - Đánh số 1, 2, 3... */}
+            {/* PHẦN PHÂN TRANG (PAGINATION) */}
             <Box sx={{ 
                 flexShrink: 0, 
                 borderTop: '1px solid rgba(255, 255, 255, 0.1)', 
                 bgcolor: 'rgba(0, 0, 0, 0.2)', 
                 p: 2,
                 display: 'flex',
-                justifyContent: 'center' // Căn giữa
+                justifyContent: 'center'
             }}>
-                <Pagination 
-                    count={Math.ceil(data.length / rowsPerPage)} 
-                    page={page} 
-                    onChange={handleChangePage} 
-                    color="primary" 
+                <Pagination
+                    count={count}
+                    page={currentPage}
+                    onChange={handlePageChange}
+                    color="primary"
                     shape="rounded"
-                    showFirstButton 
+                    showFirstButton
                     showLastButton
                 />
             </Box>
+
+            {/* DIALOG CHI TIẾT KHÁCH HÀNG */}
+            <CustomerDetailDialog 
+                open={!!selectedUser} 
+                username={selectedUser} 
+                onClose={() => setSelectedUser(null)} 
+            />
         </Box>
     );
 };

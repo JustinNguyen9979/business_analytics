@@ -152,6 +152,34 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                 result_data = dashboard_service.get_top_selling_products(db, brand_id, start_date, end_date, limit)
 
             # --------------------------------------------------------------
+            # --- Nhánh 4: TOP KHÁCH HÀNG THEO KỲ (DYNAMIC) ---
+            # --------------------------------------------------------------
+            elif request_type == "top_customers_period":
+                # Frontend gửi: limit (là page_size), page
+                page_size = int(params.get("limit", 20)) 
+                page = int(params.get("page", 1))
+                
+                # Xử lý source param
+                req_source = params.get("source")
+                source_list = None
+                if req_source is not None:
+                    if isinstance(req_source, list):
+                        source_list = req_source
+                    else:
+                        source_list = [req_source]
+                
+                result_data = crud.customer.get_top_customers_in_period(
+                    db, 
+                    brand_id, 
+                    start_date, 
+                    end_date, 
+                    limit=20000, # Max calculation limit (Hard cap)
+                    page=page,
+                    page_size=page_size,
+                    source_list=source_list
+                )
+
+            # --------------------------------------------------------------
             # --- Nhánh 5: KPI THEO PLATFORM ---
             # --------------------------------------------------------------
             elif request_type == "kpis_by_platform":

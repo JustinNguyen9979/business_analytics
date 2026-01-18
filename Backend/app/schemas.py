@@ -29,6 +29,7 @@ class Customer(CustomerBase):
 class OrderBase(BaseModel):
     order_code: str; order_date: Optional[datetime] = None; status: Optional[str] = None; username: Optional[str] = None
     total_quantity: int = 0; cogs: float = 0.0; details: Optional[Dict[str, Any]] = None
+    gmv: float = 0.0; selling_price: float = 0.0 # Added explicit pricing fields
 class Order(OrderBase):
     id: int; brand_id: int; source: str; model_config = ConfigDict(from_attributes=True)
 
@@ -154,6 +155,37 @@ class CustomerKpisResponse(CustomerMetricsMixin):
     frequency_data: List[Dict[str, Any]] = []
     previous_period: Optional[Dict[str, Any]] = {}
 
+    model_config = ConfigDict(from_attributes=True)
+
+class CustomerAnalyticsItem(BaseModel):
+    """
+    Dữ liệu khách hàng được tính toán động theo kỳ (không phải tích lũy trọn đời).
+    """
+    username: str
+    total_spent: float = 0
+    total_orders: int = 0
+    completed_orders: int = 0
+    cancelled_orders: int = 0
+    bomb_orders: int = 0
+    aov: float = 0
+    last_order_date: Optional[date] = None
+    
+    # Các trường bổ sung nếu cần hiển thị trên UI
+    city: Optional[str] = None
+    district: Optional[str] = None
+
+class CustomerAnalyticsResponse(BaseModel):
+    data: List[CustomerAnalyticsItem]
+
+class CustomerPaginationResponse(BaseModel):
+    data: List[CustomerAnalyticsItem]
+    total: int = 0
+    page: int = 1
+    limit: int = 20
+
+class CustomerDetailResponse(BaseModel):
+    info: CustomerBase
+    orders: List[Order]
     model_config = ConfigDict(from_attributes=True)
 
 # Aliases for backward compatibility if needed in frontend

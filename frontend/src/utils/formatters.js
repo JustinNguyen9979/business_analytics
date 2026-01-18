@@ -1,4 +1,15 @@
 // FILE: frontend/src/utils/formatters.js (TẠO MỚI)
+import dayjs from 'dayjs';
+
+/**
+ * Định dạng ngày tháng (YYYY-MM-DD hoặc Date object) sang 'DD/MM/YYYY'.
+ * @param {string|Date} date - Ngày cần định dạng.
+ * @returns {string} Chuỗi ngày đã định dạng.
+ */
+export const formatDate = (date) => {
+    if (!date) return '---';
+    return dayjs(date).format('DD/MM/YYYY');
+};
 
 /**
  * Định dạng một số thành chuỗi tiền tệ Việt Nam (VNĐ).

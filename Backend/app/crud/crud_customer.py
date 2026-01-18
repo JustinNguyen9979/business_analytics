@@ -3,6 +3,7 @@ from .base import CRUDBase
 from models import Customer
 from schemas import CustomerBase, CustomerCreate
 from typing import Optional
+from datetime import date # Import date here
 
 class CRUDCustomer(CRUDBase[Customer, CustomerCreate, CustomerBase]):
     def get_by_username(self, db: Session, *, brand_id: int, username: str) -> Optional[Customer]:
@@ -153,5 +154,164 @@ class CRUDCustomer(CRUDBase[Customer, CustomerCreate, CustomerBase]):
         # Hàm cũ không dùng nữa, nhưng giữ lại nếu cần tham khảo hoặc xóa sau
         from sqlalchemy import or_
         return or_(*[column.ilike(f"%{k}%") for k in keywords])
+
+    def get_top_customers_in_period(
+        self, 
+        db: Session, 
+        brand_id: int, 
+        start_date: date, 
+        end_date: date, 
+        limit: int = 20000, # Increased safety cap
+        page: int = 1,
+        page_size: int = 20,
+        source_list: list[str] = None
+    ):
+        """
+        Lấy danh sách Top khách hàng dựa trên giao dịch TRONG KỲ (Orders).
+        Sử dụng logic phân loại chuẩn từ kpi_utils (Python-side aggregation) để đảm bảo chính xác.
+        Hỗ trợ Pagination Server-side.
+        """
+        from models import Order, Customer, Revenue
+        from sqlalchemy import func, desc
+        from kpi_utils import _classify_order_status
+        from collections import defaultdict
+
+        # 1. Query Raw Data từ bảng Orders
+        # Cần lấy đủ các trường để chạy hàm _classify_order_status
+        filters = [
+            Order.brand_id == brand_id,
+            func.date(Order.order_date) >= start_date,
+            func.date(Order.order_date) <= end_date,
+            Order.username.isnot(None)
+        ]
+        
+        if source_list and 'all' not in source_list:
+            filters.append(Order.source.in_(source_list))
+
+        # Lấy danh sách đơn hàng thô
+        # Lưu ý: Việc lấy ALL orders có thể nặng nếu date range quá rộng.
+        # Tuy nhiên để sort đúng theo 'total_spent' trong kỳ, ta bắt buộc phải aggregate hết.
+        orders = db.query(Order).filter(*filters).all()
+
+        # 2. Python-side Aggregation
+        customer_stats = defaultdict(lambda: {
+            "total_spent": 0.0,
+            "total_orders": 0,
+            "completed_orders": 0,
+            "cancelled_orders": 0,
+            "bomb_orders": 0,
+            "refunded_orders": 0,
+            "last_date": None
+        })
+
+        for order in orders:
+            stats = customer_stats[order.username]
+            
+            # Phân loại trạng thái chuẩn
+            # is_financial_refund=False: Chỉ dựa vào status text và cancel reason
+            category = _classify_order_status(order, is_financial_refund=False)
+            
+            # Aggregation
+            stats["total_orders"] += 1
+            
+            if category == 'completed':
+                stats["completed_orders"] += 1
+                # Cộng doanh thu (Ưu tiên Net Revenue > GMV > Selling Price)
+                # Ở đây dùng GMV cho thống nhất hiển thị "Chi tiêu"
+                stats["total_spent"] += (order.gmv or 0)
+            elif category == 'cancelled':
+                stats["cancelled_orders"] += 1
+            elif category == 'bomb':
+                stats["bomb_orders"] += 1
+            elif category == 'refunded':
+                stats["refunded_orders"] += 1
+            # 'other' không cộng vào các metric hiển thị chính (ngoài total_orders)
+            
+            # Update Last Date
+            if order.order_date:
+                o_date = order.order_date.date()
+                if stats["last_date"] is None or o_date > stats["last_date"]:
+                    stats["last_date"] = o_date
+
+        # 3. Convert to List & Sort
+        # Chuyển đổi thành list dict để sort
+        results = []
+        for username, data in customer_stats.items():
+            completed = data["completed_orders"]
+            spent = data["total_spent"]
+            aov = (spent / completed) if completed > 0 else 0
+            
+            results.append({
+                "username": username,
+                "total_spent": spent,
+                "total_orders": data["total_orders"],
+                "completed_orders": completed,
+                "cancelled_orders": data["cancelled_orders"],
+                "bomb_orders": data["bomb_orders"],
+                "refunded_orders": data["refunded_orders"],
+                "aov": aov,
+                "last_order_date": data["last_date"]
+            })
+
+        # Sort theo total_spent giảm dần
+        results.sort(key=lambda x: x["total_spent"], reverse=True)
+        
+        # Cắt bớt nếu vượt quá safety limit (ví dụ tính 10k user nhưng chỉ lấy top 5000)
+        total_found = len(results)
+        if total_found > limit:
+            results = results[:limit]
+            total_found = limit
+
+        # 4. Pagination Slicing
+        start_idx = (page - 1) * page_size
+        end_idx = start_idx + page_size
+        paginated_results = results[start_idx:end_idx]
+
+        # 5. Bổ sung thông tin Location (City/District) CHỈ CHO TRANG HIỆN TẠI
+        top_usernames = [r["username"] for r in paginated_results]
+        customer_info_map = {}
+        
+        if top_usernames:
+            cust_infos = db.query(Customer.username, Customer.city, Customer.district).filter(
+                Customer.brand_id == brand_id,
+                Customer.username.in_(top_usernames)
+            ).all()
+            customer_info_map = {c.username: {'city': c.city, 'district': c.district} for c in cust_infos}
+
+        # Merge Location info
+        for r in paginated_results:
+            info = customer_info_map.get(r["username"], {})
+            r["city"] = info.get("city")
+            r["district"] = info.get("district")
+
+        return {
+            "data": paginated_results,
+            "total": total_found,
+            "page": page,
+            "limit": page_size # Trả về page_size hiện tại
+        }
+
+    def get_customer_detail_with_orders(self, db: Session, *, brand_id: int, username: str):
+        """
+        Lấy thông tin chi tiết khách hàng và lịch sử đơn hàng.
+        """
+        from models import Order
+        from sqlalchemy import desc
+        
+        # 1. Lấy thông tin khách hàng
+        customer = self.get_by_username(db, brand_id=brand_id, username=username)
+        if not customer:
+            return None
+            
+        # 2. Lấy lịch sử đơn hàng
+        orders = db.query(Order).filter(
+            Order.brand_id == brand_id,
+            Order.username == username
+        ).order_by(desc(Order.order_date)).all()
+        
+        return {
+            "info": customer,
+            "orders": orders
+        }
 
 customer = CRUDCustomer(Customer)

@@ -3,7 +3,7 @@ import { useTheme } from '@mui/material/styles';
 import { processChartData } from '../utils/chartDataProcessor'; // Import Processor
 import { useDateFilter } from './useDateFilter'; 
 import { useChartFilter } from './useChartFilter';
-import { getSourcesForBrand, fetchCustomerKpisAPI, fetchTopCustomersAPI } from '../services/api'; 
+import { getSourcesForBrand, fetchCustomerKpisAPI, fetchTopCustomersPeriodAPI } from '../services/api'; 
 import { useBrand } from '../context/BrandContext'; 
 
 // --- Helper Hook: Quản lý logic cho từng Box biểu đồ ---
@@ -164,39 +164,92 @@ export const useCustomerPageLogic = () => {
         fetchGlobalKpis();
     }, [brandSlug, globalFilterState.dateRange, kpiConfig]);
 
-    // 4. Logic cho Bảng Top Khách hàng (DỮ LIỆU THẬT + CÓ FILTER)
+    // 4. Logic cho Bảng Top Khách hàng (DỮ LIỆU THẬT + CÓ FILTER + SERVER-SIDE PAGINATION)
     const tableFilter = useChartFilter(globalFilterState);
     const [customerList, setCustomerList] = useState([]);
     const [listLoading, setListLoading] = useState(false);
+    
+    // Pagination State
+    const [page, setPage] = useState(1);
+    const [rowsPerPage, setRowsPerPage] = useState(10); // Default 10 rows per page
+    const [totalCount, setTotalCount] = useState(0);
+
+    // Reset page khi filter thay đổi
+    useEffect(() => {
+        setPage(1);
+    }, [tableFilter.dateRange, tableFilter.selectedSources]);
 
     useEffect(() => {
         const fetchTopCustomers = async () => {
             if (!brandSlug) return;
             setListLoading(true);
             try {
-                // Hiện tại API lấy Top Customer là dữ liệu tích lũy (Lifetime) nên chưa support lọc theo DateRange
-                // Tuy nhiên, ta có thể support lọc theo Source nếu Backend hỗ trợ (Hiện tại Backend chưa, nhưng Frontend chuẩn bị sẵn)
-                // const sources = tableFilter.selectedSources; 
+                // SỬ DỤNG API MỚI (DYNAMIC PERIOD VIA WORKER + PAGINATION)
+                // limit cũ giờ là page_size (rowsPerPage)
+                const params = {
+                    limit: rowsPerPage, 
+                    page: page,
+                    // source đã được xử lý trong api.js, nhưng cần truyền params thêm nếu hàm hỗ trợ
+                };
+
+                // Hàm fetchTopCustomersPeriodAPI cần hỗ trợ truyền thêm params page/limit
+                // Trong api.js hiện tại hàm này nhận (brandSlug, dateRange, limit, sources)
+                // Ta cần update logic gọi hàm này hoặc sửa api.js. 
+                // Tạm thời truyền object params vào tham số limit nếu sửa api.js, 
+                // hoặc sửa hook gọi đúng format mới nếu api.js đã sửa.
+                // Ở bước trước ta chưa sửa api.js hàm fetchTopCustomersPeriodAPI để nhận page.
+                // TA CẦN SỬA API.JS TRƯỚC HOẶC TRUYỀN QUA ĐỐI SỐ params thứ 3.
                 
-                const data = await fetchTopCustomersAPI(brandSlug, 20, 'total_spent', 'desc');
-                setCustomerList(data);
+                // Giả định api.js sẽ được update để nhận object options hoặc ta truyền limit là object
+                // Tuy nhiên, để an toàn, ta gọi fetchAsyncData trực tiếp hoặc sửa api.js sau.
+                // Ở đây ta gọi hàm wrapper đã có, nhưng hàm đó đang hardcode params.
+                // => TA SẼ CẦN SỬA API.JS. Nhưng trước mắt cứ gọi với logic mới.
+                
+                const response = await fetchTopCustomersPeriodAPI(
+                    brandSlug, 
+                    tableFilter.dateRange, 
+                    rowsPerPage, // Đây là limit (page_size)
+                    tableFilter.selectedSources,
+                    page // Thêm tham số page (Cần update api.js để nhận tham số này)
+                );
+                
+                // Backend trả về { data, total, page, limit } hoặc Array cũ (nếu chưa deploy backend)
+                if (response && response.data && Array.isArray(response.data)) {
+                    setCustomerList(response.data);
+                    setTotalCount(response.total || 0);
+                } else if (Array.isArray(response)) {
+                    // Fallback tương thích ngược
+                    setCustomerList(response);
+                    setTotalCount(response.length); 
+                }
             } catch (err) {
                 console.error("Error fetching top customers:", err);
                 setCustomerList([]);
+                setTotalCount(0);
             } finally {
                 setListLoading(false);
             }
         };
 
         fetchTopCustomers();
-    }, [brandSlug, tableFilter.selectedSources]); // Reload khi source thay đổi (nếu có logic filter)
+    }, [brandSlug, tableFilter.dateRange, tableFilter.selectedSources, page, rowsPerPage]); 
+
+    const handleChangePage = (event, newPage) => {
+        setPage(newPage);
+    };
 
     // Gom nhóm lại thành object tableData chuẩn để UI dùng
     const tableData = useMemo(() => ({
         data: customerList,
         loading: listLoading,
-        filter: tableFilter
-    }), [customerList, listLoading, tableFilter]);
+        filter: tableFilter,
+        pagination: {
+            page,
+            rowsPerPage,
+            totalCount,
+            handleChangePage
+        }
+    }), [customerList, listLoading, tableFilter, page, rowsPerPage, totalCount]);
 
     // 5. Return Value (Memoized)
     const charts = useMemo(() => ({

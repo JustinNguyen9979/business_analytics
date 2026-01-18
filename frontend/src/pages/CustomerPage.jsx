@@ -286,11 +286,11 @@ const CustomerTableBox = React.memo(({ tableData, sourceOptions }) => (
     <DashboardBox 
         title="Danh sách Khách hàng Tiêu biểu"
         loading={tableData.loading}
-        hasData={tableData.data.length > 0}
+        hasData={tableData.data && tableData.data.length > 0}
         height={850}
         action={<CustomerBoxControl filter={tableData.filter} sourceOptions={sourceOptions} title="Chọn nguồn dữ liệu" />}
     >
-        <CustomerTable data={tableData.data} />
+        <CustomerTable data={tableData} /> 
     </DashboardBox>
 ));
 
