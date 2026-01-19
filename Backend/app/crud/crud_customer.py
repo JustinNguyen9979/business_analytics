@@ -71,6 +71,29 @@ class CRUDCustomer:
         # (Lấy địa chỉ từ đơn cũ, giữ nguyên nếu đơn mới không có địa chỉ)
         orders = db.query(Order).filter(*filters).order_by(Order.order_date).all()
 
+        # ----------------------------------------------------------------------
+        # [UPDATED] Lấy dữ liệu Net Revenue từ bảng Revenue thay vì dùng GMV
+        # ----------------------------------------------------------------------
+        order_codes = [o.order_code for o in orders if o.order_code]
+        revenue_map = defaultdict(float) # Map: order_code -> total_net_revenue
+
+        if order_codes:
+            # Chunking query để tránh lỗi giới hạn tham số SQL (nếu danh sách quá dài)
+            chunk_size = 1000
+            for i in range(0, len(order_codes), chunk_size):
+                chunk = order_codes[i:i + chunk_size]
+                rev_records = db.query(Revenue.order_code, Revenue.net_revenue)\
+                    .filter(
+                        Revenue.brand_id == brand_id, 
+                        Revenue.order_code.in_(chunk)
+                    ).all()
+                
+                # Cộng dồn revenue (vì 1 order_code có thể có nhiều dòng revenue)
+                for code, net_rev in rev_records:
+                    if net_rev:
+                        revenue_map[code] += net_rev
+        # ----------------------------------------------------------------------
+
         # 2. Python-side Aggregation
         customer_stats = defaultdict(lambda: {
             "total_spent": 0.0,
@@ -95,8 +118,8 @@ class CRUDCustomer:
             
             if category == 'completed' or category == 'processing':
                 stats["completed_orders"] += 1
-                # Ưu tiên GMV/Selling Price để tính doanh thu
-                stats["total_spent"] += (order.gmv or order.selling_price or 0.0)
+                # [UPDATED] Lấy từ revenue_map (chính xác về mặt tài chính)
+                stats["total_spent"] += revenue_map.get(order.order_code, 0.0)
             elif category == 'cancelled':
                 stats["cancelled_orders"] += 1
             elif category == 'bomb':

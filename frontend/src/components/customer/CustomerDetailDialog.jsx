@@ -21,7 +21,6 @@ const OrderStatusChip = ({ status, category }) => {
     let color = 'text.secondary';
     let label = status;
 
-    // Ưu tiên dùng Category chuẩn từ Backend nếu có
     if (category) {
         switch (category) {
             case 'completed':
@@ -116,7 +115,7 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
                 </IconButton>
             </DialogTitle>
             
-            <DialogContent>
+            <DialogContent dividers sx={{ pt: 3, borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
                 {loading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress /></Box>
                 ) : data ? (
