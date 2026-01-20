@@ -72,6 +72,25 @@ const OrderStatusChip = ({ status, category }) => {
     );
 };
 
+// Component con hiển thị chỉ số nhỏ
+const DetailStatBox = ({ label, value, color, isBold = false }) => (
+    <Box sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        alignItems: 'center', 
+        p: 1, 
+        bgcolor: 'rgba(255,255,255,0.03)', 
+        borderRadius: 2 
+    }}>
+        <Typography variant="caption" color="text.secondary" sx={{ mb: 0.5, fontSize: '0.7rem' }}>
+            {label}
+        </Typography>
+        <Typography variant="h6" fontWeight={isBold ? '800' : '600'} sx={{ color: color, fontSize: '1.1rem' }}>
+            {value || 0}
+        </Typography>
+    </Box>
+);
+
 const CustomerDetailDialog = ({ open, onClose, username }) => {
     const { slug } = useBrand();
     const [loading, setLoading] = useState(false);
@@ -120,38 +139,85 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress /></Box>
                 ) : data ? (
                     <Stack spacing={4}>
-                        {/* 1. INFO GRID - Sử dụng StatItem đã có sẵn */}
+                        {/* 1. INFO GRID - Sức khỏe khách hàng */}
                         <Paper variant="glass" sx={{ p: 3 }}>
-                            <Grid container spacing={4}>
-                                <Grid item xs={12} sm={4}>
-                                    <StatItem 
-                                        title="Tổng Chi Tiêu" 
-                                        value={info.total_spent} 
-                                        format="currency"
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={4}>
-                                    <StatItem 
-                                        title="Tổng Đơn Hàng" 
-                                        value={info.total_orders} 
-                                        format="number"
-                                    />
-                                </Grid>
-                                <Grid item xs={12} sm={4}>
-                                    <Box>
-                                        <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'uppercase', fontSize: '0.75rem' }}>Trạng thái</Typography>
-                                        <Typography variant="h6" fontWeight="600" sx={{ color: info.bomb_orders > 0 ? 'error.main' : 'success.main' }}>
-                                            {info.bomb_orders > 0 ? `${info.bomb_orders} Đơn bom` : "Uy tín"}
-                                        </Typography>
-                                    </Box>
-                                </Grid>
-                            </Grid>
+                            {/* Hàng 1: Tài chính & Đánh giá tổng quan */}
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
+                                <StatItem 
+                                    title="Tổng Chi Tiêu Thực Tế" 
+                                    value={info.total_spent} 
+                                    format="currency"
+                                />
+                                
+                                {/* Logic Đánh giá */}
+                                <Box sx={{ textAlign: 'right' }}>
+                                    <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'uppercase', fontSize: '0.75rem', mb: 0.5 }}>
+                                        Đánh giá tín nhiệm
+                                    </Typography>
+                                    {(() => {
+                                        const isRefund = info.refunded_orders > 0;
+                                        const isBomb = info.bomb_orders > 0;
+                                        const total = info.total_orders || 0;
+                                        const cancelRate = total > 0 ? (info.cancelled_orders / total) : 0;
+                                        const isHighCancel = total > 3 && cancelRate > 0.4; // Hủy > 40% và > 3 đơn
+
+                                        let label = "Uy tín";
+                                        let color = "success.main";
+                                        let bg = "rgba(76, 175, 80, 0.1)";
+
+                                        if (isRefund) {
+                                            label = "BÁO ĐỘNG (HOÀN TIỀN)";
+                                            color = "#FF5252"; // Đỏ tươi
+                                            bg = "rgba(255, 82, 82, 0.1)";
+                                        } else if (isBomb) {
+                                            label = "CẢNH BÁO (BOM HÀNG)";
+                                            color = "#FF9800"; // Cam
+                                            bg = "rgba(255, 152, 0, 0.1)";
+                                        } else if (isHighCancel) {
+                                            label = "Cần chú ý (Hủy nhiều)";
+                                            color = "#FFC107"; // Vàng
+                                            bg = "rgba(255, 193, 7, 0.1)";
+                                        }
+
+                                        return (
+                                            <Box sx={{ 
+                                                display: 'inline-block',
+                                                px: 2, py: 0.5, 
+                                                borderRadius: 2, 
+                                                bgcolor: bg,
+                                                border: `1px solid ${color}`
+                                            }}>
+                                                <Typography variant="h6" fontWeight="bold" sx={{ color: color }}>
+                                                    {label}
+                                                </Typography>
+                                            </Box>
+                                        );
+                                    })()}
+                                </Box>
+                            </Box>
+
+                            {/* Hàng 2: Chi tiết các chỉ số đơn hàng */}
+                            <Box sx={{ 
+                                display: 'grid', 
+                                gridTemplateColumns: 'repeat(5, 1fr)', 
+                                gap: 2,
+                                pt: 2,
+                                borderTop: '1px solid rgba(255,255,255,0.1)'
+                            }}>
+                                <DetailStatBox label="Tổng đơn" value={info.total_orders} color="text.primary" />
+                                <DetailStatBox label="Thành công" value={info.completed_orders} color="success.main" />
+                                <DetailStatBox label="Đã hủy" value={info.cancelled_orders} color="warning.main" />
+                                <DetailStatBox label="Bom hàng" value={info.bomb_orders} color="error.main" />
+                                <DetailStatBox label="Hoàn tiền" value={info.refunded_orders} color="#FF5252" isBold={true} />
+                            </Box>
                             
-                            <Box sx={{ mt: 3, pt: 2, borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 4 }}>
+                            <Box sx={{ mt: 2, pt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Typography variant="caption" color="text.secondary">
-                                    📍 {[info.district, info.province].filter(Boolean).join(' - ') || '---'}
+                                    📍 {[info.district, info.province].filter(Boolean).join(' - ') || 'Chưa có địa chỉ'}
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary">📅 Đơn cuối: {formatDate(info.last_order_date)}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    📅 Đơn cuối: {formatDate(info.last_order_date)}
+                                </Typography>
                             </Box>
                         </Paper>
 

@@ -8,6 +8,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import DoNotDisturbOnIcon from '@mui/icons-material/DoNotDisturbOn';
+import ReportIcon from '@mui/icons-material/Report';
 import { formatCurrency } from '../../utils/formatters';
 import CustomerDetailDialog from './CustomerDetailDialog'; // Import Dialog
 
@@ -15,14 +16,43 @@ const getRiskInfo = (row) => {
     const total = row.total_orders || 0;
     const bomb = row.bomb_orders || 0;
     const cancel = row.cancelled_orders || 0;
+    const refund = row.refunded_orders || 0;
     
-    // Logic đánh giá rủi ro
-    if (bomb > 0) return { label: 'Nguy hiểm (Bom)', color: 'error', icon: <DoNotDisturbOnIcon fontSize="small" /> };
+    // Logic đánh giá rủi ro (Giống CustomerDetailDialog)
+    if (refund > 0) {
+        return { 
+            label: 'Báo động (Hoàn)', 
+            bg: 'rgba(255, 82, 82, 0.1)', 
+            color: '#FF5252', 
+            icon: <ReportIcon fontSize="small" style={{ color: '#FF5252' }} /> 
+        };
+    }
+
+    if (bomb > 0) {
+        return { 
+            label: 'Cảnh báo (Bom)', 
+            bg: 'rgba(255, 152, 0, 0.1)', 
+            color: '#FF9800', 
+            icon: <DoNotDisturbOnIcon fontSize="small" style={{ color: '#FF9800' }} /> 
+        };
+    }
     
     const cancelRate = total > 0 ? (cancel / total) : 0;
-    if (cancelRate > 0.3 && total >= 3) return { label: 'Cần chú ý (Hủy nhiều)', color: 'warning', icon: <WarningAmberIcon fontSize="small" /> };
+    if (total > 3 && cancelRate > 0.4) {
+        return { 
+            label: 'Hủy nhiều', 
+            bg: 'rgba(255, 193, 7, 0.1)', 
+            color: '#FFC107', 
+            icon: <WarningAmberIcon fontSize="small" style={{ color: '#FFC107' }} /> 
+        };
+    }
     
-    return { label: 'Uy tín', color: 'success', icon: <CheckCircleIcon fontSize="small" /> };
+    return { 
+        label: 'Uy tín', 
+        bg: 'rgba(76, 175, 80, 0.1)', 
+        color: '#4CAF50', 
+        icon: <CheckCircleIcon fontSize="small" style={{ color: '#4CAF50' }} /> 
+    };
 };
 
 const CustomerTable = ({ data }) => {
@@ -140,10 +170,16 @@ const CustomerTable = ({ data }) => {
                                         <Chip 
                                             icon={risk.icon}
                                             label={risk.label} 
-                                            color={risk.color} 
                                             size="small" 
                                             variant="outlined"
-                                            sx={{ minWidth: 100 }}
+                                            sx={{ 
+                                                minWidth: 100,
+                                                borderColor: risk.color,
+                                                color: risk.color,
+                                                bgcolor: risk.bg,
+                                                fontWeight: 'bold',
+                                                '& .MuiChip-icon': { color: 'inherit' }
+                                            }}
                                         />
                                     </TableCell>
                                     <TableCell align="center">
