@@ -212,8 +212,11 @@ class CRUDCustomer:
             "total_orders": 0, "completed_orders": 0,
             "cancelled_orders": 0, "bomb_orders": 0, "refunded_orders": 0,
             "last_order_date": None, "province": None, "district": None,
-            "seen_codes": set()
+            "seen_codes": set(),
+            "avg_repurchase_cycle": 0.0 # New metric
         }
+
+        completed_dates = []
 
         for order in orders:
             net_revenue = revenue_map.get(order.order_code, 0.0)
@@ -222,9 +225,36 @@ class CRUDCustomer:
             # Gọi Helper để tính toán tổng quan
             category = self._accumulate_order_data(stats, order, net_revenue, is_refunded)
             
+            # Collect dates for repurchase cycle calculation (Successful orders only)
+            if category == 'completed' and order.order_date:
+                completed_dates.append(order.order_date)
+            
             # Gán thuộc tính bổ sung vào object order để API trả về hiển thị
             setattr(order, "category", category)
             setattr(order, "net_revenue", net_revenue)
+
+        # Calculate Average Repurchase Cycle
+        if len(completed_dates) > 1:
+            # Sort dates ascending (oldest to newest)
+            completed_dates.sort()
+            
+            total_days_diff = 0
+            count_intervals = 0
+            
+            for i in range(1, len(completed_dates)):
+                # Calculate diff in days
+                diff = (completed_dates[i] - completed_dates[i-1]).total_seconds() / 86400
+                # Ignore negative diffs (same day orders count as 0 gap)
+                if diff >= 0:
+                    total_days_diff += diff
+                    count_intervals += 1
+            
+            if count_intervals > 0:
+                stats["avg_repurchase_cycle"] = total_days_diff / count_intervals
+
+        # Calculate AOV (Based on completed orders only)
+        completed_count = stats["completed_orders"]
+        aov = (stats["total_spent"] / completed_count) if completed_count > 0 else 0
 
         return {
             "info": {
@@ -232,12 +262,14 @@ class CRUDCustomer:
                 "province": stats["province"] or "---",
                 "district": stats["district"] or "---",
                 "total_spent": stats["total_spent"],
+                "aov": aov, # New field
                 "total_orders": stats["total_orders"],
                 "completed_orders": stats["completed_orders"],
                 "cancelled_orders": stats["cancelled_orders"],
                 "bomb_orders": stats["bomb_orders"],
                 "refunded_orders": stats["refunded_orders"],
-                "last_order_date": stats["last_order_date"]
+                "last_order_date": stats["last_order_date"],
+                "avg_repurchase_cycle": stats["avg_repurchase_cycle"]
             },
             "orders": orders
         }

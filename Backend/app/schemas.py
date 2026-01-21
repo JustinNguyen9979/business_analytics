@@ -19,9 +19,10 @@ class Product(ProductBase):
 class CustomerBase(BaseModel):
     username: str
     province: Optional[str] = None; district: Optional[str] = None
-    total_spent: float = 0.0; total_orders: int = 0; completed_orders: int = 0
+    total_spent: float = 0.0; aov: float = 0.0; total_orders: int = 0; completed_orders: int = 0
     cancelled_orders: int = 0; bomb_orders: int = 0; refunded_orders: int = 0
     last_order_date: Optional[datetime] = None
+    avg_repurchase_cycle: Optional[float] = 0.0
 class CustomerCreate(CustomerBase): pass
 class Customer(CustomerBase):
     id: int; brand_id: int; model_config = ConfigDict(from_attributes=True)

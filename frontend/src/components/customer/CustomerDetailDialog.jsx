@@ -142,12 +142,47 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
                         {/* 1. INFO GRID - Sức khỏe khách hàng */}
                         <Paper variant="glass" sx={{ p: 3 }}>
                             {/* Hàng 1: Tài chính & Đánh giá tổng quan */}
-                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3 }}>
-                                <StatItem 
-                                    title="Tổng Chi Tiêu Thực Tế" 
-                                    value={info.total_spent} 
-                                    format="currency"
-                                />
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    <Box sx={{ 
+                                        p: 1.5, 
+                                        borderRadius: 2, 
+                                        bgcolor: 'rgba(25, 118, 210, 0.1)', 
+                                        display: 'flex', 
+                                        alignItems: 'center', 
+                                        justifyContent: 'center',
+                                        border: '1px solid rgba(25, 118, 210, 0.2)'
+                                    }}>
+                                        <LocalMallIcon sx={{ color: 'primary.main', fontSize: '2rem' }} />
+                                    </Box>
+                                    <Box>
+                                        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                                            <Typography variant="h6" sx={{ color: 'text.secondary', fontWeight: 'bold', letterSpacing: 1 }}>
+                                                Tổng chi thực tế:
+                                            </Typography>
+                                            <Typography variant="h6" fontWeight="900" color="primary.main" sx={{ whiteSpace: 'nowrap', lineHeight: 1 }}>
+                                                {formatCurrency(info.total_spent)}
+                                            </Typography>
+                                        </Box>
+                                        <Typography 
+                                            variant="caption" 
+                                            sx={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: 0.5, 
+                                                mt: 0.5, 
+                                                color: 'text.secondary',
+                                                fontWeight: 500
+                                            }}
+                                        >
+                                            <MonetizationOnIcon sx={{ fontSize: '0.9rem', color: 'success.main' }} />
+                                            Giá trị TB mỗi đơn (AOV): 
+                                            <Box component="span" sx={{ color: 'text.primary', fontWeight: 'bold', ml: 0.5 }}>
+                                                {formatCurrency(info.aov || 0)} / đơn
+                                            </Box>
+                                        </Typography>
+                                    </Box>
+                                </Box>
                                 
                                 {/* Logic Đánh giá */}
                                 <Box sx={{ textAlign: 'right' }}>
@@ -199,7 +234,7 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
                             {/* Hàng 2: Chi tiết các chỉ số đơn hàng */}
                             <Box sx={{ 
                                 display: 'grid', 
-                                gridTemplateColumns: 'repeat(5, 1fr)', 
+                                gridTemplateColumns: 'repeat(6, 1fr)', 
                                 gap: 2,
                                 pt: 2,
                                 borderTop: '1px solid rgba(255,255,255,0.1)'
@@ -209,6 +244,7 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
                                 <DetailStatBox label="Đã hủy" value={info.cancelled_orders} color="warning.main" />
                                 <DetailStatBox label="Bom hàng" value={info.bomb_orders} color="error.main" />
                                 <DetailStatBox label="Hoàn tiền" value={info.refunded_orders} color="#FF5252" isBold={true} />
+                                <DetailStatBox label="Chu kỳ mua" value={`${Math.round(info.avg_repurchase_cycle || 0)} ngày`} color="text.primary" />
                             </Box>
                             
                             <Box sx={{ mt: 2, pt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
