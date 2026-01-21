@@ -10,7 +10,7 @@ import { Box, Typography, Stack, CircularProgress } from '@mui/material';
 const GeoMapChart = ({ 
     data, 
     valueKey = 'value', 
-    labelKey = 'city', 
+    labelKey = 'province', 
     unitLabel = '', 
     statusFilter = ['all'],
     statusColors = {} 
@@ -265,7 +265,7 @@ const GeoMapChart = ({
                         justifyContent: 'space-between'
                     }}>
                         {topItems.map((province, index) => (
-                            <Box key={province.city || index} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+                            <Box key={province.province || index} sx={{ display: 'flex', justifyContent: 'flex-start' }}>
                                 <Stack direction="row" spacing={1.5} alignItems="center">
                                     <Typography sx={{ fontWeight: 'bold', fontSize: '1.2rem', color: 'text.secondary', width: '24px' }}>
                                         {index + 1}.

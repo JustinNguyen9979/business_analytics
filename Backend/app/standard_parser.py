@@ -243,8 +243,8 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     payment_method_val = str(first_row.get('payment_method', ''))
                     cancel_reason_val = str(first_row.get('cancel_reason', '')) # Đọc lý do hủy
                     
-                    # [UPDATED] Lưu thông tin địa chỉ vào details
-                    province_val = str(first_row.get('province', ''))
+                    # [UPDATED] Lưu thông tin địa chỉ vào details (Đã chuẩn hóa)
+                    province_val = get_new_province_name(str(first_row.get('province', '')))
                     district_val = str(first_row.get('district', ''))
 
                     # Tạo dict chi tiết bổ sung (Giữ lại các thông tin chung ở đây)

@@ -488,7 +488,7 @@ def get_aggregated_location_distribution(
         if not daily_records:
             return []
         
-        city_stats = {}
+        province_stats = {}
 
         for record in daily_records:
             loc_dist = record[0]
@@ -496,8 +496,9 @@ def get_aggregated_location_distribution(
                 for item in loc_dist:
                     if not isinstance(item, dict): continue
 
-                    city = item.get('city')
-                    if not city: continue
+                    # Hỗ trợ cả key cũ 'city' và key mới 'province'
+                    province = item.get('province') or item.get('city')
+                    if not province: continue
                     
                     # --- LOGIC TÍNH TOÁN HYBRID ---
                     orders_to_add = 0
@@ -517,9 +518,9 @@ def get_aggregated_location_distribution(
                         revenue_to_add = item.get('revenue', 0)
 
                     # --- CỘNG DỒN ---
-                    if city not in city_stats:
-                        city_stats[city] = {
-                            'city': city,
+                    if province not in province_stats:
+                        province_stats[province] = {
+                            'province': province,
                             'orders': 0,
                             'revenue': 0,
                             # Thêm breakdown chi tiết
@@ -532,33 +533,33 @@ def get_aggregated_location_distribution(
                         }
                     
                     # 1. Tính tổng dựa trên Filter (Logic cũ - để sort và hiển thị tổng)
-                    city_stats[city]["orders"] += orders_to_add
-                    city_stats[city]["revenue"] += revenue_to_add
+                    province_stats[province]["orders"] += orders_to_add
+                    province_stats[province]["revenue"] += revenue_to_add
 
                     # 2. Tính chi tiết breakdown (Logic mới - cho Multi-Series Map)
                     # Chỉ tính nếu data có metrics chi tiết
                     if 'metrics' in item and isinstance(item['metrics'], dict):
-                        city_stats[city]['completed'] += item['metrics'].get('completed', {}).get('orders', 0)
-                        city_stats[city]['cancelled'] += item['metrics'].get('cancelled', {}).get('orders', 0)
-                        city_stats[city]['bomb'] += item['metrics'].get('bomb', {}).get('orders', 0)
-                        city_stats[city]['refunded'] += item['metrics'].get('refunded', {}).get('orders', 0)
+                        province_stats[province]['completed'] += item['metrics'].get('completed', {}).get('orders', 0)
+                        province_stats[province]['cancelled'] += item['metrics'].get('cancelled', {}).get('orders', 0)
+                        province_stats[province]['bomb'] += item['metrics'].get('bomb', {}).get('orders', 0)
+                        province_stats[province]['refunded'] += item['metrics'].get('refunded', {}).get('orders', 0)
                     else:
                         # Fallback cho data cũ (cố gắng map nếu có thể, hoặc chấp nhận thiếu breakdown)
                         # Ở đây tạm thời không làm gì vì data cũ không phân loại sâu được
                         pass
                     
                     # Lấy tọa độ chuẩn từ file config (Fix lỗi dữ liệu cũ bị ngược)
-                    coords = PROVINCE_CENTROIDS.get(city)
+                    coords = PROVINCE_CENTROIDS.get(province)
                     if coords:
                         # PROVINCE_CENTROIDS lưu [Longitude, Latitude]
-                        city_stats[city]["latitude"] = coords[1]
-                        city_stats[city]["longitude"] = coords[0]
+                        province_stats[province]["latitude"] = coords[1]
+                        province_stats[province]["longitude"] = coords[0]
                     # Fallback: Nếu không tìm thấy trong config thì mới lấy từ DB
-                    elif (city_stats[city]["latitude"] is None) and (item.get('latitude') is not None):
-                        city_stats[city]["latitude"] = item.get('latitude')
-                        city_stats[city]["longitude"] = item.get('longitude')
+                    elif (province_stats[province]["latitude"] is None) and (item.get('latitude') is not None):
+                        province_stats[province]["latitude"] = item.get('latitude')
+                        province_stats[province]["longitude"] = item.get('longitude')
                             
-        results = list(city_stats.values())
+        results = list(province_stats.values())
         return sorted(results, key=lambda item: item['orders'], reverse=True)
     except Exception as e:
         print(f"ERROR aggregation location: {e}")

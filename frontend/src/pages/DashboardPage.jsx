@@ -264,7 +264,7 @@ function DashboardPage() {
                                 <GeoMapChart 
                                     data={map.data} 
                                     valueKey="orders" 
-                                    labelKey="city" 
+                                    labelKey="province" 
                                     unitLabel="đơn"
                                     statusColors={statusColors}
                                     statusFilter={['all']}

@@ -183,10 +183,17 @@ const CustomerTable = ({ data }) => {
                                         />
                                     </TableCell>
                                     <TableCell align="center">
-                                        <Tooltip title="Xem chi tiết">
-                                            <IconButton size="small" onClick={() => setSelectedUser(row.username)}>
-                                                <VisibilityIcon fontSize="small" />
-                                            </IconButton>
+                                        <Tooltip title={row.username ? "Xem chi tiết" : "Không khả dụng với khách vãng lai"}>
+                                            <span>
+                                                <IconButton 
+                                                    size="small" 
+                                                    onClick={() => row.username && setSelectedUser(row.username)}
+                                                    disabled={!row.username}
+                                                    sx={{ opacity: row.username ? 1 : 0.3 }}
+                                                >
+                                                    <VisibilityIcon fontSize="small" />
+                                                </IconButton>
+                                            </span>
                                         </Tooltip>
                                     </TableCell>
                                 </TableRow>

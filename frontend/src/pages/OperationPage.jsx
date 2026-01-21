@@ -440,7 +440,7 @@ const GeoMapBox = React.memo(({ chart, sourceOptions }) => {
                 <GeoMapChart 
                     data={chart.data}
                     valueKey="orders"
-                    labelKey="city"
+                    labelKey="province"
                     unitLabel=" đơn"
                     statusFilter={chart.statusFilter}
                     statusColors={colors}

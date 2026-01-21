@@ -7,6 +7,7 @@ from sqlalchemy import func, and_
 
 import models
 from province_centroids import PROVINCE_CENTROIDS
+from vietnam_address_mapping import get_new_province_name
 
 # Constants cho chiến lược Query
 STRATEGY_ALL = "ALL"          # Query bảng DailyStat
@@ -209,17 +210,17 @@ def merge_top_products_list(lists_of_products: List[List[Dict]]) -> List[Dict]:
     return results[:10]
 
 def merge_location_lists(lists_of_locations: List[List[Dict]]) -> List[Dict]:
-    city_map = {}
+    province_map = {}
     
     for loc_list in lists_of_locations:
         if not loc_list or not isinstance(loc_list, list): continue
         for item in loc_list:
-            city = item.get('city')
-            if not city: continue
+            province = item.get('province')
+            if not province: continue
             
-            if city not in city_map:
-                city_map[city] = {
-                    'city': city,
+            if province not in province_map:
+                province_map[province] = {
+                    'province': province,
                     'latitude': item.get('latitude'),
                     'longitude': item.get('longitude'),
                     'metrics': defaultdict(lambda: {"orders": 0, "revenue": 0}),
@@ -231,19 +232,19 @@ def merge_location_lists(lists_of_locations: List[List[Dict]]) -> List[Dict]:
             item_metrics = item.get('metrics')
             if item_metrics and isinstance(item_metrics, dict):
                 for status, val in item_metrics.items():
-                    city_map[city]['metrics'][status]['orders'] += val.get('orders', 0)
-                    city_map[city]['metrics'][status]['revenue'] += val.get('revenue', 0)
+                    province_map[province]['metrics'][status]['orders'] += val.get('orders', 0)
+                    province_map[province]['metrics'][status]['revenue'] += val.get('revenue', 0)
             
             # 2. Merge Legacy Fields (Cho dữ liệu cũ chưa có metrics)
-            city_map[city]['orders'] += (item.get('orders') or 0)
-            city_map[city]['revenue'] += (item.get('revenue') or 0)
+            province_map[province]['orders'] += (item.get('orders') or 0)
+            province_map[province]['revenue'] += (item.get('revenue') or 0)
             
-            if city_map[city]['latitude'] is None and item.get('latitude'):
-                 city_map[city]['latitude'] = item.get('latitude')
-                 city_map[city]['longitude'] = item.get('longitude')
+            if province_map[province]['latitude'] is None and item.get('latitude'):
+                 province_map[province]['latitude'] = item.get('latitude')
+                 province_map[province]['longitude'] = item.get('longitude')
 
     results = []
-    for city, data in city_map.items():
+    for province, data in province_map.items():
         # Clean up defaultdict
         metrics_clean = {k: dict(v) for k, v in data["metrics"].items()}
         data["metrics"] = metrics_clean
@@ -718,17 +719,62 @@ def _calculate_location_distribution(
 ) -> List[Dict]:
     """
     [REFACTORED] Tính phân bổ địa lý.
-    Hiện tại bảng Customer đã bị xóa. Dữ liệu địa chỉ cần được lấy từ Order.details.
-    Tuy nhiên, parser hiện tại CHƯA lưu địa chỉ vào Order.details.
-    TODO: Cập nhật Parser để lưu 'city'/'province' vào Order.details.
+    Lấy dữ liệu địa chỉ từ Order.details, chuẩn hóa và tổng hợp số liệu.
     """
-    # Tạm thời trả về rỗng để tránh lỗi query bảng Customer không tồn tại
-    return []
+    if not orders:
+        return []
 
-    # --- LOGIC CŨ (Đã vô hiệu hóa) ---
-    # if not db_session or not orders: return []
-    # city_stats = defaultdict(lambda: { ... })
-    # ...
+    province_stats = {}
+    revenue_map = revenue_map or {}
+    refund_status_map = refund_status_map or {}
+
+    for order in orders:
+        # 1. Lấy province từ details
+        details = order.details or {}
+        raw_province = details.get('province')
+        if not raw_province:
+            continue
+
+        # 2. Chuẩn hóa tên tỉnh thành theo mapping 34 tỉnh
+        normalized_province = get_new_province_name(raw_province)
+        if not normalized_province:
+            continue
+
+        # 3. Phân loại trạng thái đơn hàng (completed, cancelled, bomb, refunded...)
+        status_cat = _classify_order_status(order, refund_status_map.get(order.order_code, False))
+        
+        # 4. Xác định doanh thu thực tế (Ưu tiên net_revenue từ map, fallback gmv)
+        revenue = revenue_map.get(order.order_code, order.gmv or 0)
+
+        # 5. Khởi tạo dữ liệu cho tỉnh nếu chưa có
+        if normalized_province not in province_stats:
+            coords = PROVINCE_CENTROIDS.get(normalized_province, [None, None])
+            province_stats[normalized_province] = {
+                "province": normalized_province,
+                "latitude": coords[1], # Vị trí 1 trong centroids là Latitude
+                "longitude": coords[0], # Vị trí 0 trong centroids là Longitude
+                "orders": 0,
+                "revenue": 0,
+                "metrics": defaultdict(lambda: {"orders": 0, "revenue": 0})
+            }
+
+        # 6. Cộng dồn số liệu tổng quát và chi tiết theo status
+        stats = province_stats[normalized_province]
+        stats["orders"] += 1
+        stats["revenue"] += revenue
+        stats["metrics"][status_cat]["orders"] += 1
+        stats["metrics"][status_cat]["revenue"] += revenue
+
+    # 7. Chuyển đổi sang danh sách và định dạng lại kết quả
+    results = []
+    for prov, data in province_stats.items():
+        # Làm sạch defaultdict sang dict thường để lưu JSONB
+        data["metrics"] = {k: dict(v) for k, v in data["metrics"].items()}
+        results.append(data)
+
+    # Sắp xếp theo thứ tự tỉnh có nhiều đơn nhất
+    results.sort(key=lambda x: x['orders'], reverse=True)
+    return results
 
 def _calculate_customer_retention(orders: List[models.Order], current_date: date, db_session: Session) -> Dict:
     stats = {"new_customers": 0, "returning_customers": 0, "new_customer_revenue": 0.0, "returning_customer_revenue": 0.0}
