@@ -233,24 +233,24 @@ class CRUDCustomer:
             setattr(order, "category", category)
             setattr(order, "net_revenue", net_revenue)
 
-        # Calculate Average Repurchase Cycle
+        # Calculate Average Repurchase Cycle (Logic Updated: Deduplicate same-day orders)
+        # Chỉ tính chu kỳ dựa trên "Ngày mua hàng" (Unique Dates), bỏ qua việc mua nhiều đơn trong cùng 1 ngày.
         if len(completed_dates) > 1:
-            # Sort dates ascending (oldest to newest)
-            completed_dates.sort()
+            # 1. Chuyển đổi sang date object (bỏ time) và lọc trùng
+            unique_dates = sorted(list(set([d.date() if hasattr(d, 'date') else d for d in completed_dates])))
             
-            total_days_diff = 0
-            count_intervals = 0
-            
-            for i in range(1, len(completed_dates)):
-                # Calculate diff in days
-                diff = (completed_dates[i] - completed_dates[i-1]).total_seconds() / 86400
-                # Ignore negative diffs (same day orders count as 0 gap)
-                if diff >= 0:
+            if len(unique_dates) > 1:
+                total_days_diff = 0
+                count_intervals = 0
+                
+                for i in range(1, len(unique_dates)):
+                    # Calculate diff in days
+                    diff = (unique_dates[i] - unique_dates[i-1]).days
                     total_days_diff += diff
                     count_intervals += 1
-            
-            if count_intervals > 0:
-                stats["avg_repurchase_cycle"] = total_days_diff / count_intervals
+                
+                if count_intervals > 0:
+                    stats["avg_repurchase_cycle"] = total_days_diff / count_intervals
 
         # Calculate AOV (Based on completed orders only)
         completed_count = stats["completed_orders"]
