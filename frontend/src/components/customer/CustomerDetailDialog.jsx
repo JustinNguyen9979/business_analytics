@@ -2,7 +2,8 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { 
     Dialog, DialogTitle, DialogContent, IconButton, Typography, Box, 
     Paper, Table, TableBody, TableCell, TableContainer, 
-    TableHead, TableRow, Avatar, CircularProgress, Stack, useTheme 
+    TableHead, TableRow, Avatar, CircularProgress, Stack, useTheme,
+    Tooltip
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import PersonIcon from '@mui/icons-material/Person';
@@ -110,7 +111,7 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
     const orders = data?.orders || [];
 
     return (
-        <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+        <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
             <DialogTitle sx={{ 
                 display: 'flex', 
                 alignItems: 'center', 
@@ -209,6 +210,7 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
                                             <TableCell>Ngày Đặt</TableCell>
                                             <TableCell>Trạng Thái</TableCell>
                                             <TableCell align="right">Giá Trị Đơn</TableCell>
+                                            <TableCell>Lý Do</TableCell>
                                             <TableCell>Nguồn</TableCell>
                                         </TableRow>
                                     </TableHead>
@@ -223,6 +225,13 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
                                                 </TableCell>
                                                 <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.light' }}>
                                                     {formatCurrency(order.net_revenue || 0)}
+                                                </TableCell>
+                                                <TableCell sx={{ maxWidth: 150 }}>
+                                                    <Tooltip title={order.details?.cancel_reason || '---'} arrow placement="top">
+                                                        <Typography noWrap variant="body2" sx={{ fontSize: 'inherit', cursor: 'help' }}>
+                                                            {order.details?.cancel_reason || '---'}
+                                                        </Typography>
+                                                    </Tooltip>
                                                 </TableCell>
                                                 <TableCell sx={{ textTransform: 'capitalize', color: 'text.secondary' }}>{order.source}</TableCell>
                                             </TableRow>

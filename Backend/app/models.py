@@ -100,10 +100,10 @@ class Order(Base):
     id = Column(Integer, primary_key=True, index=True)
 
     order_code = Column(String, index=True)
-    order_date = Column(DateTime, nullable=True) 
+    order_date = Column(DateTime, nullable=True, index=True) 
     
     shipped_time = Column(DateTime, nullable=True)
-    tracking_id = Column(String, nullable=True)    
+    tracking_id = Column(String, nullable=True, index=True)    
     delivered_date = Column(DateTime, nullable=True) 
     
     status = Column(String, nullable=True, index=True)
