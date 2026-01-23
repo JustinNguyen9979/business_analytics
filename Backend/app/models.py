@@ -11,7 +11,6 @@ class FinancialMetricsMixin:
     """Các chỉ số tài chính cơ bản"""
     gmv = Column(Float, default=0.0)             # Tổng GMV
     net_revenue = Column(Float, default=0.0)     # Doanh thu ròng (Thực nhận từ Revenue)
-    provisional_revenue = Column(Float, default=0.0) # Doanh thu tạm tính (Từ Order selling_price)
     profit = Column(Float, default=0.0)          # Lợi nhuận
     total_cost = Column(Float, default=0.0)      # Tổng chi phí
     cogs = Column(Float, default=0.0)            # Giá vốn hàng bán
@@ -111,8 +110,8 @@ class Order(Base):
     total_quantity = Column(Integer, default=0)
     cogs = Column(Float, default=0.0) 
     
-    gmv = Column(Float, default=0.0)            
-    selling_price = Column(Float, default=0.0)  
+    original_price = Column(Float, default=0.0)            
+    sku_price = Column(Float, default=0.0)  
     subsidy_amount = Column(Float, default=0.0) 
 
     source = Column(String, nullable=False, index=True) 

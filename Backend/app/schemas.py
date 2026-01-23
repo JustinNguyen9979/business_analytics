@@ -30,7 +30,8 @@ class Customer(CustomerBase):
 class OrderBase(BaseModel):
     order_code: str; order_date: Optional[datetime] = None; status: Optional[str] = None; username: Optional[str] = None
     total_quantity: int = 0; cogs: float = 0.0; details: Optional[Dict[str, Any]] = None
-    gmv: float = 0.0; selling_price: float = 0.0; net_revenue: float = 0.0; category: Optional[str] = None; tracking_id: Optional[str] = None # Added tracking_id
+    original_price: float = 0.0; sku_price: float = 0.0; net_revenue: float = 0.0; total_fees: float = 0.0; category: Optional[str] = None; tracking_id: Optional[str] = None
+    gmv: float = 0.0 # Giá trị được tính tổng từ bảng Revenues
 class Order(OrderBase):
     id: int; brand_id: int; source: str; model_config = ConfigDict(from_attributes=True)
 
@@ -80,7 +81,7 @@ class FinancialEventItem(BaseModel):
 
 # --- METRIC MIXINS (Building Blocks) ---
 class FinanceMetricsMixin(BaseModel):
-    net_revenue: float = 0; provisional_revenue: float = 0; gmv: float = 0
+    net_revenue: float = 0; gmv: float = 0
     total_cost: float = 0; cogs: float = 0; execution_cost: float = 0; subsidy_amount: float = 0
     profit: float = 0; roi: float = 0; profit_margin: float = 0; take_rate: float = 0
 

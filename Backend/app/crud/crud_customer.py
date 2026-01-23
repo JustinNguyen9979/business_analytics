@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from datetime import date
 from collections import defaultdict
-from models import Order, Revenue
+from models import Order, Revenue, Product
 from kpi_utils import _classify_order_status
 from vietnam_address_mapping import get_new_province_name
 
@@ -27,18 +27,30 @@ class CRUDCustomer:
         
         return None, None
 
+    def _get_product_map(self, db: Session, brand_id: int):
+        """Helper: Lấy Map SKU -> Product Name chuẩn từ bảng Products"""
+        products = db.query(Product.sku, Product.name).filter(
+            Product.brand_id == brand_id,
+            Product.name.isnot(None)
+        ).all()
+        return {p.sku: p.name for p in products}
+
     def _get_revenue_map(self, db: Session, brand_id: int, order_codes: list):
         """
-        Helper: Lấy Net Revenue và Refund Status từ bảng Revenue.
+        Helper: Lấy Net Revenue, Total Fees, GMV và Refund Status từ bảng Revenue.
         Trả về:
             - revenue_map: Dict[order_code, net_revenue]
+            - fees_map: Dict[order_code, total_fees]
+            - gmv_map: Dict[order_code, gmv]
             - refunded_codes: Set[order_code] (Các đơn có refund thực tế)
         """
         revenue_map = defaultdict(float) # order_code -> total_net_revenue
+        fees_map = defaultdict(float) # order_code -> total_fees
+        gmv_map = defaultdict(float) # order_code -> gmv
         refunded_codes = set()
         
         if not order_codes:
-            return revenue_map, refunded_codes
+            return revenue_map, fees_map, gmv_map, refunded_codes
 
         chunk_size = 1000
         for i in range(0, len(order_codes), chunk_size):
@@ -46,19 +58,25 @@ class CRUDCustomer:
             rev_records = db.query(
                 Revenue.order_code, 
                 Revenue.net_revenue,
+                Revenue.total_fees,
+                Revenue.gmv,
                 Revenue.refund
             ).filter(
                 Revenue.brand_id == brand_id, 
                 Revenue.order_code.in_(chunk)
             ).all()
             
-            for code, net_rev, refund in rev_records:
+            for code, net_rev, fees, gmv, refund in rev_records:
                 if net_rev:
                     revenue_map[code] += net_rev
+                if fees:
+                    fees_map[code] += fees
+                if gmv:
+                    gmv_map[code] += gmv
                 if (refund or 0) < -0.1:
                     refunded_codes.add(code)
                     
-        return revenue_map, refunded_codes
+        return revenue_map, fees_map, gmv_map, refunded_codes
 
     def _accumulate_order_data(self, stats: dict, order: Order, net_revenue: float, is_refunded: bool):
         """
@@ -136,7 +154,7 @@ class CRUDCustomer:
         
         # 2. Get Financial Data
         order_codes = [o.order_code for o in orders if o.order_code]
-        revenue_map, refunded_codes = self._get_revenue_map(db, brand_id, order_codes)
+        revenue_map, fees_map, gmv_map, refunded_codes = self._get_revenue_map(db, brand_id, order_codes)
 
         # 3. Process Data
         customer_stats = defaultdict(lambda: {
@@ -204,9 +222,12 @@ class CRUDCustomer:
 
         # 2. Get Financial Data
         order_codes = [o.order_code for o in orders if o.order_code]
-        revenue_map, refunded_codes = self._get_revenue_map(db, brand_id, order_codes)
+        revenue_map, fees_map, gmv_map, refunded_codes = self._get_revenue_map(db, brand_id, order_codes)
+        
+        # 3. Get Product Map (SKU -> Name)
+        product_map = self._get_product_map(db, brand_id)
 
-        # 3. Aggregation (Sử dụng chung Helper với hàm trên)
+        # 4. Aggregation (Sử dụng chung Helper với hàm trên)
         stats = {
             "total_spent": 0.0,
             "total_orders": 0, "completed_orders": 0,
@@ -220,7 +241,19 @@ class CRUDCustomer:
 
         for order in orders:
             net_revenue = revenue_map.get(order.order_code, 0.0)
+            total_fees = fees_map.get(order.order_code, 0.0)
+            revenue_gmv = gmv_map.get(order.order_code, 0.0)
             is_refunded = order.order_code in refunded_codes
+            
+            # --- LOGIC MỚI: Cập nhật tên sản phẩm chuẩn từ SKU ---
+            if order.details and isinstance(order.details, dict):
+                items = order.details.get('items', [])
+                for item in items:
+                    sku = item.get('sku')
+                    # Nếu tìm thấy SKU trong bảng products, ghi đè tên chuẩn vào
+                    if sku and sku in product_map:
+                        item['product_name'] = product_map[sku]
+            # -----------------------------------------------------
             
             # Gọi Helper để tính toán tổng quan
             category = self._accumulate_order_data(stats, order, net_revenue, is_refunded)
@@ -232,6 +265,11 @@ class CRUDCustomer:
             # Gán thuộc tính bổ sung vào object order để API trả về hiển thị
             setattr(order, "category", category)
             setattr(order, "net_revenue", net_revenue)
+            setattr(order, "total_fees", total_fees)
+            
+            # Ưu tiên lấy GMV từ bảng Revenue (nếu có)
+            if revenue_gmv > 0:
+                setattr(order, "gmv", revenue_gmv) 
 
         # Calculate Average Repurchase Cycle (Logic Updated: Deduplicate same-day orders)
         # Chỉ tính chu kỳ dựa trên "Ngày mua hàng" (Unique Dates), bỏ qua việc mua nhiều đơn trong cùng 1 ngày.

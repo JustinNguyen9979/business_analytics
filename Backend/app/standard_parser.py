@@ -202,7 +202,15 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     first_row = group.iloc[0]
                     username = first_row.get('username')
 
-                    order_cogs, total_quantity = 0, 0
+                    # Khởi tạo các biến cộng dồn
+                    order_cogs = 0.0
+                    total_quantity = 0
+                    
+                    # Các biến tài chính cần cộng dồn (Aggregation)
+                    order_original_price = 0.0
+                    order_sku_price = 0.0
+                    order_subsidy_amount = 0.0
+
                     items_list = [] # Danh sách item đã chuẩn hóa
 
                     for _, row in group.iterrows():
@@ -214,23 +222,33 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                         order_cogs += quantity * cost_price
                         total_quantity += quantity
                         
-                        # Lấy giá bán (SKU Price) từ file import
-                        raw_price = row.get('sku_price')
-                        price = to_float(raw_price)
+                        # Lấy và chuẩn hóa các giá trị tài chính của dòng hiện tại
+                        item_original_price = to_float(row.get('original_price'))
+                        item_sku_price = to_float(row.get('sku_price'))
+                        item_subsidy_amount = to_float(row.get('subsidy_amount'))
 
-                        # Tạo item dict chuẩn hóa
+                        # Cộng dồn vào tổng của đơn hàng
+                        order_original_price += item_original_price
+                        order_sku_price += item_sku_price
+                        order_subsidy_amount += item_subsidy_amount
+
+                        # Tạo item dict chuẩn hóa để lưu vào details
                         item_dict = row.to_dict()
-                        item_dict['price'] = price # Lưu giá bán chuẩn hóa (float)
+                        
+                        # Cập nhật các giá trị chuẩn hóa vào item
                         item_dict['sku'] = sku
                         item_dict['quantity'] = quantity
+                        item_dict['original_price'] = item_original_price
+                        item_dict['sku_price'] = item_sku_price
+                        item_dict['subsidy_amount'] = item_subsidy_amount
                         
                         # Dọn dẹp các trường dữ liệu cấp Order bị dư thừa trong Item
-                        # Để tránh rác dữ liệu và định dạng ngày tháng lộn xộn
                         redundant_keys = [
                             'order_date', 'delivered_date', 'payment_method', 
                             'cancel_reason', 'order_status', 'province', 
                             'district', 'order_id', 'username', 
-                            'sku_price', 'shipping_provider_name'
+                            'shipping_provider_name',
+                            # Xóa các cột gốc chưa chuẩn hóa nếu cần, nhưng key ở trên đã ghi đè rồi
                         ]
                         for key in redundant_keys:
                             item_dict.pop(key, None)
@@ -241,31 +259,31 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     tracking_id_val = str(first_row.get('tracking_id')) if not pd.isna(first_row.get('tracking_id')) else None
                     delivered_date_val = parse_datetime(first_row.get('delivered_date'))
                     payment_method_val = str(first_row.get('payment_method', ''))
-                    cancel_reason_val = str(first_row.get('cancel_reason', '')) # Đọc lý do hủy
+                    cancel_reason_val = str(first_row.get('cancel_reason', '')) 
                     
-                    # [UPDATED] Lưu thông tin địa chỉ vào details (Đã chuẩn hóa)
                     province_val = get_new_province_name(str(first_row.get('province', '')))
                     district_val = str(first_row.get('district', ''))
 
-                    # Tạo dict chi tiết bổ sung (Giữ lại các thông tin chung ở đây)
+                    # Tạo dict chi tiết bổ sung
                     extra_details = {
                         "items": items_list, 
                         "payment_method": payment_method_val,
                         "cancel_reason": cancel_reason_val, 
                         "shipping_provider_name": str(first_row.get('shipping_provider_name', '')),
                         "order_status": str(first_row.get('order_status', '')),
-                        "province": province_val, # Added province
-                        "district": district_val, # Added district
-                        # delivered_date cấp root JSON vẫn giữ cho đồng bộ nếu cần, nhưng đã có cột riêng
+                        "province": province_val,
+                        "district": district_val,
                         "delivered_date": delivered_date_val.isoformat() if delivered_date_val else None
                     }
-
-                    orders_to_insert.append({ 
-                        "order_code": order_code, 
+                    
+                    orders_to_insert.append({
+                        "order_code": order_code,
                         "tracking_id": tracking_id_val,
-                        "gmv": to_float(first_row.get('gmv')),
-                        "selling_price": to_float(first_row.get('selling_price')),
-                        "subsidy_amount": to_float(first_row.get('subsidy_amount')),
+                        # Sử dụng các giá trị đã CỘNG DỒN (Aggregated)
+                        "original_price": order_original_price,
+                        "sku_price": order_sku_price,
+                        "subsidy_amount": order_subsidy_amount,
+                        
                         "order_date": parse_datetime(first_row.get('order_date')),
                         "shipped_time": shipped_time_val, 
                         "delivered_date": delivered_date_val,

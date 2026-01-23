@@ -62,13 +62,13 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
                 {loading ? (
                     <Box sx={{ display: 'flex', justifyContent: 'center', p: 10 }}><CircularProgress /></Box>
                 ) : data ? (
-                    <Stack spacing={3}>
+                    <Stack spacing={2}>
                         {/* 1. INFO CARD */}
                         <CustomerInfoCard info={info} />
 
                         {/* 2. ORDER HISTORY */}
                         <Box>
-                            <SectionTitle>LỊCH SỬ GIAO DỊCH</SectionTitle>
+                            <SectionTitle sx={{ mt: 0 }}>LỊCH SỬ GIAO DỊCH</SectionTitle>
                             <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 500, bgcolor: 'background.paper' }}>
                                 <Table stickyHeader size="small">
                                     <TableHead>

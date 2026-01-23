@@ -744,7 +744,7 @@ def _calculate_location_distribution(
         status_cat = _classify_order_status(order, refund_status_map.get(order.order_code, False))
         
         # 4. Xác định doanh thu thực tế (Ưu tiên net_revenue từ map, fallback gmv)
-        revenue = revenue_map.get(order.order_code, order.gmv or 0)
+        revenue = revenue_map.get(order.order_code, 0)
 
         # 5. Khởi tạo dữ liệu cho tỉnh nếu chưa có
         if normalized_province not in province_stats:
@@ -776,11 +776,15 @@ def _calculate_location_distribution(
     results.sort(key=lambda x: x['orders'], reverse=True)
     return results
 
-def _calculate_customer_retention(orders: List[models.Order], current_date: date, db_session: Session) -> Dict:
+def _calculate_customer_retention(orders: List[models.Order], current_date: date, db_session: Session, gmv_map: Dict[str, float] = None) -> Dict:
     stats = {"new_customers": 0, "returning_customers": 0, "new_customer_revenue": 0.0, "returning_customer_revenue": 0.0}
     if not orders or not db_session: return stats
     usernames_today = {o.username for o in orders if o.username}
     if not usernames_today: return stats
+    
+    # Use provided map or empty dict
+    gmv_lookup = gmv_map or {}
+
     try:
         existing_customers_query = db_session.query(models.Order.username).filter(
             models.Order.username.in_(usernames_today),
@@ -790,7 +794,10 @@ def _calculate_customer_retention(orders: List[models.Order], current_date: date
         counted_new_users = set(); counted_returning_users = set()
         for order in orders:
             if not order.username: continue
-            gmv = order.gmv or 0
+            
+            # Use GMV from map, fallback to 0 (order.gmv is deprecated)
+            gmv = gmv_lookup.get(order.order_code, 0)
+            
             if order.username in existing_usernames:
                 stats["returning_customer_revenue"] += gmv
                 if order.username not in counted_returning_users:
@@ -964,7 +971,7 @@ def calculate_daily_kpis(
         # --- BƯỚC 2: SINGLE PASS CALCULATION (GOM NHÓM TÍNH TOÁN) ---
         # Khởi tạo biến cộng dồn
         sums = {
-            "provisional_revenue": 0, "subsidy_amount": 0, "total_quantity_sold": 0,
+            "subsidy_amount": 0, "total_quantity_sold": 0,
             "cogs": 0, "proc_time": 0, "proc_count": 0, "ship_time": 0, "ship_count": 0
         }
         counters = {"completed": 0, "cancelled": 0, "bomb": 0, "refunded": 0}
@@ -986,7 +993,6 @@ def calculate_daily_kpis(
         # VÒNG LẶP CHÍNH (Duyệt Orders 1 lần duy nhất)
         for o in target_orders:
             # 2.1. Cộng dồn doanh thu/số lượng cơ bản
-            sums["provisional_revenue"] += (o.selling_price or 0)
             sums["subsidy_amount"] += (o.subsidy_amount or 0)
             sums["total_quantity_sold"] += (o.total_quantity or 0)
             
@@ -1021,7 +1027,6 @@ def calculate_daily_kpis(
         # --- BƯỚC 3: TỔNG HỢP KẾT QUẢ ---
         data = {
             # Từ vòng lặp Orders
-            "provisional_revenue": sums["provisional_revenue"],
             "subsidy_amount": sums["subsidy_amount"],
             "total_quantity_sold": sums["total_quantity_sold"],
             "unique_skus_sold": len(unique_skus),
@@ -1069,7 +1074,14 @@ def calculate_daily_kpis(
         data["cancel_reason_breakdown"] = _calculate_cancel_reason_breakdown(target_orders)
         
         # Prepare maps for location calculation
-        rev_map = {r.order_code: r.net_revenue for r in valid_revenues}
+        rev_map = defaultdict(float)
+        gmv_map = defaultdict(float)
+        
+        for r in valid_revenues:
+            if r.order_code:
+                rev_map[r.order_code] += r.net_revenue
+                gmv_map[r.order_code] += (r.gmv or 0)
+        
         data["location_distribution"] = _calculate_location_distribution(
             target_orders, 
             revenue_map=rev_map,
@@ -1090,7 +1102,7 @@ def calculate_daily_kpis(
 
         # 9. Khách hàng mới/cũ
         if db_session:
-            data.update(_calculate_customer_retention(target_orders, date_to_calculate, db_session))
+            data.update(_calculate_customer_retention(target_orders, date_to_calculate, db_session, gmv_map=gmv_map))
             data["total_customers"] = len({o.username for o in target_orders if o.username})
             
             # --- TÍNH TOÁN CHU KỲ MUA LẠI TRUNG BÌNH ---

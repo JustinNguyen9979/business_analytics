@@ -71,8 +71,9 @@ const OrderRow = ({ order }) => {
                                                     <TableRow sx={{ bgcolor: 'action.hover' }}>
                                                         <TableCell sx={{ fontWeight: 'bold' }}>SKU</TableCell>
                                                         <TableCell sx={{ fontWeight: 'bold' }}>Tên Sản Phẩm</TableCell>
-                                                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Số lượng</TableCell>
-                                                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Đơn giá</TableCell>
+                                                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Giá Gốc</TableCell>
+                                                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Số Lượng</TableCell>
+                                                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Trợ Giá</TableCell>
                                                         <TableCell align="right" sx={{ fontWeight: 'bold' }}>Thành tiền</TableCell>
                                                     </TableRow>
                                                 </TableHead>
@@ -83,10 +84,11 @@ const OrderRow = ({ order }) => {
                                                             <TableCell>
                                                                 <Typography variant="body2">{item.product_name || item.name || '---'}</Typography>
                                                             </TableCell>
+                                                            <TableCell align="right">{formatCurrency(item.original_price || 0)}</TableCell>
                                                             <TableCell align="right">{item.quantity}</TableCell>
-                                                            <TableCell align="right">{formatCurrency(item.price)}</TableCell>
+                                                            <TableCell align="right">{formatCurrency(item.subsidy_amount || 0)}</TableCell>
                                                             <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                                                                {formatCurrency(item.quantity * item.price)}
+                                                                {formatCurrency((item.original_price * item.quantity) - (item.subsidy_amount || 0))}
                                                             </TableCell>
                                                         </TableRow>
                                                     ))}
@@ -114,7 +116,7 @@ const OrderRow = ({ order }) => {
                                                 </Box>
                                                 <Divider />
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <Typography variant="h7" color="text.secondary">Ngày giao thực tế</Typography>
+                                                    <Typography variant="h7" color="text.secondary">Ngày nhận hàng</Typography>
                                                     <Typography variant="body2" fontWeight="bold">
                                                         {details.delivered_date ? formatDate(details.delivered_date) : 'Chưa cập nhật'}
                                                     </Typography>
@@ -135,7 +137,7 @@ const OrderRow = ({ order }) => {
                                                         size="small" 
                                                         color="primary" 
                                                         variant="outlined"
-                                                        sx={{ height: 20, fontSize: '0.7rem' }}
+                                                        sx={{ height: 25, fontSize: '1rem' }}
                                                     />
                                                 </Box>
                                             </Stack>
@@ -156,14 +158,14 @@ const OrderRow = ({ order }) => {
                                                 </Box>
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <Typography variant="h7" color="text.secondary">Tổng Chi Phí</Typography>
-                                                    <Typography variant="body2" color="error.main" fontWeight="medium">+{formatCurrency(order.subsidy_amount)}</Typography>
+                                                    <Typography variant="body2" color="error.main" fontWeight="medium">{formatCurrency(order.total_fees || 0)}</Typography>
                                                 </Box>
                                                 <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
                                                     <Divider sx={{ width: '100%' }} />
                                                 </Box>
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', pt: 1 }}>
                                                     <Box>
-                                                        <Typography variant="subtitle2" color="primary.main" fontWeight="800">DOANH THU</Typography>
+                                                        <Typography variant="subtitle2" color="primary.main" fontWeight="800">DOANH THU ĐƠN HÀNG</Typography>
                                                         <Typography variant="h7" color="text.secondary"></Typography>
                                                     </Box>
                                                     <Typography variant="h5" color="primary.main" fontWeight="900">
