@@ -33,6 +33,7 @@ def clear_brand_cache(brand_id: int):
 def update_daily_stats(db: Session, brand_id: int, target_date: date):
     """
     Worker function: Tính toán lại KPI cho một ngày cụ thể và lưu vào DB.
+    Đã được tối ưu hóa (Refactored) để dùng chung logic cho cả DailyStat và DailyAnalytics.
     """
     # 1. Lấy dữ liệu thô
     marketing_spends = db.query(models.MarketingSpend).filter(
@@ -54,12 +55,57 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
             models.Revenue.order_code.in_(created_today_codes)
         ).all()
 
-    # 2. Xác định các source cần tính toán
+    # === HELPER FUNCTION: XỬ LÝ LOGIC CHUNG (DRY) ===
+    def process_kpi_entry(model_class, data_subset, source=None):
+        """
+        Hàm nội bộ xử lý logic: Kiểm tra rỗng -> Xóa hoặc Tính toán & Upsert.
+        """
+        s_orders, s_revenues, s_marketing, s_codes = data_subset
+
+        # A. Logic Xóa: Nếu không có dữ liệu -> Xóa bản ghi cũ (nếu có) và Return
+        if not s_orders and not s_revenues and not s_marketing:
+            filters = [model_class.brand_id == brand_id, model_class.date == target_date]
+            if source and hasattr(model_class, 'source'):
+                filters.append(model_class.source == source)
+            
+            existing_entry = db.query(model_class).filter(*filters).first()
+            if existing_entry:
+                db.delete(existing_entry)
+            return
+
+        # B. Logic Tính toán: Nếu có dữ liệu
+        kpis = kpi_utils.calculate_daily_kpis(
+            s_orders, s_revenues, s_marketing, 
+            s_codes, target_date, db_session=db,
+            brand_id=brand_id, source=source
+        )
+
+        # C. Logic Upsert (Thêm mới hoặc Cập nhật)
+        filters = [model_class.brand_id == brand_id, model_class.date == target_date]
+        if source and hasattr(model_class, 'source'):
+            filters.append(model_class.source == source)
+            
+        entry = db.query(model_class).filter(*filters).first()
+
+        if not entry:
+            entry = model_class(brand_id=brand_id, date=target_date)
+            if source and hasattr(model_class, 'source'):
+                entry.source = source
+            db.add(entry)
+            db.flush()
+
+        if kpis:
+            for key, value in kpis.items():
+                if hasattr(entry, key):
+                    setattr(entry, key, value)
+            db.add(entry)
+
+    # 2. Xử lý từng Source (DailyAnalytics)
     active_sources = set()
     active_sources.update({o.source for o in orders_created_today if o.source})
     active_sources.update({m.source for m in marketing_spends if m.source})
+    active_sources.update({r.source for r in revenues if r.source}) # Bổ sung source từ revenue
 
-    # 3. Tính toán và lưu chi tiết từng source (DailyAnalytics)
     for current_source in active_sources:
         # Filter data in memory
         filtered_revenues = [r for r in revenues if r.source == current_source]
@@ -67,59 +113,23 @@ def update_daily_stats(db: Session, brand_id: int, target_date: date):
         filtered_orders = [o for o in orders_created_today if o.source == current_source]
         filtered_codes = {o.order_code for o in filtered_orders}
 
-        kpis = kpi_utils.calculate_daily_kpis(
-            filtered_orders, filtered_revenues, filtered_marketing, 
-            filtered_codes, target_date, db_session=db,
-            brand_id=brand_id, source=current_source
+        # Gọi hàm chung
+        process_kpi_entry(
+            models.DailyAnalytics, 
+            (filtered_orders, filtered_revenues, filtered_marketing, filtered_codes), 
+            source=current_source
         )
 
-        analytics_entry = db.query(models.DailyAnalytics).filter(
-            models.DailyAnalytics.brand_id == brand_id,
-            models.DailyAnalytics.date == target_date,
-            models.DailyAnalytics.source == current_source
-        ).first()
-
-        if not analytics_entry:
-            analytics_entry = models.DailyAnalytics(brand_id=brand_id, date=target_date, source=current_source)
-            db.add(analytics_entry)
-            db.flush()
-
-        if kpis:
-            for key, value in kpis.items():
-                if hasattr(analytics_entry, key):
-                    setattr(analytics_entry, key, value)
-            db.add(analytics_entry)
-
-    # 4. Tính toán tổng hợp (DailyStat)
-    total_kpis = kpi_utils.calculate_daily_kpis(
-        orders_created_today, revenues, marketing_spends, 
-        created_today_codes, target_date, db_session=db,
-        brand_id=brand_id
+    # 3. Xử lý Tổng (DailyStat)
+    # Gọi hàm chung với toàn bộ dữ liệu và source=None
+    process_kpi_entry(
+        models.DailyStat,
+        (orders_created_today, revenues, marketing_spends, created_today_codes),
+        source=None
     )
     
-    # # DEBUG CHURN RATE
-    # if total_kpis and 'churn_rate' in total_kpis:
-    #     print(f"[DEBUG] Date: {target_date} | Churn Rate: {total_kpis['churn_rate']}% | Total Orders: {len(orders_created_today)}")
-
-    stat_entry = db.query(models.DailyStat).filter(
-        models.DailyStat.brand_id == brand_id,
-        models.DailyStat.date == target_date
-    ).first()
-
-    if not stat_entry:
-        stat_entry = models.DailyStat(brand_id=brand_id, date=target_date)
-        db.add(stat_entry)
-        db.flush()
-
-    if total_kpis:
-        for key, value in total_kpis.items():
-            if hasattr(stat_entry, key):
-                setattr(stat_entry, key, value)
-        db.add(stat_entry)
-    
-    # Commit handled by caller or worker logic usually, but here we add objects to session.
-    # Worker utils usually commit.
-    return stat_entry
+    # Commit handled by caller or worker logic usually
+    return True
 
 def delete_brand_data_in_range(db: Session, brand_id: int, start_date: date, end_date: date, source: str = None):
     """

@@ -99,37 +99,33 @@ function SingleImportDialog({ open, onClose, onUploadComplete, brandSlug }) {
 
         setIsWorking(true);
         setProgress(0);
-        setProgressText('Đang tải tệp lên...');
+        setProgressText('Đang tải lên và xử lý...');
         
+        // [UX] Tiến trình ảo thông minh:
+        // - Chạy nhanh đến 70% (Upload)
+        // - Chạy chậm dần đến 90% (Server nhận)
+        // - Nhích từng chút một 90-99% (Worker tính toán)
         intervalRef.current = setInterval(() => {
             setProgress(prev => {
-                const next = prev + 5;
-                if (next >= 90) {
-                    clearInterval(intervalRef.current);
-                    return 90;
-                }
-                return next;
+                if (prev < 70) return prev + 5;      // Giai đoạn đầu nhanh
+                if (prev < 90) return prev + 2;      // Giai đoạn giữa chậm lại
+                if (prev < 99) return prev + 0.2;    // Giai đoạn cuối (Worker) nhích rất chậm
+                return prev; // Giữ nguyên ở 99% nếu chưa xong
             });
-        }, 150);
+        }, 400);
 
         try {
+            // Backend bây giờ sẽ chờ Worker tính xong mới trả lời (tối đa 60s)
             await uploadStandardFile(selectedPlatform, brandSlug, selectedFile);
             
+            // Khi Backend trả lời xong, nghĩa là 100% hoàn tất
             if (intervalRef.current) clearInterval(intervalRef.current);
-            setProgress(90);
-            setProgressText('Máy chủ đang xử lý dữ liệu...');
-            
-            intervalRef.current = setInterval(() => {
-                setProgress(prev => Math.min(prev + 1, 99));
-            }, 1000);
-
-            await onUploadComplete();
-
-            clearInterval(intervalRef.current);
             setProgress(100);
             setProgressText('Hoàn thành!');
             
-            setTimeout(() => onClose(), 500);
+            await onUploadComplete();
+
+            setTimeout(() => onClose(), 800);
 
         } catch (error) {
             showNotification(error.message || 'Lỗi khi upload hoặc xử lý file.', 'error');

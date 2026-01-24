@@ -271,3 +271,62 @@ def recalculate_all_brand_data(brand_id: int):
         traceback.print_exc()
         
     print(f"WORKER: Hoàn thành RECALCULATE cho brand ID {brand_id}.")
+
+# ==============================================================================
+# TASK 3: TÍNH TOÁN LẠI THEO NGÀY CỤ THỂ (OPTIMIZED INCREMENTAL UPDATE)
+# ==============================================================================
+@celery_app.task(name="recalculate_brand_data_specific_dates")
+def recalculate_brand_data_specific_dates(brand_id: int, target_dates_iso: list):
+    """
+    Task chạy ngầm: Chỉ tính toán lại các ngày được chỉ định (affected_dates).
+    Giúp tối ưu hiệu năng, tránh xóa toàn bộ dữ liệu lịch sử.
+    """
+    if not target_dates_iso:
+        print("WORKER: Không có ngày nào cần tính toán lại.")
+        return
+
+    print(f"WORKER: Bắt đầu RECALCULATE (Incremental) cho brand ID {brand_id} với {len(target_dates_iso)} ngày.")
+    
+    try:
+        # Convert string ISO dates back to date objects
+        target_dates = [date.fromisoformat(d) for d in target_dates_iso]
+        
+        with get_db_session() as db:
+            # 1. Xóa dữ liệu cũ (DailyStat & DailyAnalytics) CHỈ TRONG NHỮNG NGÀY NÀY
+            # Lưu ý: Cần xóa để đảm bảo số liệu mới đè lên số liệu cũ sạch sẽ
+            print(f"WORKER: [1/3] Đang xóa dữ liệu cũ của {len(target_dates)} ngày...")
+            
+            db.query(models.DailyStat).filter(
+                models.DailyStat.brand_id == brand_id,
+                models.DailyStat.date.in_(target_dates)
+            ).delete(synchronize_session=False)
+            
+            db.query(models.DailyAnalytics).filter(
+                models.DailyAnalytics.brand_id == brand_id,
+                models.DailyAnalytics.date.in_(target_dates)
+            ).delete(synchronize_session=False)
+            
+            db.commit()
+
+            # 2. Tính toán lại cho từng ngày
+            print(f"WORKER: [2/3] Đang tính toán lại...")
+            count = 0
+            for target_date in target_dates:
+                try:
+                    data_service.update_daily_stats(db, brand_id, target_date)
+                    count += 1
+                except Exception as inner_e:
+                    print(f"WORKER ERROR tại ngày {target_date}: {inner_e}")
+            
+            # 3. Commit và Clear Cache
+            print("WORKER: [3/3] Đang commit và xóa cache...")
+            db.commit()
+            
+            # Xóa cache để dashboard cập nhật
+            data_service.clear_brand_cache(brand_id)
+            
+    except Exception as e:
+        print(f"WORKER INCREMENTAL ERROR: {e}")
+        traceback.print_exc()
+        
+    print(f"WORKER: Hoàn thành RECALCULATE (Incremental) cho brand ID {brand_id}.")

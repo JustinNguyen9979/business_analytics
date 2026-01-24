@@ -405,11 +405,9 @@ def _calculate_customer_segment_distribution(
 
     try:
         # 2. Tính LTV (Tổng chi tiêu tích lũy) của những khách này
-        # Query Order để sum selling_price (hoặc gmv/net_revenue tùy định nghĩa)
-        # Ở đây dùng selling_price (Doanh thu khách trả)
         ltv_query = db_session.query(
             models.Order.username,
-            func.sum(models.Order.selling_price)
+            func.sum(models.Order.sku_price)
         ).filter(
             models.Order.username.in_(target_usernames),
             models.Order.order_date <= datetime.combine(date_to_calculate, datetime.max.time()),
@@ -471,7 +469,7 @@ def _calculate_customer_segment_distribution(
             
             # Fallback: Nếu không có trong DB (VD đơn chưa commit), tính tạm từ đơn hiện tại
             if ltv == 0:
-                current_orders_val = sum(o.selling_price or 0 for o in orders if o.username == user)
+                current_orders_val = sum(o.sku_price or 0 for o in orders if o.username == user)
                 ltv = current_orders_val
             
             if ltv >= threshold_vip:

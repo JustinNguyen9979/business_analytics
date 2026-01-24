@@ -146,6 +146,10 @@ def find_sheet_name(sheet_names: List[str], keywords: List[str]) -> str | None:
 def process_standard_file(db: Session, file_content: bytes, brand_id: int, source: str):
     results = {}
     print(f"\n--- BẮT ĐẦU XỬ LÝ FILE CHUẨN CHO BRAND {brand_id}, NGUỒN {source.upper()} ---")
+    
+    # [TỐI ƯU] Tập hợp các ngày cần tính toán lại
+    affected_dates = set()
+
     try:
         xls = pd.ExcelFile(io.BytesIO(file_content))
         sheet_names = xls.sheet_names
@@ -264,6 +268,17 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     province_val = get_new_province_name(str(first_row.get('province', '')))
                     district_val = str(first_row.get('district', ''))
 
+                    # [TỐI ƯU] Ghi nhận ngày cần tính toán lại
+                    o_date_val = parse_datetime(first_row.get('order_date'))
+                    
+                    # [FIX BUG] Bỏ qua nếu không có mã đơn hàng hoặc ngày đặt hàng
+                    if not order_code or not o_date_val:
+                        print(f"Skipping invalid order: Code='{order_code}', Date='{first_row.get('order_date')}'")
+                        continue
+
+                    if o_date_val:
+                        affected_dates.add(o_date_val.date())
+
                     # Tạo dict chi tiết bổ sung
                     extra_details = {
                         "items": items_list, 
@@ -338,6 +353,11 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     order_code = row.get('order_id')
                     transaction_date = parse_date(row.get('transaction_date'))
                     order_date = parse_date(row.get('order_date'))
+
+                    # [TỐI ƯU] Ghi nhận ngày order gốc để tính lại
+                    if order_date:
+                        affected_dates.add(order_date)
+
                     net_revenue = to_float(row.get('net_revenue'))
                     gmv = to_float(row.get('gmv'))
                     total_fees = to_float(row.get('total_fees'))
@@ -389,6 +409,9 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     if not parsed_date:
                         continue # Bỏ qua dòng nếu không có ngày hợp lệ
 
+                    # [TỐI ƯU] Ghi nhận ngày marketing
+                    affected_dates.add(parsed_date)
+
                     spend_data = schemas.MarketingSpendCreate(
                         date=parsed_date,
                         ad_spend=to_float(row.get('adSpend')),
@@ -418,7 +441,16 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
         db.commit()
         print("COMMIT THÀNH CÔNG!")
         
-        return {"status": "success", "message": "Xử lý file và nạp dữ liệu thành công!", "details": results}
+        # Convert set to sorted list of strings for JSON response
+        sorted_affected_dates = sorted([d.isoformat() for d in affected_dates])
+        print(f"-> Tổng cộng tìm thấy {len(affected_dates)} ngày cần tính toán lại.")
+
+        return {
+            "status": "success", 
+            "message": "Xử lý file và nạp dữ liệu thành công!", 
+            "details": results,
+            "affected_dates": sorted_affected_dates
+        }
 
     except Exception as e:
         db.rollback()

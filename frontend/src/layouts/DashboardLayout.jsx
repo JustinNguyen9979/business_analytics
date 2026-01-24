@@ -144,17 +144,20 @@ function LayoutWithBrandContext() {
     };
 
     const handleUploadComplete = async () => {
-        if (!brandIdentifier) return Promise.reject("Không có định danh brand."); // Reject if no brandIdentifier
+        if (!brandIdentifier) return Promise.reject("Không có định danh brand."); 
         try {
-            showNotification(`Upload thành công! Bắt đầu tính toán lại...`, 'info');
-            await recalculateBrandDataAndWait(brandIdentifier); // Dùng brandIdentifier (slug)
-            showNotification(`Tính toán lại thành công!`, 'success');
-            navigate(0); // Refresh trang để tải lại dữ liệu
-            return Promise.resolve(); // Trả về Promise resolve khi hoàn tất
+            // [TỐI ƯU] Không cần gọi tính toán lại thủ công nữa vì Backend đã tự xử lý (Incremental Recalculation)
+            showNotification(`Upload và xử lý dữ liệu thành công!`, 'success');
+            
+            // Xóa cache Client để đảm bảo hiển thị dữ liệu mới nhất
+            await clearAllApplicationCaches();
+            
+            navigate(0); // Refresh trang
+            return Promise.resolve(); 
         } catch (error) {
-            const errorMessage = error.response?.data?.detail || 'Lỗi khi tính toán lại.';
+            const errorMessage = error.response?.data?.detail || 'Lỗi khi xử lý sau upload.';
             showNotification(errorMessage, 'error');
-            return Promise.reject(errorMessage); // Trả về Promise reject khi có lỗi
+            return Promise.reject(errorMessage); 
         }
     };
 

@@ -10,7 +10,7 @@ from typing import List, Dict, Any
 from database import SessionLocal, engine
 from datetime import date
 from cache import redis_client
-from celery_worker import process_data_request, recalculate_all_brand_data
+from celery_worker import process_data_request, recalculate_all_brand_data, recalculate_brand_data_specific_dates
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -112,9 +112,29 @@ async def upload_standard_file(
     if result.get("status") == "error":
         raise HTTPException(status_code=400, detail=result.get("message"))
     
-    # Kích hoạt task tính toán lại toàn bộ
-    recalculate_all_brand_data.delay(brand.id)
-    return {"message": "Upload thành công! Dữ liệu đang được tính toán lại trong nền."}
+    # [TỐI ƯU] Kích hoạt task tính toán lại thông minh
+    affected_dates = result.get("affected_dates")
+    task = None
+    
+    if affected_dates and isinstance(affected_dates, list) and len(affected_dates) > 0:
+        print(f"API: Kích hoạt tính toán lại cho {len(affected_dates)} ngày cụ thể.")
+        task = recalculate_brand_data_specific_dates.delay(brand.id, affected_dates)
+    else:
+        # Fallback: Nếu không xác định được ngày (file rỗng?), tính lại toàn bộ cho chắc
+        print("API: Không xác định được ngày cụ thể, tính toán lại TOÀN BỘ.")
+        task = recalculate_all_brand_data.delay(brand.id)
+    
+    # [UX IMPROVEMENT] Chờ worker hoàn thành (tối đa 60s) để Frontend hiển thị Loading đúng thực tế
+    if task:
+        try:
+            # Chờ task hoàn thành. Vì đã tối ưu nên thường chỉ mất < 5s.
+            task.get(timeout=60)
+            print("API: Worker đã hoàn thành nhiệm vụ tính toán.")
+        except Exception as e:
+            print(f"API: Worker chưa kịp hoàn thành trong 60s hoặc có lỗi: {e}. Client sẽ tự refresh.")
+            # Không raise error để tránh làm user hoang mang, worker vẫn sẽ chạy ngầm tiếp.
+        
+    return {"message": "Upload và xử lý dữ liệu thành công!"}
 
 @app.post("/brands/{brand_slug}/recalculate-and-wait", status_code=status.HTTP_200_OK)
 @limiter.limit("3/minute")
@@ -163,8 +183,21 @@ def delete_data_in_range(
             db, brand.id, payload.start_date, payload.end_date, source
         )
         
-        # Kích hoạt tính toán lại dữ liệu trong nền
-        recalculate_all_brand_data.delay(brand.id)
+        # Kích hoạt tính toán lại dữ liệu trong nền (Chỉ tính các ngày bị ảnh hưởng)
+        from datetime import timedelta
+        
+        delta = payload.end_date - payload.start_date
+        affected_dates = []
+        # Tạo danh sách các ngày trong khoảng thời gian xóa
+        for i in range(delta.days + 1):
+            day = payload.start_date + timedelta(days=i)
+            affected_dates.append(day.isoformat())
+            
+        if affected_dates:
+            recalculate_brand_data_specific_dates.delay(brand.id, affected_dates)
+        else:
+            # Fallback nếu không xác định được ngày
+            recalculate_all_brand_data.delay(brand.id)
         
         return {
             "message": "Yêu cầu xóa dữ liệu đã được thực hiện. Dữ liệu đang được tính toán lại.",
@@ -284,9 +317,10 @@ def read_brand_kpis(
     if not db_brand: 
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     if cache_was_missing:
-        print(f"API: Phát hiện cache lỗi thời cho brand ID {brand.id}. Kích hoạt worker tự sửa chữa.")
-    # Gọi worker để xử lý trong nền (Bảng DailyStat)
-    recalculate_all_brand_data.delay(brand.id)
+        print(f"API: Phát hiện cache lỗi thời cho brand ID {brand.id}. Dashboard có thể hiển thị dữ liệu cũ.")
+    
+    # [TỐI ƯU] Đã loại bỏ lệnh recalculate_all_brand_data vô điều kiện.
+    # Chỉ tính lại khi có hành động cụ thể (Upload/Delete).
     return db_brand
 
 @app.get("/brands/{brand_slug}/daily-kpis", response_model=schemas.DailyKpiResponse)
