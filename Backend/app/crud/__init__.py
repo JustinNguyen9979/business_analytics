@@ -11,6 +11,53 @@ from .crud_customer import customer
 get_all_brands = brand.get_multi
 get_brand_by_slug = brand.get_by_slug
 upsert_product = product.upsert
+create_brand = brand.create
+update_brand_name = brand.update_name
+
+def delete_brand_by_id(db, brand_id: int):
+    """
+    Xóa brand và xóa cache liên quan.
+    """
+    # 1. Xóa trong DB (Cascade sẽ xóa hết các bảng con)
+    deleted_brand = brand.remove(db=db, id=brand_id)
+    
+    # 2. Xóa Cache Redis
+    if deleted_brand:
+        clear_brand_cache(brand_id)
+        
+    return deleted_brand
+
+def clone_brand(db, brand_id: int):
+    """
+    Hàm nhân bản Brand (Logic đơn giản: Copy tên + ' - Copy')
+    """
+    original = brand.get(db, id=brand_id)
+    if not original:
+        return None
+    
+    from schemas import BrandCreate
+    new_name = f"{original.name} - Copy"
+    
+    # Xử lý trùng tên đơn giản
+    count = 1
+    while brand.get_by_name(db, name=new_name):
+        count += 1
+        new_name = f"{original.name} - Copy {count}"
+        
+    return brand.create(db, obj_in=BrandCreate(name=new_name))
+
+def recalculate_brand_data_sync(db, brand_id: int):
+    """
+    Tính toán lại dữ liệu đồng bộ (cho nút Recalculate trên UI).
+    """
+    dates = get_all_activity_dates(db, brand_id)
+    count = 0
+    for d in dates:
+        update_daily_stats(db, brand_id, d)
+        count += 1
+    
+    clear_brand_cache(brand_id)
+    return {"message": f"Đã tính toán lại dữ liệu cho {count} ngày.", "days_processed": count}
 
 def get_or_create_customer(*args, **kwargs):
     """Legacy dummy function: Table 'customers' is deprecated."""

@@ -182,13 +182,20 @@ export const cloneBrand = async (brandId) => {
     }
 };
 
-export const uploadStandardFile = async (platform, brandSlug, file) => {
+export const uploadStandardFile = async (platform, brandSlug, file, force = false) => {
     const formData = new FormData();
     formData.append('file', file);
     try {
         const response = await apiClient.post(
-            `/brands/${brandSlug}/upload-standard-file?platform=${platform.toLowerCase()}`,
-            formData, { headers: { 'Content-Type': 'multipart/form-data' } }
+            `/brands/${brandSlug}/upload-standard-file`,
+            formData, 
+            { 
+                params: { 
+                    platform: platform.toLowerCase(),
+                    force: force 
+                },
+                headers: { 'Content-Type': 'multipart/form-data' } 
+            }
         );
         return response.data;
     } catch (error) { throw error; }

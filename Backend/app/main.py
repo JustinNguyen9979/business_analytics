@@ -57,16 +57,16 @@ def read_brands(db: Session = Depends(get_db)):
 
 @app.post("/brands/", response_model=schemas.BrandInfo)
 def create_brand_api(brand: schemas.BrandCreate, db: Session = Depends(get_db)):
-    new_brand = crud.create_brand(db=db, brand=brand)
+    new_brand = crud.create_brand(db=db, obj_in=brand)
     if not new_brand:
-         raise HTTPException(status_code=400, detail="Brand với tên này đã tồn tại.")
+         raise HTTPException(status_code=400, detail="Brand này đã tồn tại.")
     return new_brand
 
 @app.put("/brands/{brand_id}", response_model=schemas.BrandInfo)
 def update_brand_api(brand_id: int, brand_update: schemas.BrandCreate, db: Session = Depends(get_db)):
     updated_brand = crud.update_brand_name(db, brand_id=brand_id, new_name=brand_update.name)
     if not updated_brand:
-        raise HTTPException(status_code=400, detail="Không thể đổi tên. Brand không tồn tại hoặc tên mới đã bị trùng.")
+        raise HTTPException(status_code=400, detail="Không thể đổi tên. Tên Brand mới đã bị trùng.")
     return updated_brand
 
 @app.delete("/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -105,10 +105,18 @@ async def upload_standard_file(
     platform: str, 
     brand: models.Brand = Depends(get_brand_from_slug),
     db: Session = Depends(get_db), 
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    force: bool = Query(False, description="Nếu True, sẽ xử lý lại file ngay cả khi đã tồn tại trong lịch sử import.")
 ):
     """Nhận file, xử lý và kích hoạt worker tính toán lại toàn bộ."""
-    result = standard_parser.process_standard_file(db, await file.read(), brand.id, platform)
+    result = standard_parser.process_standard_file(
+        db, 
+        await file.read(), 
+        brand.id, 
+        platform, 
+        file_name=file.filename,
+        allow_override=force
+    )
     if result.get("status") == "error":
         raise HTTPException(status_code=400, detail=result.get("message"))
     

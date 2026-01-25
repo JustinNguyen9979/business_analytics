@@ -8,6 +8,7 @@ import models
 import crud
 import schemas
 import re # Import Regex
+import hashlib # Import hashlib for MD5
 from datetime import date, datetime
 from typing import Union, List
 from dateutil import parser as date_parser 
@@ -143,12 +144,43 @@ def find_sheet_name(sheet_names: List[str], keywords: List[str]) -> str | None:
     return None
 
 # --- HÀM XỬ LÝ CHÍNH - "SIÊU PARSER" ĐÃ NÂNG CẤP ---
-def process_standard_file(db: Session, file_content: bytes, brand_id: int, source: str):
+def process_standard_file(db: Session, file_content: bytes, brand_id: int, source: str, file_name: str = "unknown.xlsx", allow_override: bool = False):
     results = {}
     print(f"\n--- BẮT ĐẦU XỬ LÝ FILE CHUẨN CHO BRAND {brand_id}, NGUỒN {source.upper()} ---")
     
     # [TỐI ƯU] Tập hợp các ngày cần tính toán lại
     affected_dates = set()
+
+    # --- BƯỚC 0: KIỂM TRA TRÙNG FILE (WHOLE FILE DEDUP) ---
+    file_hash = hashlib.md5(file_content).hexdigest()
+    print(f"MD5 Hash của file: {file_hash}")
+    
+    # Chỉ kiểm tra nếu KHÔNG có cờ ghi đè
+    if not allow_override:
+        existing_log = db.query(models.ImportLog).filter(
+            models.ImportLog.file_hash == file_hash,
+            models.ImportLog.brand_id == brand_id, # Kiểm tra đúng Brand
+            models.ImportLog.source == source,     # Kiểm tra đúng Source
+            models.ImportLog.status == 'SUCCESS'
+        ).first()
+
+        if existing_log:
+            msg = f"File '{file_name}' đã được import thành công vào nguồn '{source}' lúc {existing_log.created_at}. Sử dụng tùy chọn 'Ghi đè' nếu bạn muốn xử lý lại."
+            print(f"BỎ QUA: {msg}")
+            return {"status": "error", "message": msg}
+
+    # Tạo log mới với trạng thái PROCESSING
+    current_log = models.ImportLog(
+        brand_id=brand_id,
+        source=source,
+        file_name=file_name,
+        file_hash=file_hash,
+        status='PROCESSING',
+        log="Bắt đầu xử lý..."
+    )
+    db.add(current_log)
+    db.commit()
+    db.refresh(current_log)
 
     try:
         xls = pd.ExcelFile(io.BytesIO(file_content))
@@ -195,91 +227,94 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
             if not df_order.empty and 'order_id' in df_order.columns:
                 order_codes_in_file = df_order['order_id'].dropna().unique().tolist()
                 existing_codes = {c for c, in db.query(models.Order.order_code).filter(models.Order.brand_id == brand_id, models.Order.order_code.in_(order_codes_in_file)).all()}
-                df_new_orders = df_order[~df_order['order_id'].isin(existing_codes)]
                 
-                print(f"Tìm thấy {len(df_new_orders['order_id'].unique())} đơn hàng mới cần import.")
+                # Tách ra 2 luồng: Thêm mới và Cập nhật
+                df_new_orders = df_order[~df_order['order_id'].isin(existing_codes)]
+                df_existing_orders = df_order[df_order['order_id'].isin(existing_codes)]
+                
+                print(f"Phân loại: {len(df_new_orders['order_id'].unique())} đơn mới | {len(df_existing_orders['order_id'].unique())} đơn cần cập nhật.")
                 
                 orders_to_insert = []
+                orders_to_update = []
                 
-                # --- BƯỚC 2.2: XỬ LÝ ĐƠN HÀNG ---
-                for order_code, group in df_new_orders.groupby('order_id'):
+                # --- HÀM HELPER ĐỂ XỬ LÝ DỮ LIỆU ĐƠN HÀNG ---
+                def process_order_group(group, is_update=False):
                     first_row = group.iloc[0]
-                    username = first_row.get('username')
+                    order_code = str(first_row.get('order_id'))
+                    
+                    # Parse ngày tháng
+                    o_date_val = parse_datetime(first_row.get('order_date'))
+                    delivered_date_val = parse_datetime(first_row.get('delivered_date'))
+                    shipped_time_val = parse_datetime(first_row.get('shipped_time'), source_type=source)
+                    
+                    # --- SANITY CHECK (Kiểm tra tính hợp lý) ---
+                    # 1. Kiểm tra ngày giao hàng so với ngày đặt
+                    if o_date_val and delivered_date_val:
+                        if delivered_date_val < o_date_val:
+                            # Nếu chỉ chênh lệch vài giờ do múi giờ thì bỏ qua, nhưng nếu chênh ngày thì là lỗi
+                            if (o_date_val - delivered_date_val).total_seconds() > 86400: 
+                                print(f"CẢNH BÁO LOGIC: Đơn {order_code} có ngày giao ({delivered_date_val}) nhỏ hơn ngày đặt ({o_date_val}). Bỏ qua ngày giao.")
+                                delivered_date_val = None
 
-                    # Khởi tạo các biến cộng dồn
+                    # 2. Kiểm tra dữ liệu bắt buộc
+                    if not is_update and (not order_code or not o_date_val):
+                        print(f"Bỏ qua đơn lỗi thiếu thông tin: Code='{order_code}'")
+                        return None
+
+                    # Ghi nhận ngày cần tính toán lại
+                    if o_date_val: affected_dates.add(o_date_val.date())
+                    if delivered_date_val: affected_dates.add(delivered_date_val.date())
+
+                    # Xử lý items và tính toán cộng dồn
                     order_cogs = 0.0
                     total_quantity = 0
-                    
-                    # Các biến tài chính cần cộng dồn (Aggregation)
                     order_original_price = 0.0
                     order_sku_price = 0.0
                     order_subsidy_amount = 0.0
-
-                    items_list = [] # Danh sách item đã chuẩn hóa
+                    items_list = []
 
                     for _, row in group.iterrows():
                         quantity = to_int(row.get('quantity'))
                         sku = str(row.get('sku'))
                         
-                        # Lấy giá vốn từ map
                         cost_price = product_cost_map.get(sku, 0)
                         order_cogs += quantity * cost_price
                         total_quantity += quantity
                         
-                        # Lấy và chuẩn hóa các giá trị tài chính của dòng hiện tại
                         item_original_price = to_float(row.get('original_price'))
                         item_sku_price = to_float(row.get('sku_price'))
                         item_subsidy_amount = to_float(row.get('subsidy_amount'))
 
-                        # Cộng dồn vào tổng của đơn hàng
                         order_original_price += item_original_price
                         order_sku_price += item_sku_price
                         order_subsidy_amount += item_subsidy_amount
 
-                        # Tạo item dict chuẩn hóa để lưu vào details
                         item_dict = row.to_dict()
-                        
-                        # Cập nhật các giá trị chuẩn hóa vào item
                         item_dict['sku'] = sku
                         item_dict['quantity'] = quantity
                         item_dict['original_price'] = item_original_price
                         item_dict['sku_price'] = item_sku_price
                         item_dict['subsidy_amount'] = item_subsidy_amount
                         
-                        # Dọn dẹp các trường dữ liệu cấp Order bị dư thừa trong Item
                         redundant_keys = [
                             'order_date', 'delivered_date', 'payment_method', 
                             'cancel_reason', 'order_status', 'province', 
                             'district', 'order_id', 'username', 
-                            'shipping_provider_name',
-                            # Xóa các cột gốc chưa chuẩn hóa nếu cần, nhưng key ở trên đã ghi đè rồi
+                            'shipping_provider_name'
                         ]
                         for key in redundant_keys:
                             item_dict.pop(key, None)
-                            
                         items_list.append(item_dict)
 
-                    shipped_time_val = parse_datetime(first_row.get('shipped_time'), source_type=source)
+                    # Thông tin chung
+                    username = first_row.get('username')
                     tracking_id_val = str(first_row.get('tracking_id')) if not pd.isna(first_row.get('tracking_id')) else None
-                    delivered_date_val = parse_datetime(first_row.get('delivered_date'))
                     payment_method_val = str(first_row.get('payment_method', ''))
-                    cancel_reason_val = str(first_row.get('cancel_reason', '')) 
-                    
+                    cancel_reason_val = str(first_row.get('cancel_reason', ''))
                     province_val = get_new_province_name(str(first_row.get('province', '')))
                     district_val = str(first_row.get('district', ''))
-
-                    # [TỐI ƯU] Ghi nhận ngày cần tính toán lại
-                    o_date_val = parse_datetime(first_row.get('order_date'))
                     
-                    # [FIX BUG] Bỏ qua nếu không có mã đơn hàng hoặc ngày đặt hàng
-                    if not order_code or not o_date_val:
-                        print(f"Skipping invalid order: Code='{order_code}', Date='{first_row.get('order_date')}'")
-                        continue
-
-                    if o_date_val:
-                        affected_dates.add(o_date_val.date())
-
-                    # Tạo dict chi tiết bổ sung
+                    # Tạo dict chi tiết (Quan trọng để lưu cancel_reason)
                     extra_details = {
                         "items": items_list, 
                         "payment_method": payment_method_val,
@@ -290,16 +325,14 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                         "district": district_val,
                         "delivered_date": delivered_date_val.isoformat() if delivered_date_val else None
                     }
-                    
-                    orders_to_insert.append({
+
+                    return {
                         "order_code": order_code,
                         "tracking_id": tracking_id_val,
-                        # Sử dụng các giá trị đã CỘNG DỒN (Aggregated)
                         "original_price": order_original_price,
                         "sku_price": order_sku_price,
                         "subsidy_amount": order_subsidy_amount,
-                        
-                        "order_date": parse_datetime(first_row.get('order_date')),
+                        "order_date": o_date_val,
                         "shipped_time": shipped_time_val, 
                         "delivered_date": delivered_date_val,
                         "status": first_row.get('order_status'), 
@@ -309,12 +342,55 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                         "details": extra_details, 
                         "brand_id": brand_id, 
                         "source": source 
-                    })
+                    }
+
+                # --- 2.1 XỬ LÝ ĐƠN HÀNG MỚI (INSERT) ---
+                if not df_new_orders.empty:
+                    for order_code, group in df_new_orders.groupby('order_id'):
+                        data = process_order_group(group, is_update=False)
+                        if data:
+                            orders_to_insert.append(data)
+                    
+                    if orders_to_insert:
+                        db.bulk_insert_mappings(models.Order, orders_to_insert)
+                        results['order_insert'] = f"Đã thêm mới {len(orders_to_insert)} đơn hàng."
+                        print(results['order_insert'])
+
+                # --- 2.2 XỬ LÝ ĐƠN HÀNG CŨ (UPDATE) ---
+                if not df_existing_orders.empty:
+                    # Lấy ID của các đơn hàng cần update để mapping
+                    existing_orders_map = {
+                        o.order_code: o.id 
+                        for o in db.query(models.Order.id, models.Order.order_code)
+                        .filter(models.Order.brand_id == brand_id, models.Order.order_code.in_(df_existing_orders['order_id'].unique()))
+                        .all()
+                    }
+
+                    for order_code, group in df_existing_orders.groupby('order_id'):
+                        if order_code not in existing_orders_map: continue
+                        
+                        data = process_order_group(group, is_update=True)
+                        if data:
+                            # Với update, ta chỉ cập nhật các trường có thể thay đổi
+                            update_data = {
+                                "id": existing_orders_map[order_code], # Bắt buộc phải có PK cho bulk_update
+                                "status": data['status'],
+                                "delivered_date": data['delivered_date'],
+                                "shipped_time": data['shipped_time'],
+                                "tracking_id": data['tracking_id'],
+                                "details": data['details'], # Cập nhật cancel_reason nằm trong này
+                                "updated_at": datetime.now() # Đánh dấu thời điểm cập nhật
+                            }
+                            # Update thêm các chỉ số tài chính nếu cần (đề phòng file trước bị sai)
+                            # Nhưng cẩn thận ghi đè dữ liệu đã sửa tay. Hiện tại ưu tiên trạng thái vận đơn.
+                            orders_to_update.append(update_data)
+
+                    if orders_to_update:
+                        db.bulk_update_mappings(models.Order, orders_to_update)
+                        results['order_update'] = f"Đã cập nhật trạng thái cho {len(orders_to_update)} đơn hàng cũ."
+                        print(results['order_update'])
                 
-                if orders_to_insert:
-                    db.bulk_insert_mappings(models.Order, orders_to_insert)
-                results['order_sheet'] = f"Đã chuẩn bị import {len(orders_to_insert)} đơn hàng mới."
-                print(results['order_sheet'])
+                results['order_sheet'] = f"Tổng xử lý: {len(orders_to_insert)} thêm mới, {len(orders_to_update)} cập nhật."
 
         else:
             print("Không tìm thấy sheet Đơn hàng.")
@@ -445,6 +521,11 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
         sorted_affected_dates = sorted([d.isoformat() for d in affected_dates])
         print(f"-> Tổng cộng tìm thấy {len(affected_dates)} ngày cần tính toán lại.")
 
+        # Update log thành công
+        current_log.status = 'SUCCESS'
+        current_log.log = str(results)
+        db.commit()
+
         return {
             "status": "success", 
             "message": "Xử lý file và nạp dữ liệu thành công!", 
@@ -456,4 +537,10 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
         db.rollback()
         print(f"!!! ĐÃ XẢY RA LỖI, THỰC HIỆN ROLLBACK: {e}")
         traceback.print_exc()
+
+        # Update log thất bại
+        current_log.status = 'FAILED'
+        current_log.log = str(e)
+        db.commit()
+
         return {"status": "error", "message": f"Đã xảy ra lỗi nghiêm trọng khi xử lý file: {e}"}

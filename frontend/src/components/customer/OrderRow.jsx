@@ -118,7 +118,7 @@ const OrderRow = ({ order }) => {
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <Typography variant="h7" color="text.secondary">Ngày nhận hàng</Typography>
                                                     <Typography variant="body2" fontWeight="bold">
-                                                        {details.delivered_date ? formatDate(details.delivered_date) : 'Chưa cập nhật'}
+                                                        {details.delivered_date ? formatDate(details.delivered_date) : 'Đang cập nhật'}
                                                     </Typography>
                                                 </Box>
                                                 <Divider />
@@ -132,12 +132,9 @@ const OrderRow = ({ order }) => {
                                                 <Divider />
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <Typography variant="h7" color="text.secondary">Trạng thái đơn</Typography>
-                                                    <Chip 
-                                                        label={details.order_status || order.status} 
-                                                        size="small" 
-                                                        color="primary" 
-                                                        variant="outlined"
-                                                        sx={{ height: 25, fontSize: '1rem' }}
+                                                    <OrderStatusChip 
+                                                        status={details.order_status || order.status} 
+                                                        variant="chip"
                                                     />
                                                 </Box>
                                             </Stack>

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float, Index, UniqueConstraint, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float, Index, UniqueConstraint, DateTime, Boolean, func
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB 
 from database import Base
@@ -83,6 +83,7 @@ class Brand(Base):
     
     daily_stats = relationship("DailyStat", back_populates="owner_brand", cascade="all, delete-orphan")
     daily_analytics = relationship("DailyAnalytics", back_populates="owner_brand", cascade="all, delete-orphan")
+    import_logs = relationship("ImportLog", back_populates="owner_brand", cascade="all, delete-orphan")
 
 class Product(Base):
     __tablename__ = "products"
@@ -208,3 +209,17 @@ class DailyAnalytics(Base, FinancialMetricsMixin, MarketingMetricsMixin, Operati
     )
 
     owner_brand = relationship("Brand", back_populates="daily_analytics")
+
+class ImportLog(Base):
+    __tablename__ = "import_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
+    source = Column(String, index=True)
+    file_name = Column(String)
+    file_hash = Column(String, index=True)
+    status = Column(String) # PROCESSING, SUCCESS, FAILED
+    log = Column(String, nullable=True)
+    created_at = Column(DateTime, default=func.now())
+
+    owner_brand = relationship("Brand", back_populates="import_logs")
