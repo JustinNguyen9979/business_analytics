@@ -23,6 +23,7 @@ import TrackChangesIcon from '@mui/icons-material/TrackChanges';
 import TuneIcon from '@mui/icons-material/Tune';
 import GroupIcon from '@mui/icons-material/Group';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import ManageSearchIcon from '@mui/icons-material/ManageSearch';
 
 // --- Components & Services ---
 import SingleImportDialog from '../components/import/SingleImportDialog';
@@ -243,6 +244,12 @@ function LayoutWithBrandContext() {
                             })}
                         </List>
                         <List subheader={isSidebarOpen ? <ListSubheader>CÔNG CỤ</ListSubheader> : null}>
+                            <ListItem disablePadding>
+                                <ListItemButton component={RouterLink} to={`/dashboard/${brandIdentifier}/search`} selected={pathname === `/dashboard/${brandIdentifier}/search`} sx={{ minHeight: 48 }}>
+                                    <ListItemIcon><ManageSearchIcon /></ListItemIcon>
+                                    <ListItemText primary="Tra cứu" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                                </ListItemButton>
+                            </ListItem>
                             <ListItem disablePadding>
                                 <ListItemButton onClick={handleRecalculate} disabled={isRecalculating} sx={{ minHeight: 48 }}>
                                     <ListItemIcon><RefreshIcon /></ListItemIcon>

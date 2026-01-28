@@ -422,3 +422,15 @@ export const fetchCustomerDetailAPI = async (brandSlug, username) => {
         throw error;
     }
 };
+
+export const searchEntitiesAPI = async (brandSlug, query) => {
+    try {
+        const response = await apiClient.get(`/brands/${brandSlug}/search`, {
+            params: { q: query }
+        });
+        return response.data;
+    } catch (error) {
+        console.error(`Error searching entities for brand ${brandSlug}:`, error);
+        throw error;
+    }
+};

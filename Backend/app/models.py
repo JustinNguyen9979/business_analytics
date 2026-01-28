@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float, Index, UniqueConstraint, DateTime, Boolean, func
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float, Index, UniqueConstraint, DateTime, Boolean, func, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB 
 from database import Base
@@ -84,6 +84,8 @@ class Brand(Base):
     daily_stats = relationship("DailyStat", back_populates="owner_brand", cascade="all, delete-orphan")
     daily_analytics = relationship("DailyAnalytics", back_populates="owner_brand", cascade="all, delete-orphan")
     import_logs = relationship("ImportLog", back_populates="owner_brand", cascade="all, delete-orphan")
+    
+    customers = relationship("Customer", back_populates="owner_brand", cascade="all, delete-orphan")
 
 class Product(Base):
     __tablename__ = "products"
@@ -139,6 +141,7 @@ class Revenue(Base):
     
     total_fees = Column(Float, default=0.0) 
     refund = Column(Float, default=0.0)     
+    order_refund = Column(Float, default=0.0) # Added new column
 
     source = Column(String, nullable=False, index=True)
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
@@ -209,6 +212,38 @@ class DailyAnalytics(Base, FinancialMetricsMixin, MarketingMetricsMixin, Operati
     )
 
     owner_brand = relationship("Brand", back_populates="daily_analytics")
+
+class Customer(Base):
+    __tablename__ = "customers"
+    id = Column(Integer, primary_key=True, index=True)
+    brand_id = Column(Integer, ForeignKey("brands.id"), index=True)
+
+    # Định danh & Thông tin cơ bản
+    source = Column(String, nullable=True, index=True) # Nguồn khách hàng (Shopee, Lazada...)
+    username = Column(String, index=True, nullable=True)
+    phone = Column(String, index=True, nullable=True)
+    email = Column(String, nullable=True)
+    gender = Column(String, nullable=True)
+
+    # CRM & Chăm sóc
+    rank = Column(String, default="Member") # Member, Silver, Gold, Diamond...
+    tags = Column(JSONB, default=list)      # ["KOL", "Bom hàng", ...]
+    notes = Column(Text, nullable=True)     # Ghi chú nội bộ
+
+    # Chỉ số tích lũy (Aggregated Metrics)
+    total_spent = Column(Float, default=0.0)   # Tổng chi tiêu (LTV)
+    total_orders = Column(Integer, default=0)
+    success_orders = Column(Integer, default=0)
+    canceled_orders = Column(Integer, default=0)
+    refunded_orders = Column(Integer, default=0)
+    profit = Column(Float, default=0.0)        # Lợi nhuận tích lũy (Net Rev - COGS)
+    aov = Column(Float, default=0.0)           # Giá trị trung bình đơn
+
+    # Địa chỉ mặc định
+    default_province = Column(String, nullable=True)
+    default_address = Column(String, nullable=True)
+
+    owner_brand = relationship("Brand", back_populates="customers")
 
 class ImportLog(Base):
     __tablename__ = "import_logs"

@@ -475,3 +475,23 @@ def get_customer_detail(
         raise HTTPException(status_code=404, detail="Không tìm thấy khách hàng này.")
         
     return detail
+
+@app.get("/brands/{brand_slug}/search")
+def search_anything(
+    brand_slug: str,
+    q: str = Query(..., min_length=1),
+    db: Session = Depends(get_db)
+):
+    """
+    Tìm kiếm thông minh: Đơn hàng, Mã vận đơn, SĐT hoặc Tên khách hàng.
+    """
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    if not db_brand:
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
+    
+    result = crud.customer.search_entities(db, db_brand.id, q)
+    if not result:
+        # Trả về 200 kèm status not_found để frontend xử lý êm ái hơn là báo lỗi 404
+        return {"status": "not_found", "message": "Không tìm thấy kết quả phù hợp."}
+    
+    return result

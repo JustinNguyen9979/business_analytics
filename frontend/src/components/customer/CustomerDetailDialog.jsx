@@ -15,6 +15,7 @@ import { fetchCustomerDetailAPI } from '../../services/api';
 import SectionTitle from '../ui/SectionTitle';
 import CustomerInfoCard from './CustomerInfoCard';
 import OrderRow from './OrderRow';
+import OrderHistoryTable from './OrderHistoryTable';
 
 const CustomerDetailDialog = ({ open, onClose, username }) => {
     const { slug } = useBrand();
@@ -69,27 +70,7 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
                         {/* 2. ORDER HISTORY */}
                         <Box>
                             <SectionTitle sx={{ mt: 0 }}>LỊCH SỬ GIAO DỊCH</SectionTitle>
-                            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: 500, bgcolor: 'background.paper' }}>
-                                <Table stickyHeader size="small">
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell /> {/* Expand Arrow Column */}
-                                            <TableCell>Mã Đơn Hàng</TableCell>
-                                            <TableCell>Mã Vận Đơn</TableCell>
-                                            <TableCell>Ngày Đặt</TableCell>
-                                            <TableCell>Trạng Thái</TableCell>
-                                            <TableCell align="right">Giá Trị Đơn</TableCell>
-                                            <TableCell>Lý Do</TableCell>
-                                            <TableCell>Nguồn</TableCell>
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {orders.map((order) => (
-                                            <OrderRow key={order.order_code} order={order} />
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
+                            <OrderHistoryTable orders={orders} />
                         </Box>
                     </Stack>
                 ) : null}

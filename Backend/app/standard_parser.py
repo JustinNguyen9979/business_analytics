@@ -12,6 +12,7 @@ import hashlib # Import hashlib for MD5
 from datetime import date, datetime
 from typing import Union, List
 from dateutil import parser as date_parser 
+from unidecode import unidecode
 from vietnam_address_mapping import get_new_province_name 
 
 def parse_date(date_str: str) -> Union[date, None]:
@@ -130,18 +131,72 @@ def to_int(value) -> int:
     """
     return int(to_float(value))
 
-# === HÀM TIỆN ÍCH MỚI: TÌM TÊN SHEET LINH HOẠT ===
-def find_sheet_name(sheet_names: List[str], keywords: List[str]) -> str | None:
+# === HÀM TIỆN ÍCH: TÌM KIẾM LINH HOẠT ===
+def find_sheet_name(items: List[str], keywords: List[str]) -> str | None:
     """
-    Tìm tên sheet đầu tiên trong danh sách `sheet_names` có chứa bất kỳ từ khóa nào trong `keywords`.
-    Không phân biệt chữ hoa/thường và khoảng trắng.
+    Tìm phần tử đầu tiên trong danh sách `items` có chứa (hoặc khớp) bất kỳ từ khóa nào trong `keywords`.
+    Dùng cho cả tên Sheet và tên Cột.
     """
-    for name in sheet_names:
-        normalized_name = name.lower().strip()
+    for item in items:
+        normalized_item = str(item).lower().strip()
         for keyword in keywords:
-            if keyword in normalized_name:
-                return name # Trả về tên gốc để Pandas có thể tìm thấy
+            if keyword in normalized_item:
+                return item # Trả về tên gốc
     return None
+
+def normalize_phone(phone) -> str | None:
+    """Chuẩn hóa số điện thoại VN."""
+    if not phone or pd.isna(phone): return None
+    s = str(phone).strip()
+    s = re.sub(r'\D', '', s) # Giữ lại số
+    if not s: return None
+    
+    # Xử lý đầu 84
+    if s.startswith('84'):
+        s = '0' + s[2:]
+    elif not s.startswith('0'):
+        s = '0' + s
+        
+    if len(s) < 9 or len(s) > 12: # Check độ dài hợp lý
+        return None
+    return s
+
+def normalize_email(email) -> str | None:
+    """Chuẩn hóa email cơ bản."""
+    if not email or pd.isna(email): return None
+    s = str(email).strip().lower()
+    if '@' not in s or '.' not in s: return None
+    return s
+
+def normalize_gender(value) -> str | None:
+    """
+    Chuẩn hóa giới tính: female, male, other.
+    Input: Nữ, Chị, Cô, Nu, Female, F... -> female
+    Input: Nam, Anh, Chú, Ong, Male, M... -> male
+    """
+    if not value or pd.isna(value): return None
+    
+    # Bỏ dấu và chuyển về chữ thường (Ví dụ: "Nữ" -> "nu")
+    s = unidecode(str(value)).lower().strip()
+    
+    # 1. Nhóm Nữ (Female)
+    female_keywords = [
+        'nu', 'chi', 'female', 'ba', 'co', 'me', 'f', 'woman', 'lady', 'girl', 
+        'madam', 'ms', 'mrs', 'miss'
+    ]
+    # Kiểm tra khớp chính xác hoặc chứa từ khóa (ưu tiên khớp từ đầu)
+    if any(k == s for k in female_keywords) or any(s.startswith(k) for k in female_keywords):
+        return 'female'
+
+    # 2. Nhóm Nam (Male)
+    male_keywords = [
+        'nam', 'anh', 'male', 'ong', 'chu', 'bo', 'm', 'man', 'boy', 
+        'mr', 'sir'
+    ]
+    if any(k == s for k in male_keywords) or any(s.startswith(k) for k in male_keywords):
+        return 'male'
+
+    return 'other'
 
 # --- HÀM XỬ LÝ CHÍNH - "SIÊU PARSER" ĐÃ NÂNG CẤP ---
 def process_standard_file(db: Session, file_content: bytes, brand_id: int, source: str, file_name: str = "unknown.xlsx", allow_override: bool = False):
@@ -221,10 +276,15 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
         print(f"Đã tải {len(product_cost_map)} sản phẩm có giá vốn từ DB sau khi flush.")
 
         # --- BƯỚC 2: XỬ LÝ SHEET ĐƠN HÀNG ---
+        affected_usernames = set() # Tập hợp các username cần đồng bộ
         if order_sheet:
             print(f"Đang xử lý sheet '{order_sheet}'...")
             df_order = pd.read_excel(xls, sheet_name=order_sheet, header=1, dtype=str).fillna('')
             if not df_order.empty and 'order_id' in df_order.columns:
+                # Thu thập tất cả username trong file
+                if 'username' in df_order.columns:
+                    affected_usernames.update(df_order['username'].dropna().unique().tolist())
+                
                 order_codes_in_file = df_order['order_id'].dropna().unique().tolist()
                 existing_codes = {c for c, in db.query(models.Order.order_code).filter(models.Order.brand_id == brand_id, models.Order.order_code.in_(order_codes_in_file)).all()}
                 
@@ -234,6 +294,13 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                 
                 print(f"Phân loại: {len(df_new_orders['order_id'].unique())} đơn mới | {len(df_existing_orders['order_id'].unique())} đơn cần cập nhật.")
                 
+                cols = df_order.columns.tolist()
+                # Tự động tìm tên cột linh hoạt hơn
+                col_phone = find_sheet_name(cols, ['phone', 'sdt', 'điện thoại', 'tel', 'mobile']) or ('phone' if 'phone' in cols else None)
+                col_email = find_sheet_name(cols, ['email', 'mail', 'thư']) or ('email' if 'email' in cols else None)
+                col_address = find_sheet_name(cols, ['address', 'địa chỉ', 'dia chi']) or ('address' if 'address' in cols else None)
+                col_gender = find_sheet_name(cols, ['gender', 'sex', 'giới tính', 'gioi tinh', 'phái', 'phai', 'xưng hô', 'xung ho'])
+
                 orders_to_insert = []
                 orders_to_update = []
                 
@@ -302,6 +369,12 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                             'district', 'order_id', 'username', 
                             'shipping_provider_name'
                         ]
+                        # Remove also dynamic cols if exist
+                        if col_phone: redundant_keys.append(col_phone)
+                        if col_email: redundant_keys.append(col_email)
+                        if col_address: redundant_keys.append(col_address)
+                        if col_gender: redundant_keys.append(col_gender)
+
                         for key in redundant_keys:
                             item_dict.pop(key, None)
                         items_list.append(item_dict)
@@ -314,6 +387,12 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     province_val = get_new_province_name(str(first_row.get('province', '')))
                     district_val = str(first_row.get('district', ''))
                     
+                    # Xử lý thông tin KH mới (Phone, Email, Gender)
+                    phone_val = normalize_phone(first_row.get(col_phone)) if col_phone else None
+                    email_val = normalize_email(first_row.get(col_email)) if col_email else None
+                    address_val = str(first_row.get(col_address)).strip() if col_address and not pd.isna(first_row.get(col_address)) else None
+                    gender_val = normalize_gender(first_row.get(col_gender)) if col_gender else None
+
                     # Tạo dict chi tiết (Quan trọng để lưu cancel_reason)
                     extra_details = {
                         "items": items_list, 
@@ -323,7 +402,11 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                         "order_status": str(first_row.get('order_status', '')),
                         "province": province_val,
                         "district": district_val,
-                        "delivered_date": delivered_date_val.isoformat() if delivered_date_val else None
+                        "delivered_date": delivered_date_val.isoformat() if delivered_date_val else None,
+                        "phone": phone_val,
+                        "email": email_val,
+                        "address": address_val,
+                        "gender": gender_val
                     }
 
                     return {
@@ -418,6 +501,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                         rev.gmv,
                         rev.total_fees,
                         rev.refund,
+                        rev.order_refund,
                         rev.source
                     ) for rev in existing_revenues
                 }
@@ -438,6 +522,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     gmv = to_float(row.get('gmv'))
                     total_fees = to_float(row.get('total_fees'))
                     refund = to_float(row.get('refund'))
+                    order_refund = to_float(row.get('order_refund'))
 
                     # Tạo chữ ký cho dòng mới
                     new_signature = (
@@ -447,6 +532,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                         gmv,
                         total_fees,
                         refund,
+                        order_refund,
                         source # `source` là của cả file import
                     )
 
@@ -460,6 +546,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                             "gmv": gmv,
                             "total_fees": total_fees,
                             "refund": refund,
+                            "order_refund": order_refund,
                             "brand_id": brand_id,
                             "source": source
                         })
@@ -512,7 +599,12 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
         else:
             print("Không tìm thấy sheet Marketing.")
 
-        # --- BƯỚC 5: COMMIT GIAO DỊCH ---
+        # --- BƯỚC 5: ĐỒNG BỘ BẢNG CUSTOMER ---
+        if affected_usernames:
+            print(f"Đang đồng bộ dữ liệu cho {len(affected_usernames)} khách hàng...")
+            crud.customer.upsert_customers_from_orders(db, brand_id, list(affected_usernames))
+
+        # --- BƯỚC 6: COMMIT GIAO DỊCH ---
         print("Đang thực hiện commit dữ liệu vào DB...")
         db.commit()
         print("COMMIT THÀNH CÔNG!")

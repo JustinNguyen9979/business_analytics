@@ -24,6 +24,13 @@ ORDER_STATUS_KEYWORDS = {
     "processing_status": ["dang giao", "dang trung chuyen", "cho giao hang", "cho van chuyen", "dang cho", "chuan bi hang", "pickup", "transitting", "delivery"]
 }
 
+# Các trạng thái được tính là thành công (Góp phần vào số lượng đơn tính AOV)
+SUCCESS_CATEGORIES = {'completed'}
+
+def is_success_category(category: str) -> bool:
+    """Check if the categorized status is considered a successful/active order."""
+    return category in SUCCESS_CATEGORIES
+
 def get_active_order_filters(model):
     """
     Trả về điều kiện lọc chung để loại bỏ các đơn hàng không hợp lệ (Hủy, Bom, Fail).

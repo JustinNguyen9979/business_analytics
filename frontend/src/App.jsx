@@ -16,6 +16,7 @@ const FinancePage = lazy(() => import('./pages/FinancePage'));
 const MarketingPage = lazy(() => import('./pages/MarketingPage'));
 const OperationPage = lazy(() => import('./pages/OperationPage'));
 const CustomerPage = lazy(() => import('./pages/CustomerPage'));
+const SearchPage = lazy(() => import('./pages/SearchPage'));
 
 const PageLoader = () => (
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100%' }}>
@@ -39,6 +40,7 @@ function App() {
                                 <Route path="/dashboard/:brandIdentifier/marketing" element={<MarketingPage />} />
                                 <Route path="/dashboard/:brandIdentifier/operation" element={<OperationPage />} />
                                 <Route path="/dashboard/:brandIdentifier/customer" element={<CustomerPage />} />
+                                <Route path="/dashboard/:brandIdentifier/search" element={<SearchPage />} />
                             </Route>
                         </Routes>
                     </Suspense>

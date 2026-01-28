@@ -31,6 +31,7 @@ class OrderBase(BaseModel):
     order_code: str; order_date: Optional[datetime] = None; status: Optional[str] = None; username: Optional[str] = None
     total_quantity: int = 0; cogs: float = 0.0; details: Optional[Dict[str, Any]] = None
     original_price: float = 0.0; sku_price: float = 0.0; net_revenue: float = 0.0; total_fees: float = 0.0; category: Optional[str] = None; tracking_id: Optional[str] = None
+    return_tracking_code: Optional[str] = None # Mã hoàn hàng (nếu có)
     gmv: float = 0.0 # Giá trị được tính tổng từ bảng Revenues
 class Order(OrderBase):
     id: int; brand_id: int; source: str; model_config = ConfigDict(from_attributes=True)
