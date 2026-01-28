@@ -52,7 +52,9 @@ export const MainContainer = styled(Box)(({ theme }) => ({
     flexDirection: 'column',
 }));
 
-export const SearchHeader = styled(Box)(({ theme, hasResult }) => ({
+export const SearchHeader = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'hasResult',
+})(({ theme, hasResult }) => ({
     width: '100%',
     display: 'flex',
     flexDirection: 'column',

@@ -422,3 +422,15 @@ export const searchEntitiesAPI = async (brandSlug, query) => {
         throw error;
     }
 };
+
+export const fetchSearchSuggestionsAPI = async (brandSlug, query) => {
+    try {
+        const response = await apiClient.get(`/brands/${brandSlug}/search-suggestions`, {
+            params: { q: query }
+        });
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching search suggestions for brand ${brandSlug}:`, error);
+        return []; // Trả về mảng rỗng nếu lỗi
+    }
+};

@@ -476,3 +476,18 @@ def search_anything(
         return {"status": "not_found", "message": "Không tìm thấy kết quả phù hợp."}
     
     return result
+
+@app.get("/brands/{brand_slug}/search-suggestions")
+def get_search_suggestions(
+    brand_slug: str,
+    q: str = Query(..., min_length=2),
+    db: Session = Depends(get_db)
+):
+    """
+    Gợi ý nhanh khi người dùng nhập vào ô tìm kiếm.
+    """
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    if not db_brand:
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
+    
+    return crud.customer.suggest_entities(db, db_brand.id, q)

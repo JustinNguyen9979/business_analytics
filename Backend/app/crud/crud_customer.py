@@ -600,4 +600,48 @@ class CRUDCustomer:
 
         return None
 
+    def suggest_entities(self, db: Session, brand_id: int, query: str, limit: int = 10):
+        """
+        Gợi ý kết quả khi người dùng đang gõ (Autocomplete).
+        Tìm kiếm gần đúng trong Customers (username, phone) và Orders (order_code).
+        """
+        if not query or len(query) < 2:
+            return []
+
+        suggestions = []
+        
+        # 1. Gợi ý khách hàng (Ưu tiên username và phone)
+        customers = db.query(Customer).filter(
+            Customer.brand_id == brand_id,
+            or_(
+                Customer.username.ilike(f"%{query}%"),
+                Customer.phone.ilike(f"%{query}%")
+            )
+        ).limit(limit).all()
+
+        for c in customers:
+            suggestions.append({
+                "type": "customer",
+                "value": c.username,
+                "label": f"{c.username} ({c.phone or 'No phone'})",
+                "sub_label": "Khách hàng"
+            })
+
+        # 2. Gợi ý đơn hàng (Nếu còn chỗ)
+        if len(suggestions) < limit:
+            orders = db.query(Order).filter(
+                Order.brand_id == brand_id,
+                Order.order_code.ilike(f"%{query}%")
+            ).limit(limit - len(suggestions)).all()
+
+            for o in orders:
+                suggestions.append({
+                    "type": "order",
+                    "value": o.order_code,
+                    "label": f"Đơn hàng: {o.order_code}",
+                    "sub_label": o.source or "---"
+                })
+
+        return suggestions
+
 customer = CRUDCustomer()
