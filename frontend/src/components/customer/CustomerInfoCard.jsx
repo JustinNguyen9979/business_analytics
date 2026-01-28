@@ -38,10 +38,10 @@ const CreditRatingBadge = ({ info }) => {
     const theme = useTheme();
 
     const rating = useMemo(() => {
-        const isRefund = info.refunded_orders > 0;
-        const isBomb = info.bomb_orders > 0;
-        const total = info.total_orders || 0;
-        const cancelRate = total > 0 ? (info.cancelled_orders / total) : 0;
+        const isRefund = info.refundedOrders > 0;
+        const isBomb = info.bombOrders > 0;
+        const total = info.orderCount || 0;
+        const cancelRate = total > 0 ? (info.cancelCount / total) : 0;
         const isHighCancel = total > 3 && cancelRate > 0.4;
 
         if (isRefund) {
@@ -100,7 +100,7 @@ const CustomerInfoCard = ({ info }) => {
                                 Tổng chi thực tế:
                             </Typography>
                             <Typography variant="h6" sx={{ fontSize: '1.5rem !important', fontWeight: 900 }}>
-                                {formatCurrency(info.total_spent)}
+                                {formatCurrency(info.ltv)}
                             </Typography>
                         </Box>
                         <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.5 }}>
@@ -123,17 +123,17 @@ const CustomerInfoCard = ({ info }) => {
                 gap: 2, pt: 3,
                 borderTop: `1px solid ${theme.palette.divider}`
             }}>
-                <DetailStatBox label="Tổng đơn" value={info.total_orders} color="text.primary" />
-                <DetailStatBox label="Thành công" value={info.completed_orders} color="success.main" />
-                <DetailStatBox label="Đã hủy" value={info.cancelled_orders} color="warning.main" />
-                <DetailStatBox label="Bom hàng" value={info.bomb_orders} color="error.main" />
-                <DetailStatBox label="Hoàn tiền" value={info.refunded_orders} color="error.main" isBold />
-                <DetailStatBox label="Chu kỳ mua" value={info.avg_repurchase_cycle ? `${Math.round(info.avg_repurchase_cycle)} ngày` : '-'} color="info.main" />
+                <DetailStatBox label="Tổng đơn" value={info.orderCount} color="text.primary" />
+                <DetailStatBox label="Thành công" value={info.successCount} color="success.main" />
+                <DetailStatBox label="Đã hủy" value={info.cancelCount} color="warning.main" />
+                <DetailStatBox label="Bom hàng" value={info.bombOrders} color="error.main" />
+                <DetailStatBox label="Hoàn tiền" value={info.refundedOrders} color="error.main" isBold />
+                <DetailStatBox label="Chu kỳ mua" value={info.avgRepurchaseCycle ? `${Math.round(info.avgRepurchaseCycle)} ngày` : '-'} color="info.main" />
             </Box>
 
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', opacity: 0.7 }}>
-                <Typography variant="body2">📍 {[info.district, info.province].filter(Boolean).join(' - ') || 'Chưa có địa chỉ'}</Typography>
-                <Typography variant="body2">📅 Đơn cuối: {formatDate(info.last_order_date)}</Typography>
+                <Typography variant="body2">📍 {info.defaultAddress || 'Đang cập nhật'}</Typography>
+                <Typography variant="body2">📅 Đơn cuối: {formatDate(info.lastOrderDate)}</Typography>
             </Box>
         </Paper>
     );

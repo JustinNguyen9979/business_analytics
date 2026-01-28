@@ -9,7 +9,7 @@ import PersonIcon from '@mui/icons-material/Person';
 
 // Context & Services
 import { useBrand } from '../../context/BrandContext';
-import { fetchCustomerDetailAPI } from '../../services/api';
+import { searchEntitiesAPI } from '../../services/api';
 
 // Components
 import SectionTitle from '../ui/SectionTitle';
@@ -25,15 +25,22 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
     useEffect(() => {
         if (open && username && slug) {
             setLoading(true);
-            fetchCustomerDetailAPI(slug, username)
-                .then(res => setData(res))
+            // Thay vì gọi API detail riêng, ta dùng logic Search chung
+            searchEntitiesAPI(slug, username)
+                .then(res => {
+                    // Logic search trả về object trực tiếp (customer hoặc order)
+                    // Ở đây ta kỳ vọng là customer
+                    if (res && res.type === 'customer') {
+                        setData(res);
+                    } else {
+                        console.warn("Không tìm thấy hồ sơ khách hàng qua search logic:", res);
+                        setData(null);
+                    }
+                })
                 .catch(err => console.error(err))
                 .finally(() => setLoading(false));
         }
     }, [open, username, slug]);
-
-    const info = data?.info || {};
-    const orders = data?.orders || [];
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth>
@@ -65,15 +72,23 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
                 ) : data ? (
                     <Stack spacing={2}>
                         {/* 1. INFO CARD */}
-                        <CustomerInfoCard info={info} />
+                        {/* Data trả về từ search logic đã có sẵn format chuẩn */}
+                        <CustomerInfoCard info={data} />
 
                         {/* 2. ORDER HISTORY */}
                         <Box>
                             <SectionTitle sx={{ mt: 0 }}>LỊCH SỬ GIAO DỊCH</SectionTitle>
-                            <OrderHistoryTable orders={orders} />
+                            <OrderHistoryTable 
+                                orders={data.recentOrders} 
+                                maxHeight={600}
+                            />
                         </Box>
                     </Stack>
-                ) : null}
+                ) : (
+                    <Box sx={{ p: 5, textAlign: 'center' }}>
+                        <Typography color="text.secondary">Không tìm thấy thông tin khách hàng.</Typography>
+                    </Box>
+                )}
             </DialogContent>
         </Dialog>
     );

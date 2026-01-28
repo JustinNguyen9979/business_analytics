@@ -106,20 +106,9 @@ const CustomerResultView = ({ data }) => {
                         <CardHeader>
                             <Typography variant="subtitle1" fontWeight="bold">LỊCH SỬ ĐƠN HÀNG</Typography>
                         </CardHeader>
+                        
                         <OrderHistoryTable 
-                            orders={data.recentOrders.map(o => ({
-                                order_code: o.id,
-                                tracking_id: o.trackingCode, 
-                                return_tracking_code: o.return_tracking_code, // Map thêm Return Tracking Code
-                                order_date: o.date,
-                                status: o.status,
-                                category: o.category,
-                                net_revenue: o.total,
-                                gmv: o.gmv,             // Map thêm GMV
-                                total_fees: o.total_fees, // Map thêm Total Fees
-                                source: o.source || '---',
-                                details: o.details || {} // Truyền full details (items, shipping...)
-                            }))} 
+                            orders={data.recentOrders} 
                             maxHeight={600}
                         />
                     </LuxuryCard>

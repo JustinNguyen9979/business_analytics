@@ -127,21 +127,25 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
             # --- Nhánh 2: BIỂU ĐỒ ---
             # --------------------------------------------------------------
             elif request_type == "daily_kpis_chart":
-                # Lấy danh sách source từ params gửi lên (Frontend sẽ gửi list hoặc string)
+                # Lấy danh sách source từ params gửi lên
                 req_source = params.get("source")
+                # Lấy interval (day/week/month) - Mặc định là day
+                interval = params.get("interval", "day")
 
-                # Chuẩn hóa thành list nếu cần
+                # Chuẩn hóa source thành list nếu cần
                 source_list = None
-                if req_source is not None: # SỬA: Dùng is not None để chấp nhận list rỗng []
+                if req_source is not None:
                     if isinstance(req_source, list):
                         source_list = req_source
                     else:
                         source_list = [req_source]
 
+                # Gọi hàm mới hỗ trợ aggregation
                 result_data = {
-                    "data": dashboard_service.get_daily_kpis_for_range(
-                        db, brand_id, start_date, end_date, source_list=source_list
-                    )
+                    "data": dashboard_service.get_aggregated_kpis_chart(
+                        db, brand_id, start_date, end_date, source_list=source_list, interval=interval
+                    ),
+                    "aggregationType": interval # Trả về để Frontend biết cách vẽ trục X
                 }
 
             # --------------------------------------------------------------

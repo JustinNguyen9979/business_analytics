@@ -362,115 +362,190 @@ class CRUDCustomer:
             "total": total_found, "page": page, "limit": page_size
         }
 
-    def get_customer_detail_with_orders(self, db: Session, *, brand_id: int, username: str):
-        # 1. Query Orders
-        orders = db.query(Order).filter(
-            Order.brand_id == brand_id, 
-            Order.username == username
-        ).order_by(desc(Order.order_date)).all()
+    def _format_unified_order(
+        self, 
+        order: Order, 
+        net_revenue: float, 
+        gmv: float, 
+        total_fees: float, 
+        category: str, 
+        refund_tracking_code: str = None,
+        product_map: dict = None
+    ):
+        """
+        Helper chuẩn hóa dữ liệu đơn hàng về format thống nhất cho cả Search và Detail View.
+        Format này tương thích trực tiếp với OrderHistoryTable ở Frontend.
+        """
+        # Lấy details và deep copy để tránh sửa đổi object gốc nếu cần (hoặc dùng dict mới)
+        full_details = order.details if order.details and isinstance(order.details, dict) else {}
         
-        if not orders:
-            return None
-
-        # 2. Get Financial Data
-        order_codes = [o.order_code for o in orders if o.order_code]
-        revenue_map, fees_map, gmv_map, refunded_codes, refund_tracking_map = self._get_revenue_map(db, brand_id, order_codes)
-        
-        # 3. Get Product Map (SKU -> Name)
-        product_map = self._get_product_map(db, brand_id)
-
-        # 4. Aggregation (Sử dụng chung Helper với hàm trên)
-        stats = {
-            "total_spent": 0.0,
-            "total_orders": 0, "completed_orders": 0,
-            "cancelled_orders": 0, "bomb_orders": 0, "refunded_orders": 0,
-            "last_order_date": None, "province": None, "district": None,
-            "seen_codes": set(),
-            "avg_repurchase_cycle": 0.0 # New metric
-        }
-
-        completed_dates = []
-
-        for order in orders:
-            net_revenue = revenue_map.get(order.order_code, 0.0)
-            total_fees = fees_map.get(order.order_code, 0.0)
-            revenue_gmv = gmv_map.get(order.order_code, 0.0)
-            is_refunded = order.order_code in refunded_codes
-            
-            # --- LOGIC MỚI: Cập nhật tên sản phẩm chuẩn từ SKU ---
-            if order.details and isinstance(order.details, dict):
-                items = order.details.get('items', [])
-                for item in items:
-                    sku = item.get('sku')
-                    # Nếu tìm thấy SKU trong bảng products, ghi đè tên chuẩn vào
-                    if sku and sku in product_map:
-                        item['product_name'] = product_map[sku]
-            # -----------------------------------------------------
-            
-            # Gọi Helper để tính toán tổng quan
-            category = self._accumulate_order_data(stats, order, net_revenue, is_refunded)
-            
-            # Collect dates for repurchase cycle calculation (Successful orders only)
-            if is_success_category(category) and order.order_date:
-                completed_dates.append(order.order_date)
-            
-            # Gán thuộc tính bổ sung vào object order để API trả về hiển thị
-            setattr(order, "category", category)
-            setattr(order, "net_revenue", net_revenue)
-            setattr(order, "total_fees", total_fees)
-            
-            # Gán mã hoàn hàng (nếu có)
-            if refund_tracking_map.get(order.order_code):
-                setattr(order, "return_tracking_code", refund_tracking_map[order.order_code])
-            
-            # Ưu tiên lấy GMV từ bảng Revenue (nếu có)
-            if revenue_gmv > 0:
-                setattr(order, "gmv", revenue_gmv) 
-
-        # Calculate Average Repurchase Cycle (Logic Updated: Deduplicate same-day orders)
-        # Chỉ tính chu kỳ dựa trên "Ngày mua hàng" (Unique Dates), bỏ qua việc mua nhiều đơn trong cùng 1 ngày.
-        if len(completed_dates) > 1:
-            # 1. Chuyển đổi sang date object (bỏ time) và lọc trùng
-            unique_dates = sorted(list(set([d.date() if hasattr(d, 'date') else d for d in completed_dates])))
-            
-            if len(unique_dates) > 1:
-                total_days_diff = 0
-                count_intervals = 0
-                
-                for i in range(1, len(unique_dates)):
-                    # Calculate diff in days
-                    diff = (unique_dates[i] - unique_dates[i-1]).days
-                    total_days_diff += diff
-                    count_intervals += 1
-                
-                if count_intervals > 0:
-                    stats["avg_repurchase_cycle"] = total_days_diff / count_intervals
-
-        # Calculate AOV (Based on completed orders only)
-        completed_count = stats["completed_orders"]
-        aov = (stats["total_spent"] / completed_count) if completed_count > 0 else 0
+        # Cập nhật tên sản phẩm chuẩn từ SKU (nếu có map)
+        if product_map and 'items' in full_details and isinstance(full_details['items'], list):
+            for item in full_details['items']:
+                sku = item.get('sku')
+                if sku and sku in product_map:
+                    item['product_name'] = product_map[sku]
 
         return {
-            "info": {
-                "username": username,
-                "province": stats["province"] or "---",
-                "district": stats["district"] or "---",
-                "total_spent": stats["total_spent"],
-                "aov": aov, # New field
-                "total_orders": stats["total_orders"],
-                "completed_orders": stats["completed_orders"],
-                "cancelled_orders": stats["cancelled_orders"],
-                "bomb_orders": stats["bomb_orders"],
-                "refunded_orders": stats["refunded_orders"],
-                "last_order_date": stats["last_order_date"],
-                "avg_repurchase_cycle": stats["avg_repurchase_cycle"]
-            },
-            "orders": orders
+            # --- CÁC TRƯỜNG BẮT BUỘC CỦA SCHEMA (Database Model) ---
+            "id": order.id,
+            "brand_id": order.brand_id,
+            "username": order.username,
+            "total_quantity": order.total_quantity or 0,
+            "cogs": order.cogs or 0.0,
+            "original_price": order.original_price or 0.0,
+            "sku_price": order.sku_price or 0.0,
+            
+            # --- CÁC TRƯỜNG HIỂN THỊ UI & LOGIC ---
+            "order_code": order.order_code,
+            "tracking_id": order.tracking_id,
+            "return_tracking_code": refund_tracking_code,
+            "order_date": order.order_date.isoformat() if order.order_date else None,
+            "status": order.status,
+            "category": category,
+            "net_revenue": net_revenue,
+            "gmv": gmv,
+            "total_fees": total_fees,
+            "source": order.source or "---",
+            "details": full_details
         }
+
+    def _build_customer_response(self, customer: Customer, orders: list, revenue_map: dict, fees_map: dict, gmv_map: dict, refunded_codes: set, refund_tracking_map: dict, product_map: dict):
+        """
+        Helper duy nhất để tạo ra object Customer Response chuẩn (Single Source of Truth).
+        Kết hợp dữ liệu từ DB (cho các chỉ số tổng) và tính toán realtime (cho list orders).
+        """
+        # 1. Xử lý danh sách đơn hàng & Tính chỉ số phụ (Cycle, Real Revenue...)
+        formatted_orders = []
+        completed_dates = []
+        real_net_revenue = 0.0
+        real_total_fees = 0.0
+        
+        # Bomb orders chưa có trong bảng Customer, cần tính từ danh sách đơn hàng hoặc giả định
+        bomb_count_from_loop = 0
+        
+        for order in orders:
+            net_rev = revenue_map.get(order.order_code, 0.0)
+            fees = fees_map.get(order.order_code, 0.0)
+            gmv = gmv_map.get(order.order_code, 0.0)
+            refund_code = refund_tracking_map.get(order.order_code)
+            
+            # Phân loại trạng thái chuẩn xác
+            # Sử dụng refunded_codes (được xác định từ dữ liệu tài chính) để biết đơn có hoàn tiền hay không
+            is_financial_refund = order.order_code in refunded_codes
+            category = _classify_order_status(order, is_financial_refund=is_financial_refund)
+            
+            formatted_order = self._format_unified_order(
+                order, net_rev, gmv, fees, category, refund_code, product_map
+            )
+            formatted_orders.append(formatted_order)
+            
+            # Collect stats
+            if category == 'completed':
+                real_net_revenue += net_rev
+                completed_dates.append(order.order_date)
+            elif category == 'refunded':
+                real_net_revenue += net_rev # Cộng số âm
+            elif category == 'bomb':
+                bomb_count_from_loop += 1
+            
+            real_total_fees += fees
+
+        # 2. Tính Avg Repurchase Cycle
+        avg_cycle = 0.0
+        if len(completed_dates) > 1:
+            unique_dates = sorted(list(set([d.date() if hasattr(d, 'date') else d for d in completed_dates])))
+            if len(unique_dates) > 1:
+                total_days = (unique_dates[-1] - unique_dates[0]).days
+                avg_cycle = total_days / (len(unique_dates) - 1)
+
+        # 3. Tính Rank Progress
+        current_spent = customer.total_spent or 0
+        next_rank_target = 0
+        next_rank_name = "MAX"
+        
+        if current_spent < 2000000:
+            next_rank_target = 2000000; next_rank_name = "SILVER"
+        elif current_spent < 10000000:
+            next_rank_target = 10000000; next_rank_name = "GOLD"
+        elif current_spent < 20000000:
+            next_rank_target = 20000000; next_rank_name = "PLATINUM"
+        elif current_spent < 50000000:
+            next_rank_target = 50000000; next_rank_name = "DIAMOND"
+        
+        rank_progress = 100
+        if next_rank_target > 0:
+            rank_progress = min(round((current_spent / next_rank_target) * 100, 1), 100)
+
+        # 4. Construct Final Object
+        # Lấy ngày đặt hàng gần nhất từ danh sách đơn hàng (đã sort desc)
+        latest_order_date = None
+        if orders and len(orders) > 0:
+            # orders[0] là object Order, có thuộc tính order_date (datetime)
+            latest_order_date = orders[0].order_date
+
+        return {
+            "type": "customer",
+            "id": customer.username or str(customer.id),
+            "source": customer.source or "---",
+            "name": customer.username or customer.phone or "Khách vãng lai",
+            "phone": customer.phone or "---",
+            "email": customer.email or "---",
+            "gender": customer.gender or "---",
+            "defaultAddress": customer.default_address or "---",
+            "province": customer.default_province or "---",
+            "district": "---", # Cần bổ sung nếu DB có cột district
+            "lastLogin": "Gần đây",
+            "tags": customer.tags or [],
+            "notes": customer.notes or "---",
+            "lastOrderDate": latest_order_date,
+            
+            # --- Metrics ---
+            "rank": customer.rank,
+            "nextRank": next_rank_name,
+            "rankProgress": rank_progress,
+            
+            "ltv": customer.total_spent,
+            "totalProfit": customer.profit or 0.0,
+            "totalFees": real_total_fees, # Tính từ list orders hiển thị
+            "aov": customer.aov or 0.0,
+            
+            "orderCount": customer.total_orders,
+            "successCount": customer.success_orders,
+            "refundedOrders": customer.refunded_orders,
+            "cancelCount": customer.canceled_orders,
+            "bombOrders": bomb_count_from_loop, # Tạm dùng số tính từ loop
+            "avgRepurchaseCycle": avg_cycle,
+            
+            # --- List ---
+            "recentOrders": formatted_orders
+        }
+
+    def _fetch_customer_profile_data(self, db: Session, brand_id: int, customer: Customer):
+        """
+        Helper: Logic cốt lõi để lấy dữ liệu chi tiết khách hàng + orders + finance.
+        Được tách ra từ SearchPage để dùng chung, tránh trùng lặp logic.
+        """
+        # 1. Lấy toàn bộ lịch sử đơn hàng
+        all_orders = db.query(Order).filter(
+            Order.brand_id == brand_id,
+            Order.username == customer.username
+        ).order_by(Order.order_date.desc()).all()
+
+        # 2. Lấy dữ liệu tài chính
+        order_codes = [o.order_code for o in all_orders if o.order_code]
+        revenue_map, fees_map, gmv_map, refunded_codes, refund_tracking_map = self._get_revenue_map(db, brand_id, order_codes)
+        product_map = self._get_product_map(db, brand_id)
+
+        # 3. Build Response using Shared Helper
+        return self._build_customer_response(
+            customer, all_orders, revenue_map, fees_map, gmv_map, refunded_codes, refund_tracking_map, product_map
+        )
 
     def search_entities(self, db: Session, brand_id: int, query: str):
         """
-        Tìm kiếm thực thể (Đơn hàng hoặc Khách hàng) dựa trên query.
+        Tìm kiếm thực thể:
+        Nếu là tìm khách hàng, cũng phải tuân thủ việc lấy từ bảng Customer làm gốc.
         """
         query = query.strip()
         if not query:
@@ -483,15 +558,8 @@ class CRUDCustomer:
         ).first()
 
         if order:
-            # Nếu tìm thấy đơn hàng, trả về thông tin chi tiết đơn hàng kèm info khách hàng (nếu có)
-            # Tận dụng hàm detail_with_orders nhưng chỉ lấy 1 đơn
-            # Ở đây ta sẽ giả lập cấu trúc trả về giống frontend mong đợi
-            
-            # Lấy thêm net_revenue từ Revenue table
             from models import Revenue
             rev = db.query(Revenue).filter(Revenue.brand_id == brand_id, Revenue.order_code == order.order_code).first()
-            
-            # Phân loại trạng thái
             is_refunded = (rev.refund or 0) < -0.1 if rev else False
             category = _classify_order_status(order, is_financial_refund=is_refunded)
             
@@ -503,13 +571,13 @@ class CRUDCustomer:
                 "paymentMethod": order.details.get("payment_method") if order.details else "---",
                 "source": order.source,
                 "trackingCode": order.tracking_id or "---",
-                "return_tracking_code": rev.order_refund if rev else None, # Mã hoàn hàng
+                "return_tracking_code": rev.order_refund if rev else None,
                 "carrier": order.details.get("shipping_provider_name") if order.details else "---",
                 "customer": {
                     "name": order.details.get("customer_name") or order.username if order.details else order.username,
                     "phone": order.details.get("phone") if order.details else "---",
                     "email": "---",
-                    "rank": "MEMBER", # Mặc định, có thể query thêm từ bảng Customer
+                    "rank": "MEMBER", 
                     "fullAddress": f"{order.details.get('address', '')}, {order.details.get('province', '')}" if order.details else "---"
                 },
                 "items": order.details.get("items", []) if order.details else [],
@@ -521,135 +589,14 @@ class CRUDCustomer:
                 "netMargin": round(((rev.net_revenue - order.cogs) / rev.net_revenue * 100), 1) if rev and rev.net_revenue > 0 else 0
             }
 
-        # 2. ƯU TIÊN 2: Tìm khách hàng (theo SĐT hoặc Username) - LOẠI BỎ TÌM THEO TÊN
+        # 2. ƯU TIÊN 2: Tìm khách hàng (Tìm chính xác tuyệt đối trên cột username)
         customer = db.query(Customer).filter(
             Customer.brand_id == brand_id,
-            (Customer.phone == query) | (Customer.username.ilike(f"%{query}%")) 
+            Customer.username == query
         ).first()
 
         if customer:
-            # 2.1 Lấy toàn bộ lịch sử đơn hàng
-            all_orders = db.query(Order).filter(
-                Order.brand_id == brand_id,
-                Order.username == customer.username
-            ).order_by(Order.order_date.desc()).all()
-
-            # 2.2 Lấy dữ liệu tài chính thực tế từ bảng Revenue cho các đơn hàng này
-            order_codes = [o.order_code for o in all_orders if o.order_code]
-            revenue_map, fees_map, gmv_map, refunded_codes, refund_tracking_map = self._get_revenue_map(db, brand_id, order_codes)
-            
-            # 2.2b Lấy Product Map để chuẩn hóa tên sản phẩm
-            product_map = self._get_product_map(db, brand_id)
-
-            # 2.3 Tính toán tổng hợp (Aggregation)
-            # Thay vì tính toán lại Profit từ đầu (tốn kém), ta lấy trực tiếp từ bảng Customer
-            # Tuy nhiên, vẫn cần loop qua đơn hàng để lấy danh sách recentOrders và tính các chỉ số phụ khác nếu cần
-            
-            real_total_fees = 0.0
-            real_net_revenue = 0.0
-            
-            recent_orders_data = [] # Chuẩn bị data cho list
-
-            for order in all_orders:
-                # 1. Tính toán trước các biến cần thiết
-                is_refunded = order.order_code in refunded_codes
-                category = _classify_order_status(order, is_financial_refund=is_refunded)
-                
-                net_rev = revenue_map.get(order.order_code, 0.0)
-                fees = fees_map.get(order.order_code, 0.0)
-                
-                # 2. Cộng dồn tài chính (Chỉ để hiển thị thêm, Profit chính lấy từ Customer DB)
-                if category == 'completed':
-                    real_net_revenue += net_rev
-                elif category == 'refunded':
-                    real_net_revenue += net_rev
-                
-                real_total_fees += fees 
-                
-                # Lấy toàn bộ thông tin chi tiết (items, shipping, payment...)
-                full_details = order.details if order.details and isinstance(order.details, dict) else {}
-                
-                # --- LOGIC MỚI: Cập nhật tên sản phẩm chuẩn từ SKU ---
-                if 'items' in full_details and isinstance(full_details['items'], list):
-                    for item in full_details['items']:
-                        sku = item.get('sku')
-                        if sku and sku in product_map:
-                            item['product_name'] = product_map[sku] # Ghi đè tên chuẩn
-                # -----------------------------------------------------
-
-                recent_orders_data.append({
-                    "id": order.order_code,
-                    "trackingCode": order.tracking_id,
-                    "source": order.source,
-                    "date": order.order_date.isoformat() if order.order_date else None,
-                    "total": net_rev,
-                    "gmv": gmv_map.get(order.order_code, 0.0),
-                    "total_fees": fees, 
-                    "return_tracking_code": refund_tracking_map.get(order.order_code), 
-                    "status": order.status, 
-                    "category": category,
-                    "details": full_details 
-                })
-
-            # 2.4 Tính toán Rank Progress (Tiến độ lên hạng)
-            current_spent = customer.total_spent or 0
-            next_rank_target = 0
-            next_rank_name = "MAX"
-            
-            if current_spent < 2000000:
-                next_rank_target = 2000000
-                next_rank_name = "SILVER"
-            elif current_spent < 10000000:
-                next_rank_target = 10000000
-                next_rank_name = "GOLD"
-            elif current_spent < 20000000:
-                next_rank_target = 20000000
-                next_rank_name = "PLATINUM"
-            elif current_spent < 50000000:
-                next_rank_target = 50000000
-                next_rank_name = "DIAMOND"
-            
-            rank_progress = 100
-            if next_rank_target > 0:
-                rank_progress = min(round((current_spent / next_rank_target) * 100, 1), 100)
-
-            # 2.5 Construct Response đầy đủ
-            return {
-                "type": "customer",
-                # --- Customer Info ---
-                "id": customer.username or str(customer.id),
-                "source": customer.source or "---", 
-                "name": customer.username or customer.phone or "Khách vãng lai",
-                "phone": customer.phone or "---",
-                "email": customer.email or "---",
-                "gender": customer.gender or "---",
-                "defaultAddress": customer.default_address or "---",
-                "province": customer.default_province or "---",
-                "lastLogin": "Gần đây", 
-                "tags": customer.tags or [],
-                "notes": customer.notes or "---",
-                
-                # --- Metrics & Rank ---
-                "rank": customer.rank,
-                "nextRank": next_rank_name,
-                "rankProgress": rank_progress,
-                
-                # --- Aggregated Financials (Orders + Revenues) ---
-                "ltv": customer.total_spent, 
-                "totalNetRevenue": real_net_revenue, 
-                "totalProfit": customer.profit or 0.0,    # LẤY TRỰC TIẾP TỪ DB
-                "totalFees": real_total_fees,        
-                "aov": customer.aov,
-                
-                # --- Order Counts ---
-                "orderCount": customer.total_orders,
-                "successCount": customer.success_orders,
-                "refundedOrders": customer.refunded_orders, 
-                "cancelCount": customer.canceled_orders, 
-                
-                # --- List Orders (Mapped for UI) ---
-                "recentOrders": recent_orders_data
-            }
+            return self._fetch_customer_profile_data(db, brand_id, customer)
 
         return None
 

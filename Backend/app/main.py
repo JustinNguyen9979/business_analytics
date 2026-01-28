@@ -457,25 +457,6 @@ def get_top_customers(
     # Kết quả trả về là List[Dict], Pydantic sẽ tự validate sang List[CustomerAnalyticsItem]
     return result['data']
 
-@app.get("/brands/{brand_slug}/customers/{username}", response_model=schemas.CustomerDetailResponse)
-def get_customer_detail(
-    brand_slug: str,
-    username: str,
-    db: Session = Depends(get_db),
-):
-    """
-    Lấy thông tin chi tiết và lịch sử đơn hàng của một khách hàng cụ thể.
-    """
-    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
-    if not db_brand:
-        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
-        
-    detail = crud.customer.get_customer_detail_with_orders(db, brand_id=db_brand.id, username=username)
-    if not detail:
-        raise HTTPException(status_code=404, detail="Không tìm thấy khách hàng này.")
-        
-    return detail
-
 @app.get("/brands/{brand_slug}/search")
 def search_anything(
     brand_slug: str,

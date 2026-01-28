@@ -17,7 +17,7 @@ dayjs.extend(advancedFormat);
  * @param {Array<dayjs>} dateRange - Khoảng thời gian [start, end].
  * @returns {'day' | 'week' | 'month'}
  */
-const determineAggregation = (dateRange) => {
+export const determineAggregation = (dateRange) => {
     const [start, end] = dateRange;
 
     if (!start || !end) return 'day';
@@ -41,9 +41,10 @@ const determineAggregation = (dateRange) => {
  * Xử lý và tổng hợp dữ liệu biểu đồ.
  * @param {Array<Object>} dailyData - Dữ liệu thô hàng ngày từ API.
  * @param {object} chartDateRange - Object bộ lọc { range, type }.
+ * @param {string} [preCalculatedType] - Loại aggregation đã được tính sẵn từ Backend (Optional).
  * @returns {{ aggregatedData: Array<Object>, aggregationType: string }}
  */
-export const processChartData = (dailyData, chartDateRange) => {
+export const processChartData = (dailyData, chartDateRange, preCalculatedType = null) => {
     // Các điều kiện an toàn
     if (!dailyData || !chartDateRange?.range) {
         return { aggregatedData: [], aggregationType: 'day' };
@@ -51,21 +52,24 @@ export const processChartData = (dailyData, chartDateRange) => {
 
     const { range } = chartDateRange; // Chỉ cần range
     const [startDate, endDate] = range;
-    const aggregationType = determineAggregation(range); // Gọi hàm đã sửa đổi
+    
+    // Nếu Backend đã tính sẵn, dùng luôn type đó. Nếu không, tự tính.
+    const aggregationType = preCalculatedType || determineAggregation(range);
 
-    // Nếu dữ liệu rỗng (do lọc không ra kết quả), trả về rỗng ngay, không tự điền số 0
-    // NHƯNG vẫn phải trả về aggregationType đúng để vẽ trục X
+    // Nếu dữ liệu rỗng (do lọc không ra kết quả), trả về rỗng ngay
     if (dailyData.length === 0) {
         return { aggregatedData: [], aggregationType };
     }
 
-    // TH1: Không cần tổng hợp, trả về dữ liệu gốc
-    if (aggregationType === 'day') {
+    // [OPTIMIZATION] Nếu Backend đã tính sẵn (preCalculatedType có giá trị và != day)
+    // Hoặc logic tự động quyết định là 'day' -> Không cần loop gom nhóm
+    if ((preCalculatedType && preCalculatedType !== 'day') || aggregationType === 'day') {
+        // console.log(`[Processor] Using pre-calculated data for '${aggregationType}'`);
         return { aggregatedData: dailyData, aggregationType };
     }
     
-    // DEBUG: Kiểm tra aggregation
-    console.log(`[Processor] Aggregating ${dailyData.length} rows to '${aggregationType}'`);
+    // DEBUG: Kiểm tra aggregation (Chỉ chạy khi Frontend phải tự làm - Fallback)
+    console.log(`[Processor] Aggregating ${dailyData.length} rows to '${aggregationType}' (Client-side Fallback)`);
 
     const DEFAULT_KEYS = ['net_revenue', 'profit', 'total_cost', 'ad_spend', 'cogs', 'shipping_cost', 'packaging_cost', 'operating_cost', 'other_cost'];
 

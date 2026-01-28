@@ -22,6 +22,69 @@ def json_serial(obj):
         return float(obj)
     raise TypeError(f"Type {type(obj)} not serializable")
 
+def get_aggregated_kpis_chart(
+    db: Session, 
+    brand_id: int, 
+    start_date: date, 
+    end_date: date, 
+    source_list: Optional[List[str]] = None,
+    interval: str = 'day'
+) -> List[Dict[str, Any]]:
+    """
+    Lấy dữ liệu KPI biểu đồ, hỗ trợ gom nhóm theo Tuần/Tháng ngay tại Backend.
+    Giúp giảm tải cho Frontend khi xem khoảng thời gian dài.
+    """
+    # 1. Lấy dữ liệu thô theo ngày (Đã có Cache Redis tối ưu ở tầng này)
+    daily_data = get_daily_kpis_for_range(db, brand_id, start_date, end_date, source_list)
+    
+    if not daily_data or interval == 'day':
+        return daily_data
+
+    # 2. Gom nhóm (Grouping)
+    grouped_map = defaultdict(list)
+    
+    for item in daily_data:
+        try:
+            # Parse ngày từ string (do get_daily_kpis_for_range trả về dict với date là string ISO)
+            d_str = item.get('date')
+            current_date = date.fromisoformat(d_str)
+            
+            key = ""
+            if interval == 'month':
+                # Gom về ngày đầu tháng: 2023-01-15 -> 2023-01-01
+                key = current_date.replace(day=1).isoformat()
+                
+            elif interval == 'week':
+                # Gom về ngày đầu tuần (Thứ 2): 
+                # weekday(): Mon=0, Sun=6
+                start_of_week = current_date - timedelta(days=current_date.weekday())
+                key = start_of_week.isoformat()
+            else:
+                key = d_str # Fallback
+
+            grouped_map[key].append(item)
+        except Exception as e:
+            print(f"Error grouping date {item.get('date')}: {e}")
+            continue
+
+    # 3. Tổng hợp (Aggregation) từng nhóm
+    results = []
+    for date_key, items in grouped_map.items():
+        # Dùng lại logic chuẩn của kpi_utils để cộng dồn JSON và số liệu
+        agg = kpi_utils.aggregate_data_points(items)
+        
+        # Tính lại các chỉ số % (ROI, AOV...)
+        final = kpi_utils.calculate_derived_metrics(agg)
+        
+        # Gán lại ngày đại diện
+        final['date'] = date_key
+        results.append(final)
+    
+    # Sắp xếp lại theo thời gian
+    results.sort(key=lambda x: x['date'])
+    
+    return results
+
 def get_daily_kpis_for_range(
     db: Session, 
     brand_id: int, 

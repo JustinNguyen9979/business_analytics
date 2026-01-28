@@ -403,22 +403,10 @@ export const fetchTopCustomersAPI = async (brandSlug, limit = 50, sortBy = 'tota
             sort_by: sortBy,
             order: order
         };
-        const response = await apiClient.get(`/brands/${brandSlug}/customers`, { params });
+        const response = await apiClient.get(`/brands/${brand_slug}/customers`, { params });
         return response.data;
     } catch (error) {
         console.error(`Error fetching top customers for brand ${brandSlug}:`, error);
-        throw error;
-    }
-};
-
-export const fetchCustomerDetailAPI = async (brandSlug, username) => {
-    try {
-        // Encode username để xử lý các ký tự đặc biệt nếu có
-        const encodedUsername = encodeURIComponent(username);
-        const response = await apiClient.get(`/brands/${brandSlug}/customers/${encodedUsername}`);
-        return response.data;
-    } catch (error) {
-        console.error(`Error fetching customer detail for ${username}:`, error);
         throw error;
     }
 };
