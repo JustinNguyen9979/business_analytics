@@ -28,7 +28,8 @@ const useSearchPageLogic = () => {
     // Debounced function để lấy gợi ý
     const debouncedFetchSuggestions = useCallback(
         debounce(async (searchValue) => {
-            if (searchValue.trim().length < 2) {
+            const trimmedVal = searchValue.trim();
+            if (trimmedVal.length < 2) {
                 setSuggestions([]);
                 setIsMenuOpen(false);
                 return;
@@ -36,10 +37,22 @@ const useSearchPageLogic = () => {
             
             setIsLoadingSuggestions(true);
             try {
-                const data = await fetchSearchSuggestionsAPI(brandSlug, searchValue);
-                const hasSuggestions = data && data.length > 0;
-                setSuggestions(data || []);
-                setIsMenuOpen(hasSuggestions); // Chỉ mở menu nếu thực sự có gợi ý trả về
+                const data = await fetchSearchSuggestionsAPI(brandSlug, trimmedVal);
+                
+                // [TỐI ƯU] Nếu user nhập chính xác 100% tên hoặc giá trị đã gợi ý, không cần hiện menu nữa
+                const exactMatch = data && data.some(s => 
+                    s.value.toLowerCase() === trimmedVal.toLowerCase() || 
+                    s.label.split(' (')[0].toLowerCase() === trimmedVal.toLowerCase()
+                );
+
+                if (exactMatch) {
+                    setSuggestions([]);
+                    setIsMenuOpen(false);
+                } else {
+                    const hasSuggestions = data && data.length > 0;
+                    setSuggestions(data || []);
+                    setIsMenuOpen(hasSuggestions);
+                }
             } catch (error) {
                 console.error("Lỗi lấy gợi ý:", error);
                 setSuggestions([]);
