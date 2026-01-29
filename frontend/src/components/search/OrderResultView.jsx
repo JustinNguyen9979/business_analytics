@@ -165,7 +165,8 @@ const OrderResultView = ({ data }) => {
                                 </Box>
 
                                 {/* Tracking Codes */}
-                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: data.return_tracking_code ? '1fr 1fr' : '1fr' }, gap: 2 }}>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: data.return_tracking_code ? '1fr 1fr 1fr' : '1fr 1fr' }, gap: 2 }}>
+                                    <TrackingInfo label="MÃ ĐƠN HÀNG" code={data.orderCode} colorType="primary" />
                                     <TrackingInfo label="MÃ VẬN ĐƠN" code={data.trackingCode} colorType="info" />
                                     <TrackingInfo label="MÃ HOÀN HÀNG" code={data.return_tracking_code} colorType="error" />
                                 </Box>
@@ -191,7 +192,7 @@ const OrderResultView = ({ data }) => {
                                 <Box sx={{ flex: 1, pr: { md: 4 } }}>
                                     <SectionTitle>DOANH THU & PHÍ SÀN</SectionTitle>
                                     <FinanceRow label="Giá bán (Original Price)" value={formatNumber(data.original_price)} />
-                                    <FinanceRow label="Trợ giá (Voucher/Subsidy)" value={formatNumber(data.subsidy_amount)} isPositive valueColor="success.main" />
+                                    <FinanceRow label="Trợ giá (Voucher/Subsidy)" value={formatNumber(data.subsidy_amount)} isNegative valueColor="success.main" />
                                     <FinanceRow label="Khách trả (Subtotal)" value={formatNumber(data.sku_price)} isBold />
                                     
                                     <Divider sx={{ my: 1.5, borderStyle: 'dashed' }} />
@@ -199,9 +200,9 @@ const OrderResultView = ({ data }) => {
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
                                         <Typography variant="body2" color="text.secondary">Phí sàn & QC (Fees)</Typography>
                                         <Stack direction="row" spacing={1} alignItems="center">
-                                            {data.takeRate > 0 && (
+                                            {(data.takeRate && Math.abs(data.takeRate) > 0 && data.netRevenue > 0) && (
                                                 <Chip 
-                                                    label={`Take Rate: ${formatNumber(data.takeRate)}%`} 
+                                                    label={`Take Rate: ${formatNumber(Math.abs(data.takeRate))}%`} 
                                                     size="small" 
                                                     color="warning" 
                                                     variant="outlined"
@@ -209,7 +210,7 @@ const OrderResultView = ({ data }) => {
                                                 />
                                             )}
                                             <Typography variant="body2" color="error.main">
-                                                -{formatNumber(data.totalFees)}
+                                                {formatNumber(data.totalFees)}
                                             </Typography>
                                         </Stack>
                                     </Box>
@@ -238,19 +239,32 @@ const OrderResultView = ({ data }) => {
                                     
                                     <Divider sx={{ my: 1.5 }} />
                                     
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                        <Typography fontWeight="bold">LỢI NHUẬN RÒNG</Typography>
-                                        <Box sx={{ textAlign: 'right' }}>
+                                    {/* Final Profit Result Box */}
+                                    <Box sx={{ 
+                                        mt: 2, 
+                                        p: 2, 
+                                        borderRadius: 2,
+                                        bgcolor: (theme) => alpha(data.netProfit >= 0 ? theme.palette.success.main : theme.palette.error.main, 0.05),
+                                        border: '1px dashed',
+                                        borderColor: data.netProfit >= 0 ? 'success.main' : 'error.main'
+                                    }}>
+                                        <Stack direction="row" justifyContent="space-between" alignItems="center">
+                                            <Box>
+                                                <Typography variant="subtitle2" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
+                                                    Lợi nhuận ròng
+                                                </Typography>
+                                                <Stack direction="row" spacing={0.5} alignItems="center" mt={0.5}>
+                                                    <Typography variant="caption" color="text.secondary">Margin:</Typography>
+                                                    <Typography variant="body2" fontWeight="bold" color={data.profitMargin >= 0 ? "success.main" : "error.main"}>
+                                                        {formatNumber(data.profitMargin)}%
+                                                    </Typography>
+                                                </Stack>
+                                            </Box>
+                                            
                                             <Typography variant="h5" fontWeight="900" color={data.netProfit >= 0 ? "success.main" : "error.main"}>
-                                                {data.netProfit >= 0 ? '+' : ''}{formatCurrency(data.netProfit)}
+                                                {data.netProfit > 0 ? '+' : ''}{formatCurrency(data.netProfit)}
                                             </Typography>
-                                            <Chip 
-                                                label={`Margin: ${formatNumber(data.profitMargin)}%`} 
-                                                size="small" 
-                                                color={data.profitMargin >= 0 ? "success" : "error"} 
-                                                sx={{ height: 20, fontWeight: 'bold', mt: 0.5 }} 
-                                            />
-                                        </Box>
+                                        </Stack>
                                     </Box>
                                 </Box>
                             </Box>

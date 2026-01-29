@@ -131,8 +131,17 @@ class SearchService:
         # --- ENRICH PRODUCT NAMES ---
         enriched_items = self._enrich_order_items(db, brand_id, order.details)
 
-        # --- FETCH CUSTOMER METRICS IF AVAILABLE ---
-        net_profit = rev.net_revenue - (order.cogs or 0.0) if rev else 0.0
+        if category == 'refunded':
+            calc_cogs = 0.0
+        else:
+            calc_cogs = order.cogs or 0.0
+
+        net_profit = rev.net_revenue - calc_cogs
+
+        calculated_original_price = sum((
+            item.get("original_price", 0.0) * item.get("quantity") or 0)
+            for item in order.details.get("items", [])
+        ) if order.details else 0.0
 
         return {
             "type": "order",
@@ -151,12 +160,12 @@ class SearchService:
             "customer": customer_info,
             "items": enriched_items,
             
-            "original_price": order.original_price or 0.0,
+            "original_price": calculated_original_price,
             "subsidy_amount": order.subsidy_amount or 0.0,
             "sku_price": order.sku_price or 0.0,
             "totalCollected": rev.net_revenue if rev else 0.0,
             
-            "cogs": order.cogs or 0.0, 
+            "cogs": calc_cogs, 
             "netProfit": net_profit,
             "netRevenue": rev.net_revenue if rev else 0.0,
             "totalFees": rev.total_fees if rev else 0.0,
