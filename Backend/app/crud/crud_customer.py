@@ -677,4 +677,45 @@ class CRUDCustomer:
 
         return suggestions
 
+    def update_customer_info(self, db: Session, brand_id: int, customer_identifier: str, update_data):
+        """
+        Cập nhật thông tin khách hàng (SĐT, Email, Address, Notes).
+        identifier có thể là ID (int) hoặc username (str).
+        """
+        # Thử tìm theo username trước (vì frontend đang dùng username làm ID chính)
+        customer = db.query(Customer).filter(
+            Customer.brand_id == brand_id,
+            Customer.username == customer_identifier
+        ).first()
+
+        # Nếu không tìm thấy theo username, thử tìm theo ID (đề phòng)
+        if not customer and customer_identifier.isdigit():
+             customer = db.query(Customer).filter(
+                Customer.brand_id == brand_id,
+                Customer.id == int(customer_identifier)
+            ).first()
+
+        if not customer:
+            return None
+
+        # Cập nhật các trường được phép
+        if update_data.phone is not None:
+            customer.phone = update_data.phone
+        if update_data.email is not None:
+            customer.email = update_data.email
+        if update_data.gender is not None:
+            customer.gender = update_data.gender
+        if update_data.default_address is not None:
+            customer.default_address = update_data.default_address
+        if update_data.notes is not None:
+            customer.notes = update_data.notes
+        if update_data.tags is not None:
+            customer.tags = update_data.tags
+            
+        db.commit()
+        db.refresh(customer)
+        
+        # Trả về data format chuẩn để frontend hiển thị lại ngay
+        return self._fetch_customer_profile_data(db, brand_id, customer)
+
 customer = CRUDCustomer()

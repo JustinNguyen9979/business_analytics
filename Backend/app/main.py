@@ -491,3 +491,24 @@ def get_search_suggestions(
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     
     return crud.customer.suggest_entities(db, db_brand.id, q)
+
+@app.put("/brands/{brand_slug}/customers/{customer_identifier}")
+def update_customer_api(
+    brand_slug: str,
+    customer_identifier: str,
+    update_data: schemas.CustomerUpdate,
+    db: Session = Depends(get_db)
+):
+    """
+    Cập nhật thông tin khách hàng (SĐT, Email, Address, Notes).
+    """
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    if not db_brand:
+        raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
+        
+    result = crud.customer.update_customer_info(db, db_brand.id, customer_identifier, update_data)
+    
+    if not result:
+        raise HTTPException(status_code=404, detail="Không tìm thấy Khách hàng.")
+        
+    return result

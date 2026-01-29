@@ -58,6 +58,15 @@ class CustomerBase(BaseModel):
 
 class CustomerCreate(CustomerBase): pass
 
+class CustomerUpdate(BaseModel):
+    """Schema for updating customer info via API"""
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    gender: Optional[str] = None
+    default_address: Optional[str] = None
+    notes: Optional[str] = None
+    tags: Optional[List[str]] = None
+
 class Customer(CustomerBase, DBEntity): 
     pass
 

@@ -184,14 +184,15 @@ export const LuxuryCard = styled(Paper)(({ theme }) => ({
             height: '3px',
         }
     },
-    '&::before': { // Viền sáng gradient trên đầu
+    '&::before': { // Viền sáng gradient trên đầu (Nằm trong Box)
         content: '""',
         position: 'absolute',
         top: 0, left: 0, right: 0,
-        height: '2px',
+        height: '3px', // Tăng độ dày một chút
         background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
-        opacity: 0.7,
+        opacity: 0.6, // Giảm độ gắt
         transition: 'all 0.3s ease',
+        zIndex: 1, // Đảm bảo nằm dưới các control nổi
     }
 }));
 

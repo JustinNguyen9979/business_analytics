@@ -434,3 +434,16 @@ export const fetchSearchSuggestionsAPI = async (brandSlug, query) => {
         return []; // Trả về mảng rỗng nếu lỗi
     }
 };
+
+export const updateCustomerAPI = async (brandSlug, customerIdentifier, updateData) => {
+    try {
+        const response = await apiClient.put(
+            `/brands/${brandSlug}/customers/${customerIdentifier}`, 
+            updateData
+        );
+        return response.data;
+    } catch (error) {
+        console.error(`Error updating customer ${customerIdentifier} for brand ${brandSlug}:`, error);
+        throw error;
+    }
+};

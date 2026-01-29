@@ -197,6 +197,39 @@ const theme = createTheme({
                         height: 400,
                     },
                 },
+                // Mới: Biến thể Liquid Glass cao cấp (Dùng cho Dropdown/Menu/Search)
+                {
+                    props: { variant: 'liquidGlass' },
+                    style: {
+                        marginTop: 8,
+                        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03))',
+                        backdropFilter: 'blur(30px) saturate(150%)',
+                        WebkitBackdropFilter: 'blur(30px) saturate(150%)',
+                        border: 'none', // Loại bỏ viền trắng để hòa quyện hơn
+                        boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6)',
+                        borderRadius: 16,
+                        overflow: 'hidden',
+                        '& .MuiList-root': { padding: 0 }, // Xóa padding mặc định của List
+                        '& .MuiMenuItem-root': {
+                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                            margin: 0, // Reset margin để full width
+                            padding: '12px 20px', // Padding chuẩn
+                            borderBottom: '1px solid rgba(255,255,255,0.05)',
+                            '&:hover': {
+                                backgroundColor: 'rgba(0, 229, 255, 0.1) !important',
+                                color: '#00E5FF',
+                                textShadow: '0 0 8px rgba(0, 229, 255, 0.5)',
+                                paddingLeft: '28px' // Hiệu ứng trượt nhẹ
+                            },
+                            '&.Mui-selected': {
+                                backgroundColor: 'rgba(0, 229, 255, 0.2) !important',
+                                color: '#00E5FF',
+                                fontWeight: 'bold'
+                            },
+                            '&:last-child': { borderBottom: 'none' }
+                        }
+                    },
+                },
             ]
         },
 
@@ -352,6 +385,26 @@ const theme = createTheme({
                 '.neon-text': {
                     color: PALETTE.primary.main,
                     textShadow: '0 0 5px rgba(0, 229, 255, 0.7), 0 0 10px rgba(0, 229, 255, 0.5)',
+                },
+                
+                // Animation Marquee (Chữ chạy)
+                '@keyframes marquee': {
+                    '0%': { transform: 'translateX(50%)' }, 
+                    '100%': { transform: 'translateX(-100%)' }
+                },
+                '.marquee-box': {
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                    maskImage: 'linear-gradient(to right, transparent 0%, black 10%, black 90%, transparent 100%)',
+                    '&:hover .marquee-text': {
+                        animationPlayState: 'paused' // Dừng khi hover
+                    }
+                },
+                '.marquee-text': {
+                    display: 'inline-block',
+                    paddingLeft: '16px',
+                    paddingRight: '16px',
+                    minWidth: '100%',
                 }
             }
         },
