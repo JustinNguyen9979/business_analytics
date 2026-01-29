@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func, cast, String
+from sqlalchemy import or_, and_, func, cast, String
 from collections import defaultdict
 from models import Order, Revenue, Product, Customer
 from kpi_utils import _classify_order_status
@@ -36,7 +36,7 @@ class SearchService:
         if not order:
             rev_match = db.query(Revenue).filter(
                 Revenue.brand_id == brand_id,
-                cast(Revenue.order_refund, String).ilike(f"%{query}%") # Tìm gần đúng mã hoàn
+                Revenue.order_refund.ilike(f"%{query}%")
             ).first()
             
             if rev_match:
@@ -65,55 +65,128 @@ class SearchService:
 
     def suggest_entities(self, db: Session, brand_id: int, query: str, limit: int = 10):
         """
-        Gợi ý kết quả khi người dùng đang gõ (Autocomplete).
-        Tìm kiếm gần đúng trong Customers (username, phone, email) và Orders (order_code).
+        Gợi ý kết quả Toàn cục (Global Search & Ranking).
+        Chiến thuật: UNION ALL + Global Sorting.
+        - Không giới hạn số lượng từng bảng con.
+        - Tìm quét toàn bộ DB.
+        - Sắp xếp dựa trên độ khớp (Exact > Prefix > Contains) và độ dài chuỗi.
         """
+        from sqlalchemy import literal, case, union_all, text
+        
         if not query or len(query) < 2:
             return []
-
-        suggestions = []
         
-        # 1. Gợi ý khách hàng (Ưu tiên username, phone, email)
-        customers = db.query(Customer).filter(
+        # Chuẩn bị pattern
+        pattern = f"%{query}%"
+        
+        # --- 1. SUB-QUERY: CUSTOMERS ---
+        # Logic: Nếu username khớp thì lấy username làm match_text, ngược lại lấy phone
+        c_stmt = db.query(
+            literal("customer").label("type"),
+            Customer.username.label("value"),
+            Customer.username.label("label"),
+            (Customer.phone + " - " + func.coalesce(Customer.email, "")).label("sub_label"),
+            case(
+                (Customer.username.ilike(pattern), Customer.username),
+                else_=Customer.phone
+            ).label("match_text")
+        ).filter(
             Customer.brand_id == brand_id,
             or_(
-                Customer.username.ilike(f"%{query}%"),
-                Customer.phone.ilike(f"%{query}%"),
-                Customer.email.ilike(f"%{query}%")
+                Customer.username.ilike(pattern),
+                Customer.phone.ilike(pattern),
+                Customer.email.ilike(pattern)
             )
-        ).limit(limit).all()
+        )
 
-        for c in customers:
-            label = c.username
-            if c.phone: label += f" ({c.phone})"
-            
-            suggestions.append({
-                "type": "customer",
-                "value": c.username,
-                "label": label,
-                "sub_label": c.email or "Khách hàng"
-            })
+        # --- 2. SUB-QUERY: ORDERS ---
+        # Logic hiển thị động:
+        # - Nếu khớp Tracking ID -> Label = Tracking ID (để user dễ nhận biết)
+        # - Nếu khớp Order Code -> Label = Order Code
+        
+        # Biến boolean kiểm tra xem Tracking có khớp query không
+        is_tracking_match = and_(
+            Order.tracking_id.ilike(pattern),
+            Order.tracking_id != '',
+            func.length(Order.tracking_id) > 2
+        )
 
-        # 2. Gợi ý đơn hàng (Nếu còn chỗ)
-        if len(suggestions) < limit:
-            remaining = limit - len(suggestions)
-            orders = db.query(Order).filter(
-                Order.brand_id == brand_id,
-                or_(
-                    Order.order_code.ilike(f"%{query}%"),
-                    Order.tracking_id.ilike(f"%{query}%")
-                )
-            ).limit(remaining).all()
+        o_stmt = db.query(
+            literal("order").label("type"),
+            Order.order_code.label("value"), # Value vẫn giữ Order Code để frontend navigate đúng
+            case(
+                (is_tracking_match, "Vận đơn: " + Order.tracking_id),
+                else_="Đơn hàng: " + Order.order_code
+            ).label("label"),
+            case(
+                (is_tracking_match, "Đơn hàng: " + Order.order_code),
+                else_=func.coalesce(func.nullif(Order.tracking_id, ''), Order.source)
+            ).label("sub_label"),
+            case(
+                (Order.order_code.ilike(pattern), Order.order_code),
+                else_=Order.tracking_id
+            ).label("match_text")
+        ).filter(
+            Order.brand_id == brand_id,
+            or_(
+                Order.order_code.ilike(pattern),
+                is_tracking_match
+            )
+        )
 
-            for o in orders:
-                suggestions.append({
-                    "type": "order",
-                    "value": o.order_code,
-                    "label": f"Đơn hàng: {o.order_code}",
-                    "sub_label": o.tracking_id or o.source
-                })
+        # --- 3. SUB-QUERY: REVENUES (RETURN ORDERS) ---
+        # Loại bỏ dữ liệu rác: '0', '0.0', chuỗi rỗng
+        r_stmt = db.query(
+            literal("order").label("type"),
+            Revenue.order_code.label("value"),
+            ("Đơn hoàn: " + Revenue.order_code).label("label"),
+            ("Mã hoàn: " + Revenue.order_refund).label("sub_label"),
+            Revenue.order_refund.label("match_text")
+        ).filter(
+            Revenue.brand_id == brand_id,
+            Revenue.order_refund.ilike(pattern),
+            Revenue.order_refund != '0',
+            Revenue.order_refund != '0.0',
+            Revenue.order_refund != '',
+            func.length(Revenue.order_refund) > 2
+        )
 
-        return suggestions
+        # --- 4. UNION ALL & GLOBAL SORTING ---
+        # Gộp tất cả lại thành 1 query duy nhất
+        combined_query = union_all(c_stmt, o_stmt, r_stmt).alias("combined_results")
+        
+        # Tính điểm ưu tiên (Priority Score)
+        # 0: Khớp chính xác (Exact)
+        # 1: Bắt đầu bằng (Prefix)
+        # 2: Chứa (Contains)
+        priority_score = case(
+            (combined_query.c.match_text.ilike(query), 0),       # Exact match
+            (combined_query.c.match_text.ilike(f"{query}%"), 1), # Prefix match
+            else_=2                                              # Contains match
+        )
+
+        final_query = db.query(
+            combined_query.c.type,
+            combined_query.c.value,
+            combined_query.c.label,
+            combined_query.c.sub_label
+        ).order_by(
+            priority_score.asc(),                 # Ưu tiên độ khớp
+            func.length(combined_query.c.match_text).asc(), # Ưu tiên chuỗi ngắn hơn
+            combined_query.c.label.asc()          # Alphabetical
+        ).limit(limit)
+
+        results = final_query.all()
+
+        return [
+            {
+                "type": r.type,
+                "value": r.value,
+                "label": r.label,
+                "sub_label": r.sub_label
+            }
+            for r in results
+        ]
 
     # =========================================================================
     # HELPERS (Private methods for internal use)
@@ -154,7 +227,7 @@ class SearchService:
             "source": order.source,
             "trackingCode": order.tracking_id or "---",
             "orderCode": order.order_code or "---",
-            "return_tracking_code": rev.order_refund if rev and rev.order_refund else None,
+            "return_tracking_code": rev.order_refund if rev and rev.order_refund else "---",
             "carrier": order.details.get("shipping_provider_name") if order.details else "---",
             
             "customer": customer_info,

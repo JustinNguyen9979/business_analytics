@@ -141,7 +141,7 @@ class Revenue(Base):
     
     total_fees = Column(Float, default=0.0) 
     refund = Column(Float, default=0.0)     
-    order_refund = Column(Float, default=0.0) # Added new column
+    order_refund = Column(String, nullable=True, index=True) 
 
     source = Column(String, nullable=False, index=True)
     brand_id = Column(Integer, ForeignKey("brands.id"), index=True)

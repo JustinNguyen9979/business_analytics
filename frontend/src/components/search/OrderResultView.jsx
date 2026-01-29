@@ -120,8 +120,7 @@ const TrackingInfo = ({ label, code, colorType = 'info' }) => {
 const OrderResultView = ({ data }) => {
     const theme = useTheme();
 
-    // Data Helpers
-    const totalOpsCost = (data.shippingCostReal || 0) + (data.platformFee || 0) + (data.adsCost || 0);
+    const hasReturn = !!data.return_tracking_code && !['0', '0.0', ''].includes(String(data.return_tracking_code).trim());
 
     return (
         <Box sx={{ 
@@ -165,10 +164,12 @@ const OrderResultView = ({ data }) => {
                                 </Box>
 
                                 {/* Tracking Codes */}
-                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: data.return_tracking_code ? '1fr 1fr 1fr' : '1fr 1fr' }, gap: 2 }}>
+                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: hasReturn ? '1fr 1fr 1fr' : '1fr 1fr' }, gap: 2 }}>
                                     <TrackingInfo label="MÃ ĐƠN HÀNG" code={data.orderCode} colorType="primary" />
                                     <TrackingInfo label="MÃ VẬN ĐƠN" code={data.trackingCode} colorType="info" />
-                                    <TrackingInfo label="MÃ HOÀN HÀNG" code={data.return_tracking_code} colorType="error" />
+                                    {hasReturn && (
+                                        <TrackingInfo label="MÃ HOÀN HÀNG" code={data.return_tracking_code} colorType="error" />
+                                    )}
                                 </Box>
                             </Stack>
                         </CardContent>
