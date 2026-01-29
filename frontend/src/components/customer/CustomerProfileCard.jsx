@@ -236,7 +236,7 @@ const CustomerProfileCard = ({ data: initialData, sx = {} }) => {
                             { label: 'Thành công', val: data.successCount, color: 'success.main' },
                             { label: 'Hoàn tiền', val: data.refundedOrders, color: 'error.main' },
                             { label: 'Bom hàng', val: data.bombOrders, color: 'warning.main' },
-                            { label: 'Đã hủy', val: Math.max(0, (data.orderCount || 0) - (data.successCount + data.refundedOrders + data.bombOrders)), color: 'text.disabled' }
+                            { label: 'Đã hủy', val: data.cancelCount, color: 'text.disabled' }
                         ].map((item, idx) => (
                             <Box key={idx} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

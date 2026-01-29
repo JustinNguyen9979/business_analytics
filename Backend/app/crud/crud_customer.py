@@ -37,6 +37,7 @@ class CRUDCustomer:
             "total_orders": 0,
             "success_orders": 0,
             "canceled_orders": 0,
+            "bomb_orders": 0,
             "refunded_orders": 0,
             "latest_source": None,
             "phone": None,
@@ -63,7 +64,7 @@ class CRUDCustomer:
             elif category == 'cancelled':
                 stats["canceled_orders"] += 1
             elif category == 'bomb':
-                stats["canceled_orders"] += 1
+                stats["bomb_orders"] += 1 # Tách riêng bomb
             elif category == 'refunded':
                 stats["refunded_orders"] += 1
 
@@ -121,20 +122,24 @@ class CRUDCustomer:
             customer.total_orders = data["total_orders"]
             customer.success_orders = data["success_orders"]
             customer.canceled_orders = data["canceled_orders"]
+            customer.bomb_orders = data["bomb_orders"] # Cập nhật cột mới
             customer.refunded_orders = data["refunded_orders"]
             
             if data["success_orders"] > 0:
                 customer.aov = data["total_spent"] / data["success_orders"]
 
-            # Phân hạng (Rank)
-            if customer.total_spent >= 50000000: customer.rank = "DIAMOND"
-            elif customer.total_spent >= 20000000: customer.rank = "PLATINUM"
-            elif customer.total_spent >= 10000000: customer.rank = "GOLD"
-            elif customer.total_spent >= 2000000: customer.rank = "SILVER"
-            else: customer.rank = "MEMBER"
+            # Phân hạng (Rank) - Logic tính toán inline (Thay vì gọi helper thiếu)
+            current_spent = customer.total_spent or 0.0
+            rank = "MEMBER"
+            if current_spent < 2000000: rank = "MEMBER"
+            elif current_spent < 10000000: rank = "SILVER"
+            elif current_spent < 20000000: rank = "GOLD"
+            elif current_spent < 50000000: rank = "PLATINUM"
+            else: rank = "DIAMOND"
+            
+            customer.rank = rank
 
         db.flush() # Đẩy thay đổi xuống nhưng chưa commit hoàn toàn
-
 
     def _extract_location_data(self, details: dict):
         """Helper: Trích xuất và chuẩn hóa Province/District từ JSON details."""
@@ -412,17 +417,14 @@ class CRUDCustomer:
 
     def _build_customer_response(self, customer: Customer, orders: list, revenue_map: dict, fees_map: dict, gmv_map: dict, refunded_codes: set, refund_tracking_map: dict, product_map: dict):
         """
-        Helper duy nhất để tạo ra object Customer Response chuẩn (Single Source of Truth).
-        Kết hợp dữ liệu từ DB (cho các chỉ số tổng) và tính toán realtime (cho list orders).
+        Helper tạo object Customer Response: Lấy trực tiếp từ DB, không tính toán real-time.
         """
-        # 1. Xử lý danh sách đơn hàng & Tính chỉ số phụ (Cycle, Real Revenue...)
+        # 1. Format danh sách đơn hàng (Chỉ để hiển thị list)
         formatted_orders = []
-        completed_dates = []
-        real_net_revenue = 0.0
-        real_total_fees = 0.0
         
-        # Bomb orders chưa có trong bảng Customer, cần tính từ danh sách đơn hàng hoặc giả định
-        bomb_count_from_loop = 0
+        # Biến đếm real-time từ danh sách đơn hàng (Để hiển thị chính xác Bom vs Hủy)
+        count_bomb = 0
+        count_cancel = 0
         
         for order in orders:
             net_rev = revenue_map.get(order.order_code, 0.0)
@@ -430,40 +432,22 @@ class CRUDCustomer:
             gmv = gmv_map.get(order.order_code, 0.0)
             refund_code = refund_tracking_map.get(order.order_code)
             
-            # Phân loại trạng thái chuẩn xác
-            # Sử dụng refunded_codes (được xác định từ dữ liệu tài chính) để biết đơn có hoàn tiền hay không
             is_financial_refund = order.order_code in refunded_codes
             category = _classify_order_status(order, is_financial_refund=is_financial_refund)
             
-            formatted_order = self._format_unified_order(
+            # Đếm phân loại (Fix lỗi DB gộp chung Hủy/Bom)
+            if category == 'bomb':
+                count_bomb += 1
+            elif category == 'cancelled':
+                count_cancel += 1
+            
+            formatted_orders.append(self._format_unified_order(
                 order, net_rev, gmv, fees, category, refund_code, product_map
-            )
-            formatted_orders.append(formatted_order)
-            
-            # Collect stats
-            if category == 'completed':
-                real_net_revenue += net_rev
-                completed_dates.append(order.order_date)
-            elif category == 'refunded':
-                real_net_revenue += net_rev # Cộng số âm
-            elif category == 'bomb':
-                bomb_count_from_loop += 1
-            
-            real_total_fees += fees
+            ))
 
-        # 2. Tính Avg Repurchase Cycle
-        avg_cycle = 0.0
-        if len(completed_dates) > 1:
-            unique_dates = sorted(list(set([d.date() if hasattr(d, 'date') else d for d in completed_dates])))
-            if len(unique_dates) > 1:
-                total_days = (unique_dates[-1] - unique_dates[0]).days
-                avg_cycle = total_days / (len(unique_dates) - 1)
-
-        # 3. Tính Rank Progress
-        current_spent = customer.total_spent or 0
-        next_rank_target = 0
-        next_rank_name = "MAX"
-        
+        # 2. Tính Rank Progress (Logic hiển thị O(1))
+        current_spent = customer.total_spent or 0.0
+        next_rank_target = 0; next_rank_name = "MAX"
         if current_spent < 2000000:
             next_rank_target = 2000000; next_rank_name = "SILVER"
         elif current_spent < 10000000:
@@ -473,17 +457,9 @@ class CRUDCustomer:
         elif current_spent < 50000000:
             next_rank_target = 50000000; next_rank_name = "DIAMOND"
         
-        rank_progress = 100
-        if next_rank_target > 0:
-            rank_progress = min(round((current_spent / next_rank_target) * 100, 1), 100)
+        rank_progress = min(round((current_spent / next_rank_target) * 100, 1), 100) if next_rank_target > 0 else 100
 
-        # 4. Construct Final Object
-        # Lấy ngày đặt hàng gần nhất từ danh sách đơn hàng (đã sort desc)
-        latest_order_date = None
-        if orders and len(orders) > 0:
-            # orders[0] là object Order, có thuộc tính order_date (datetime)
-            latest_order_date = orders[0].order_date
-
+        # 3. Trả về data (Bốc trực tiếp từ DB + Fix hiển thị Bom)
         return {
             "type": "customer",
             "id": customer.username or str(customer.id),
@@ -494,50 +470,53 @@ class CRUDCustomer:
             "gender": customer.gender or "---",
             "defaultAddress": customer.default_address or "---",
             "province": customer.default_province or "---",
-            "district": "---", # Cần bổ sung nếu DB có cột district
+            "district": "---", 
             "lastLogin": "Gần đây",
             "tags": customer.tags or [],
             "notes": customer.notes or "---",
-            "lastOrderDate": latest_order_date,
+            "lastOrderDate": orders[0].order_date if orders else None,
             
             # --- Metrics ---
             "rank": customer.rank,
             "nextRank": next_rank_name,
             "rankProgress": rank_progress,
             
-            "ltv": customer.total_spent,
+            "ltv": customer.total_spent or 0.0,
             "totalProfit": customer.profit or 0.0,
-            "totalFees": real_total_fees, # Tính từ list orders hiển thị
+            "totalFees": 0.0, 
             "aov": customer.aov or 0.0,
             
-            "orderCount": customer.total_orders,
-            "successCount": customer.success_orders,
-            "refundedOrders": customer.refunded_orders,
-            "cancelCount": customer.canceled_orders,
-            "bombOrders": bomb_count_from_loop, # Tạm dùng số tính từ loop
-            "avgRepurchaseCycle": avg_cycle,
+            "orderCount": customer.total_orders or 0,
+            "successCount": customer.success_orders or 0,
+            "refundedOrders": customer.refunded_orders or 0,
             
-            # --- List ---
+            # Sử dụng số đếm chính xác từ list thay vì số gộp trong DB
+            "cancelCount": count_cancel,
+            "bombOrders": count_bomb,
+            
+            "avgRepurchaseCycle": 0.0,
+            
             "recentOrders": formatted_orders
         }
 
     def _fetch_customer_profile_data(self, db: Session, brand_id: int, customer: Customer):
         """
-        Helper: Logic cốt lõi để lấy dữ liệu chi tiết khách hàng + orders + finance.
-        Được tách ra từ SearchPage để dùng chung, tránh trùng lặp logic.
+        Helper: Lấy dữ liệu chi tiết khách hàng.
+        Đã tối ưu: Không tính toán lại tài chính, chỉ fetch orders để hiển thị.
         """
-        # 1. Lấy toàn bộ lịch sử đơn hàng
+        # 1. Lấy lịch sử đơn hàng (Vẫn cần để hiển thị list chi tiết)
+        # Có thể limit số lượng nếu danh sách quá dài (ví dụ: lấy 50 đơn gần nhất)
         all_orders = db.query(Order).filter(
             Order.brand_id == brand_id,
             Order.username == customer.username
-        ).order_by(Order.order_date.desc()).all()
+        ).order_by(Order.order_date.desc()).limit(100).all() # Limit để tránh quá tải
 
-        # 2. Lấy dữ liệu tài chính
+        # 2. Lấy dữ liệu tài chính cho LIST ĐƠN HÀNG NÀY (để hiển thị chi tiết từng dòng)
         order_codes = [o.order_code for o in all_orders if o.order_code]
         revenue_map, fees_map, gmv_map, refunded_codes, refund_tracking_map = self._get_revenue_map(db, brand_id, order_codes)
         product_map = self._get_product_map(db, brand_id)
 
-        # 3. Build Response using Shared Helper
+        # 3. Build Response
         return self._build_customer_response(
             customer, all_orders, revenue_map, fees_map, gmv_map, refunded_codes, refund_tracking_map, product_map
         )
@@ -545,7 +524,7 @@ class CRUDCustomer:
     def search_entities(self, db: Session, brand_id: int, query: str):
         """
         Tìm kiếm thông minh: 
-        - Hỗ trợ tìm chính xác hoặc gần đúng (case-insensitive)
+        - Hỗ trợ tìm gần đúng (ilike %...%) cho Order Code và Tracking ID.
         - Order: order_code, tracking_id, return_tracking_code (via Revenue)
         - Customer: username, phone, email
         """
@@ -554,12 +533,12 @@ class CRUDCustomer:
             return None
 
         # 1. TÌM KIẾM ĐƠN HÀNG (Order Code hoặc Tracking ID)
-        # Sử dụng ilike để tìm kiếm không phân biệt hoa thường
+        # Sử dụng ilike %...% để tìm kiếm gần đúng (Contains)
         order = db.query(Order).filter(
             Order.brand_id == brand_id,
             or_(
-                Order.order_code.ilike(query), 
-                Order.tracking_id.ilike(query)
+                Order.order_code.ilike(f"%{query}%"), 
+                Order.tracking_id.ilike(f"%{query}%")
             )
         ).first()
 
@@ -569,7 +548,7 @@ class CRUDCustomer:
             from sqlalchemy import cast, String
             rev_match = db.query(Revenue).filter(
                 Revenue.brand_id == brand_id,
-                cast(Revenue.order_refund, String).ilike(query) # Cast sang String để dùng ilike
+                cast(Revenue.order_refund, String).ilike(f"%{query}%") # Cũng sửa thành tìm gần đúng
             ).first()
             
             if rev_match:
@@ -584,30 +563,122 @@ class CRUDCustomer:
             is_refunded = (rev.refund or 0) < -0.1 if rev else False
             category = _classify_order_status(order, is_financial_refund=is_refunded)
             
+            # --- START: ENRICH CUSTOMER DATA (OPTIMIZED) ---
+            # Mặc định lấy từ JSON details
+            customer_info = {
+                "name": order.details.get("customer_name") or order.username if order.details else order.username,
+                "phone": order.details.get("phone") if order.details else "---",
+                "email": "---",
+                "rank": "MEMBER", 
+                "fullAddress": f"{order.details.get('address', '')}, {order.details.get('province', '')}" if order.details else "---",
+                "id": order.username,
+                "total_orders": 0,
+                "success_orders": 0,
+                "refunded_orders": 0,
+                "bomb_orders": 0,
+                "nextRank": "SILVER",
+                "rankProgress": 0,
+                "notes": "---",
+                "tags": []
+            }
+
+            # Nếu có username, Lookup trực tiếp bảng Customer (O(1)) để lấy dữ liệu đã tổng hợp
+            if order.username:
+                db_customer = db.query(Customer).filter(
+                    Customer.brand_id == brand_id,
+                    Customer.username == order.username
+                ).first()
+                
+                if db_customer:
+                    # Tính toán nhanh Next Rank & Progress (Inline Logic)
+                    current_spent = db_customer.total_spent or 0.0
+                    next_rank_target = 0
+                    next_rank_name = "MAX"
+                    
+                    if current_spent < 2000000:
+                        next_rank_target = 2000000; next_rank_name = "SILVER"
+                    elif current_spent < 10000000:
+                        next_rank_target = 10000000; next_rank_name = "GOLD"
+                    elif current_spent < 20000000:
+                        next_rank_target = 20000000; next_rank_name = "PLATINUM"
+                    elif current_spent < 50000000:
+                        next_rank_target = 50000000; next_rank_name = "DIAMOND"
+                    
+                    rank_progress = 100
+                    if next_rank_target > 0:
+                        rank_progress = min(round((current_spent / next_rank_target) * 100, 1), 100)
+
+                    # Merge dữ liệu từ DB vào response
+                    customer_info.update({
+                        "name": db_customer.username, # Ưu tiên username định danh
+                        "source": db_customer.source or "---", # Lấy nguồn khách hàng
+                        "phone": db_customer.phone or customer_info["phone"],
+                        "email": db_customer.email or customer_info["email"],
+                        "gender": db_customer.gender or "---", # Lấy giới tính
+                        "rank": db_customer.rank or "MEMBER", # Lấy trực tiếp từ DB
+                        "nextRank": next_rank_name,
+                        "rankProgress": rank_progress,
+                        "defaultAddress": db_customer.default_address or customer_info["fullAddress"],
+                        "province": db_customer.default_province or "---", # Lấy tỉnh thành
+                        "notes": db_customer.notes or "---",
+                        "tags": db_customer.tags or [],
+                        
+                        # Metrics tài chính
+                        "ltv": db_customer.total_spent,
+                        "totalProfit": db_customer.profit,
+                        "aov": db_customer.aov,
+                        
+                        # Metrics đơn hàng
+                        "orderCount": db_customer.total_orders,
+                        "successCount": db_customer.success_orders,
+                        "refundedOrders": db_customer.refunded_orders,
+                        "cancelCount": db_customer.canceled_orders,
+                        "bombOrders": db_customer.bomb_orders or 0 # Cập nhật lấy từ DB
+                    })
+            # --- END: ENRICH CUSTOMER DATA ---
+
+            # --- ENRICH PRODUCT NAMES ---
+            enriched_items = order.details.get("items", []) if order.details else []
+            # Lấy map SKU -> Product Name
+            product_map = self._get_product_map(db, brand_id)
+            for item in enriched_items:
+                sku = item.get('sku')
+                if sku and sku in product_map:
+                    item['product_name'] = product_map[sku]
+                else:
+                    # Fallback nếu không có trong map, giữ nguyên name gốc hoặc hiển thị SKU
+                    item['product_name'] = item.get('name') or item.get('item_name') or sku
+
             return {
                 "type": "order",
                 "id": order.order_code,
                 "status": category,
                 "createdDate": order.order_date.strftime("%d/%m/%Y %H:%M") if order.order_date else "---",
+                "shippedDate": order.shipped_time.strftime("%d/%m/%Y %H:%M") if order.shipped_time else None,
+                "deliveredDate": order.delivered_date.strftime("%d/%m/%Y %H:%M") if order.delivered_date else None,
                 "paymentMethod": order.details.get("payment_method") if order.details else "---",
                 "source": order.source,
                 "trackingCode": order.tracking_id or "---",
-                "return_tracking_code": rev.order_refund if rev and rev.order_refund else "---",
+                "return_tracking_code": rev.order_refund if rev and rev.order_refund else None,
                 "carrier": order.details.get("shipping_provider_name") if order.details else "---",
-                "customer": {
-                    "name": order.details.get("customer_name") or order.username if order.details else order.username,
-                    "phone": order.details.get("phone") if order.details else "---",
-                    "email": "---",
-                    "rank": "MEMBER", 
-                    "fullAddress": f"{order.details.get('address', '')}, {order.details.get('province', '')}" if order.details else "---"
-                },
-                "items": order.details.get("items", []) if order.details else [],
+                
+                # Trả về object Customer đã được enrich
+                "customer": customer_info,
+                
+                "items": enriched_items,
                 "subtotal": order.original_price or 0.0,
                 "discountVoucher": order.subsidy_amount or 0.0,
+                "shippingFeeCustomer": order.details.get("shipping_fee", 0.0) if order.details else 0.0,
                 "totalCollected": rev.net_revenue if rev else 0.0,
+                
+                # Admin Costs
                 "cogs": order.cogs or 0.0,
-                "netProfit": (rev.net_revenue - order.cogs) if rev else 0.0,
-                "netMargin": round(((rev.net_revenue - order.cogs) / rev.net_revenue * 100), 1) if rev and rev.net_revenue > 0 else 0
+                "shippingCostReal": rev.total_fees if rev else 0.0, # Tạm gán total_fees vào shippingCostReal để hiển thị
+                "platformFee": 0.0, # Cần tách fee nếu có cột riêng
+                "adsCost": 0.0, # Cần logic tính ads riêng nếu có
+                
+                "netProfit": (rev.net_revenue - (order.cogs or 0.0)) if rev else 0.0,
+                "netMargin": round(((rev.net_revenue - (order.cogs or 0.0)) / rev.net_revenue * 100), 1) if rev and rev.net_revenue > 0 else 0
             }
 
         # 2. TÌM KIẾM KHÁCH HÀNG (Username, Phone, Email)

@@ -236,6 +236,7 @@ class Customer(Base):
     success_orders = Column(Integer, default=0)
     canceled_orders = Column(Integer, default=0)
     refunded_orders = Column(Integer, default=0)
+    bomb_orders = Column(Integer, default=0) # Added bomb_orders
     profit = Column(Float, default=0.0)        # Lợi nhuận tích lũy (Net Rev - COGS)
     aov = Column(Float, default=0.0)           # Giá trị trung bình đơn
 

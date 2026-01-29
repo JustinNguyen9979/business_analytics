@@ -1,29 +1,127 @@
 import React from 'react';
 import { 
-    Box, Typography, Stack, Button, Divider, 
-    Paper, IconButton, Chip 
+    Box, Typography, Stack, Divider, 
+    IconButton, Chip, Tooltip 
 } from '@mui/material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme, alpha, styled } from '@mui/material/styles';
 
+// Icons
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import EditIcon from '@mui/icons-material/Edit';
-import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
+
+// Common & Custom Components
 import CustomerProfileCard from '../customer/CustomerProfileCard'; 
 import OrderItemsTable from '../common/OrderItemsTable';
-
-// Custom Components
 import { LuxuryCard, CardHeader, CardContent } from '../StyledComponents';
-import OrderStatusChip from '../common/OrderStatusChip';
-import { LabelValue, SectionTitle } from './SearchCommon';
+import { SectionTitle } from './SearchCommon';
 
 // Utils
 import { formatCurrency, formatNumber } from '../../utils/formatters';
 
+// --- LOCAL STYLED COMPONENTS ---
+
+const StyledTimelineBox = styled(Stack)(({ theme }) => ({
+    backgroundColor: alpha(theme.palette.primary.main, 0.03),
+    padding: theme.spacing(2),
+    borderRadius: theme.shape.borderRadius * 2,
+    border: `1px dashed ${alpha(theme.palette.primary.main, 0.2)}`,
+    justifyContent: 'space-around',
+    alignItems: 'center'
+}));
+
+const TrackingContainer = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'colorType'
+})(({ theme, colorType = 'info' }) => {
+    const color = theme.palette[colorType].main;
+    return {
+        padding: theme.spacing(1.5),
+        backgroundColor: alpha(color, 0.05),
+        borderRadius: theme.shape.borderRadius,
+        border: `1px dashed ${color}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        transition: 'transform 0.2s',
+        '&:hover': {
+            backgroundColor: alpha(color, 0.1),
+        }
+    };
+});
+
+// --- HELPER SUB-COMPONENTS ---
+
+const MilestoneStep = ({ label, date, isCompleted, color = 'text.primary' }) => (
+    <Box sx={{ textAlign: 'center', flex: 1 }}>
+        <Typography variant="caption" color="text.secondary" display="block" mb={0.5} fontWeight="bold" sx={{ textTransform: 'uppercase' }}>
+            {label}
+        </Typography>
+        <Typography variant="body2" fontWeight="bold" color={isCompleted ? color : 'text.disabled'}>
+            {date || '---'}
+        </Typography>
+    </Box>
+);
+
+const MetricItem = ({ icon, label, value }) => (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center' }}>
+            {React.cloneElement(icon, { fontSize: 'small' })}
+        </Box>
+        <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+            {label}:
+        </Typography>
+        <Typography variant="body2" fontWeight="bold">
+            {value}
+        </Typography>
+    </Box>
+);
+
+const FinanceRow = ({ label, value, valueColor = 'text.primary', isBold = false, isNegative = false, isPositive = false }) => (
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
+        <Typography variant="body2" color="text.secondary">{label}</Typography>
+        <Typography 
+            variant={isBold ? 'subtitle2' : 'body2'} 
+            fontWeight={isBold ? 'bold' : 'normal'}
+            color={valueColor}
+        >
+            {isNegative && '-'}{isPositive && '+'}{value}
+        </Typography>
+    </Box>
+);
+
+const TrackingInfo = ({ label, code, colorType = 'info' }) => {
+    if (!code) return null;
+    return (
+        <TrackingContainer colorType={colorType}>
+            <Typography variant="subtitle2" color={`${colorType}.main`} fontWeight="900" sx={{ letterSpacing: 0.5 }}>
+                {label}
+            </Typography>
+            <Stack direction="row" alignItems="center" spacing={1}>
+                <Typography variant="body1" fontWeight="bold" color={colorType === 'error' ? 'error.main' : 'text.primary'}>
+                    {code}
+                </Typography>
+                <Tooltip title="Sao chép">
+                    <IconButton 
+                        size="small" 
+                        color={colorType}
+                        onClick={() => navigator.clipboard.writeText(code)}
+                    >
+                        <ContentCopyIcon fontSize="small" />
+                    </IconButton>
+                </Tooltip>
+            </Stack>
+        </TrackingContainer>
+    );
+};
+
+// --- MAIN COMPONENT ---
+
 const OrderResultView = ({ data }) => {
     const theme = useTheme();
+
+    // Data Helpers
+    const totalOpsCost = (data.shippingCostReal || 0) + (data.platformFee || 0) + (data.adsCost || 0);
 
     return (
         <Box sx={{ 
@@ -32,156 +130,50 @@ const OrderResultView = ({ data }) => {
             gap: 3,
             animation: 'fadeIn 0.5s ease' 
         }}>
-            {/* COL 1: CUSTOMER & INFO (Sidebar) */}
-            <Box sx={{ 
-                flex: { xs: '1 1 auto', md: '0 0 380px' },
-                minWidth: 0
-            }}>
-                <Stack spacing={3}>
-                    {/* LUXURY CUSTOMER BOX */}
-                    <Box sx={{ width: '100%' }}>
-                        <CustomerProfileCard data={data} />
-                    </Box>
-
-                    {/* OPERATION BOX */}
-                </Stack>
+            {/* COL 1: CUSTOMER SIDEBAR */}
+            <Box sx={{ flex: { xs: '1 1 auto', md: '0 0 380px' }, minWidth: 0 }}>
+                <CustomerProfileCard data={data.customer} />
             </Box>
 
-            {/* COL 2: FINANCIAL & ITEMS (Main Content) */}
-            <Box sx={{ 
-                flex: 1,
-                minWidth: 0
-            }}>
+            {/* COL 2: MAIN CONTENT */}
+            <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Stack spacing={3}>
+                    
+                    {/* 1. OPERATIONS CARD */}
                     <LuxuryCard sx={{ height: 'auto' }}>
                         <CardHeader><Typography variant="subtitle1" fontWeight="bold">VẬN HÀNH</Typography></CardHeader>
                         <CardContent>
                             <Stack spacing={3}>
-                                {/* SECTION 1: TIMELINE (3 KEY MILESTONES) */}
-                                <Stack 
+                                {/* Timeline */}
+                                <StyledTimelineBox 
                                     direction={{ xs: 'column', sm: 'row' }}
                                     divider={<Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' }, my: 1 }} />}
                                     spacing={2}
-                                    sx={{ 
-                                        bgcolor: alpha(theme.palette.primary.main, 0.03),
-                                        p: 2,
-                                        borderRadius: 2,
-                                        border: `1px dashed ${alpha(theme.palette.primary.main, 0.2)}`,
-                                        justifyContent: 'space-around',
-                                        alignItems: 'center'
-                                    }}
                                 >
-                                    {/* Milestone 1: Created */}
-                                    <Box sx={{ textAlign: 'center', flex: 1 }}>
-                                        <Typography variant="caption" color="text.secondary" display="block" mb={0.5} fontWeight="bold">NGÀY ĐẶT HÀNG</Typography>
-                                        <Typography variant="body2" fontWeight="bold">{data.createdDate || '---'}</Typography>
-                                    </Box>
-
-                                    {/* Milestone 2: Shipped */}
-                                    <Box sx={{ textAlign: 'center', flex: 1 }}>
-                                        <Typography variant="caption" color="text.secondary" display="block" mb={0.5} fontWeight="bold">GỬI HÀNG</Typography>
-                                        <Typography variant="body2" fontWeight="bold" color={data.shippedDate ? 'text.primary' : 'text.disabled'}>
-                                            {data.shippedDate || '---'}
-                                        </Typography>
-                                    </Box>
-
-                                    {/* Milestone 3: Delivered */}
-                                    <Box sx={{ textAlign: 'center', flex: 1 }}>
-                                        <Typography variant="caption" color="text.secondary" display="block" mb={0.5} fontWeight="bold">NHẬN HÀNG</Typography>
-                                        <Typography variant="body2" fontWeight="bold" color={data.deliveredDate ? 'success.main' : 'text.disabled'}>
-                                            {data.deliveredDate || '---'}
-                                        </Typography>
-                                    </Box>
-                                </Stack>
+                                    <MilestoneStep label="Ngày đặt hàng" date={data.createdDate} isCompleted={true} />
+                                    <MilestoneStep label="Gửi hàng" date={data.shippedDate || 'Đang cập nhật'} isCompleted={!!data.shippedDate} />
+                                    <MilestoneStep label="Nhận hàng" date={data.deliveredDate || 'Đang cập nhật'} isCompleted={!!data.deliveredDate} color="success.main" />
+                                </StyledTimelineBox>
 
                                 <Divider />
 
-                                {/* SECTION 2: DETAILS */}
-                                <Stack spacing={2}>
-                                    {/* Row 1: 3 Metrics (Source, Payment, Carrier) - Horizontal Layout */}
-                                    <Box sx={{ 
-                                        display: 'grid', 
-                                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, 
-                                        gap: 2 
-                                    }}>
-                                        {[
-                                            { icon: <StorefrontIcon fontSize="small" />, label: 'Nguồn đơn', value: data.source },
-                                            { icon: <CreditCardIcon fontSize="small" />, label: 'Thanh toán', value: data.paymentMethod },
-                                            { icon: <LocalShippingIcon fontSize="small" />, label: 'Đơn vị vận chuyển', value: data.carrier }
-                                        ].map((item, idx) => (
-                                            <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                                                <Box sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center' }}>
-                                                    {item.icon}
-                                                </Box>
-                                                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-                                                    {item.label}:
-                                                </Typography>
-                                                <Typography variant="body2" fontWeight="bold">
-                                                    {item.value}
-                                                </Typography>
-                                            </Box>
-                                        ))}
-                                    </Box>
+                                {/* Order Info Grid */}
+                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 2 }}>
+                                    <MetricItem icon={<StorefrontIcon />} label="Nguồn" value={data.source} />
+                                    <MetricItem icon={<CreditCardIcon />} label="Thanh Toán" value={data.paymentMethod} />
+                                    <MetricItem icon={<LocalShippingIcon />} label="ĐVVC" value={data.carrier} />
+                                </Box>
 
-                                    {/* Row 2: Tracking Codes (Order & Return) */}
-                                    <Box sx={{ 
-                                        display: 'grid', 
-                                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, 
-                                        gap: 2 
-                                    }}>
-                                        {/* Tracking Code (Forward) */}
-                                        <Box sx={{ 
-                                            p: 1.5, 
-                                            bgcolor: alpha(theme.palette.info.main, 0.05), 
-                                            borderRadius: 2, 
-                                            border: `1px dashed ${theme.palette.info.main}`,
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'space-between'
-                                        }}>
-                                            <Typography variant="subtitle2" color="info.main" fontWeight="900" sx={{ letterSpacing: 0.5 }}>
-                                                MÃ VẬN ĐƠN
-                                            </Typography>
-                                            
-                                            <Stack direction="row" alignItems="center" spacing={1}>
-                                                <Typography variant="body1" fontWeight="bold">
-                                                    {data.trackingCode || '---'}
-                                                </Typography>
-                                                <IconButton size="small" color="info"><ContentCopyIcon fontSize="small" /></IconButton>
-                                            </Stack>
-                                        </Box>
-
-                                        {/* Return Tracking Code (Only if exists) */}
-                                        {data.return_tracking_code && (
-                                            <Box sx={{ 
-                                                p: 1.5, 
-                                                bgcolor: alpha(theme.palette.error.main, 0.05), 
-                                                borderRadius: 2, 
-                                                border: `1px dashed ${theme.palette.error.main}`,
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                justifyContent: 'space-between'
-                                            }}>
-                                                <Typography variant="subtitle2" color="error.main" fontWeight="900" sx={{ letterSpacing: 0.5 }}>
-                                                    MÃ HOÀN HÀNG
-                                                </Typography>
-                                                
-                                                <Stack direction="row" alignItems="center" spacing={1}>
-                                                    <Typography variant="body1" fontWeight="bold" color="error.main">
-                                                        {data.return_tracking_code}
-                                                    </Typography>
-                                                    <IconButton size="small" color="error"><ContentCopyIcon fontSize="small" /></IconButton>
-                                                </Stack>
-                                            </Box>
-                                        )}
-                                    </Box>
-                                </Stack>
+                                {/* Tracking Codes */}
+                                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: data.return_tracking_code ? '1fr 1fr' : '1fr' }, gap: 2 }}>
+                                    <TrackingInfo label="MÃ VẬN ĐƠN" code={data.trackingCode} colorType="info" />
+                                    <TrackingInfo label="MÃ HOÀN HÀNG" code={data.return_tracking_code} colorType="error" />
+                                </Box>
                             </Stack>
                         </CardContent>
                     </LuxuryCard>
-                    
 
-                    {/* ITEM TABLE */}
+                    {/* 2. ORDER ITEMS */}
                     <LuxuryCard>
                         <CardHeader><Typography variant="subtitle1" fontWeight="bold">CHI TIẾT ĐƠN HÀNG</Typography></CardHeader>
                         <Box sx={{ p: 2 }}>
@@ -189,36 +181,30 @@ const OrderResultView = ({ data }) => {
                         </Box>
                     </LuxuryCard>
 
-                    {/* P&L ANALYSIS */}
+                    {/* 3. P&L ANALYSIS */}
                     <LuxuryCard>
                         <CardHeader><Typography variant="subtitle1" fontWeight="bold">PHÂN TÍCH LỢI NHUẬN (P&L)</Typography></CardHeader>
                         <CardContent>
-                            <Box sx={{ 
-                                display: 'flex', 
-                                flexDirection: { xs: 'column', md: 'row' }, 
-                                gap: { xs: 4, md: 0 } 
-                            }}>
+                            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: { xs: 4, md: 0 } }}>
+                                
+                                {/* Client Side (Revenue) */}
                                 <Box sx={{ flex: 1, pr: { md: 4 } }}>
                                     <SectionTitle>DOANH THU & THU KHÁCH</SectionTitle>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                        <Typography color="text.secondary">Tổng tiền hàng</Typography>
-                                        <Typography>{formatNumber(data.subtotal)}</Typography>
-                                    </Box>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                        <Typography color="text.secondary">Voucher/Giảm giá</Typography>
-                                        <Typography color="error.main">-{formatNumber(data.discountVoucher)}</Typography>
-                                    </Box>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                        <Typography color="text.secondary">Phí ship thu khách</Typography>
-                                        <Typography>+{formatNumber(data.shippingFeeCustomer)}</Typography>
-                                    </Box>
+                                    <FinanceRow label="Tổng tiền hàng" value={formatNumber(data.subtotal)} />
+                                    <FinanceRow label="Voucher/Giảm giá" value={formatNumber(data.discountVoucher)} valueColor="error.main" isNegative />
+                                    <FinanceRow label="Phí ship thu khách" value={formatNumber(data.shippingFeeCustomer)} isPositive />
+                                    
                                     <Divider sx={{ my: 1.5 }} />
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                                        <Typography fontWeight="bold">KHÁCH CẦN TRẢ</Typography>
-                                        <Typography variant="h6" fontWeight="bold" color="primary.main">{formatCurrency(data.totalCollected)}</Typography>
-                                    </Box>
+                                    
+                                    <FinanceRow 
+                                        label="KHÁCH CẦN TRẢ" 
+                                        value={formatCurrency(data.totalCollected)} 
+                                        valueColor="primary.main" 
+                                        isBold 
+                                    />
                                 </Box>
 
+                                {/* Admin Side (Costs & Profit) */}
                                 <Box sx={{ 
                                     flex: 1, 
                                     pl: { md: 4 }, 
@@ -226,29 +212,36 @@ const OrderResultView = ({ data }) => {
                                     borderTop: { xs: `1px dashed ${theme.palette.divider}`, md: 'none' },
                                     pt: { xs: 4, md: 0 }
                                 }}>
-                                    <SectionTitle>CHI PHÍ & LỢI NHUẬN (ADMIN ONLY)</SectionTitle>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                        <Typography variant="body2" color="text.secondary">Giá vốn (COGS)</Typography>
-                                        <Typography variant="body2" color="text.primary">-{formatNumber(data.cogs)}</Typography>
-                                    </Box>
-                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                                        <Typography variant="body2" color="text.secondary">Chi phí vận hành (Ship+Sàn+Ads)</Typography>
-                                        <Typography variant="body2" color="warning.main">
-                                            -{formatNumber((data.shippingCostReal || 0) + (data.platformFee || 0) + (data.adsCost || 0))}
-                                        </Typography>
-                                    </Box>
+                                    <SectionTitle>CHI PHÍ & LỢI NHUẬN (ADMIN)</SectionTitle>
+                                    <FinanceRow label="Giá vốn (COGS)" value={formatNumber(data.cogs)} isNegative />
+                                    <FinanceRow 
+                                        label="Chi phí vận hành (Ship+Sàn+Ads)" 
+                                        value={formatNumber(totalOpsCost)} 
+                                        valueColor="warning.main"
+                                        isNegative 
+                                    />
+                                    
                                     <Divider sx={{ my: 1.5 }} />
+                                    
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <Typography fontWeight="bold">LỢI NHUẬN RÒNG</Typography>
                                         <Box sx={{ textAlign: 'right' }}>
-                                            <Typography variant="h5" fontWeight="900" color="success.main">+{formatCurrency(data.netProfit)}</Typography>
-                                            <Chip label={`Margin: ${data.netMargin}%`} size="small" color="success" sx={{ height: 20 }} />
+                                            <Typography variant="h5" fontWeight="900" color="success.main">
+                                                +{formatCurrency(data.netProfit)}
+                                            </Typography>
+                                            <Chip 
+                                                label={`Margin: ${data.netMargin}%`} 
+                                                size="small" 
+                                                color="success" 
+                                                sx={{ height: 20, fontWeight: 'bold' }} 
+                                            />
                                         </Box>
                                     </Box>
                                 </Box>
                             </Box>
                         </CardContent>
                     </LuxuryCard>
+
                 </Stack>
             </Box>
         </Box>
