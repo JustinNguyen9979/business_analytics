@@ -6,7 +6,7 @@ import {
 // Custom Components
 import { LuxuryCard, CardHeader, CardContent } from '../StyledComponents';
 import OrderHistoryTable from '../customer/OrderHistoryTable';
-import CustomerProfileCard from '../customer/CustomerProfileCard'; // Import component mới
+import CustomerProfileCard from '../customer/CustomerProfileCard'; 
 
 // Utils
 import { formatCurrency, formatNumber } from '../../utils/formatters';

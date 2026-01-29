@@ -10,9 +10,17 @@ import OrderRow from './OrderRow';
 const OrderHistoryTable = ({ orders, maxHeight = 500 }) => {
     return (
         <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: maxHeight, bgcolor: 'background.paper' }}>
-            <Table stickyHeader size="small">
+            <Table stickyHeader size="small" sx={{ 
+                '& .MuiTableCell-root': { borderBottom: 'none' },
+                '& .MuiTableCell-head': { 
+                    bgcolor: '#000000 !important', 
+                    color: '#ffffff !important',
+                    fontWeight: 'bold',
+                    opacity: 1
+                }
+            }}>
                 <TableHead>
-                    <TableRow>
+                    <TableRow sx={{ borderBottom: 'none' }}>
                         <TableCell></TableCell>
                         <TableCell>Mã Đơn Hàng</TableCell>
                         <TableCell>Mã Vận Đơn</TableCell>

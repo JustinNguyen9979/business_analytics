@@ -153,9 +153,9 @@ const CustomerProfileCard = ({ data: initialData, sx = {} }) => {
                 <Box sx={{ mt: 3, textAlign: 'left' }}>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                         <Typography variant="caption" color="text.secondary">Tiến độ lên <Box component="span" sx={{ color: 'secondary.main', fontWeight: 'bold' }}>{data.nextRank}</Box></Typography>
-                        <Typography variant="caption" fontWeight="bold" color="primary.main">{data.rankProgress}%</Typography>
+                        <Typography variant="caption" fontWeight="bold" color="primary.main">{data.rankProgress || 0}%</Typography>
                     </Box>
-                    <LinearProgress variant="determinate" value={data.rankProgress} sx={{ height: 6, borderRadius: 3, bgcolor: 'action.disabledBackground', '& .MuiLinearProgress-bar': { borderRadius: 3, background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`, boxShadow: `0 0 10px ${theme.palette.primary.main}` } }} />
+                    <LinearProgress variant="determinate" value={data.rankProgress || 0} sx={{ height: 6, borderRadius: 3, bgcolor: 'action.disabledBackground', '& .MuiLinearProgress-bar': { borderRadius: 3, background: `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`, boxShadow: `0 0 10px ${theme.palette.primary.main}` } }} />
                 </Box>
             </Box>
             

@@ -18,6 +18,8 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import OrderStatusChip from '../common/OrderStatusChip';
 
+import OrderItemsTable from '../common/OrderItemsTable';
+
 const OrderRow = ({ order }) => {
     const [open, setOpen] = useState(false);
     const [copied, setCopied] = useState(false);
@@ -55,7 +57,7 @@ const OrderRow = ({ order }) => {
     return (
         <React.Fragment>
             {/* Main Row */}
-            <TableRow hover sx={{ '& > *': { borderBottom: 'unset' }, bgcolor: open ? 'action.hover' : 'inherit' }}>
+            <TableRow hover sx={{ '& > *': { borderBottom: 'none' }, bgcolor: open ? 'action.hover' : 'inherit' }}>
                 <TableCell>
                     <IconButton aria-label="expand row" size="small" onClick={() => setOpen(!open)}>
                         {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
@@ -95,40 +97,7 @@ const OrderRow = ({ order }) => {
                                             DANH SÁCH SẢN PHẨM TRONG ĐƠN ({items.length})
                                         </Typography>
                                     </Box>
-                                    {hasItems ? (
-                                        <TableContainer sx={{ borderRadius: 2, border: `1px solid ${theme.palette.divider}`, bgcolor: 'background.paper' }}>
-                                            <Table size="small">
-                                                <TableHead>
-                                                    <TableRow sx={{ bgcolor: 'action.hover' }}>
-                                                        <TableCell sx={{ fontWeight: 'bold' }}>SKU</TableCell>
-                                                        <TableCell sx={{ fontWeight: 'bold' }}>Tên Sản Phẩm</TableCell>
-                                                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Giá Gốc</TableCell>
-                                                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Số Lượng</TableCell>
-                                                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Trợ Giá</TableCell>
-                                                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Thành tiền</TableCell>
-                                                    </TableRow>
-                                                </TableHead>
-                                                <TableBody>
-                                                    {items.map((item, index) => (
-                                                        <TableRow key={index} hover>
-                                                            <TableCell sx={{ fontFamily: 'monospace', color: 'primary.light' }}>{item.sku}</TableCell>
-                                                            <TableCell>
-                                                                <Typography variant="body2">{item.product_name || item.name || '---'}</Typography>
-                                                            </TableCell>
-                                                            <TableCell align="right">{formatCurrency(item.original_price || 0)}</TableCell>
-                                                            <TableCell align="right">{item.quantity}</TableCell>
-                                                            <TableCell align="right">{formatCurrency(item.subsidy_amount || 0)}</TableCell>
-                                                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                                                                {formatCurrency((item.original_price * item.quantity) - (item.subsidy_amount || 0))}
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        </TableContainer>
-                                    ) : (
-                                        <Typography variant="body2" fontStyle="italic" color="text.secondary">Không có dữ liệu sản phẩm chi tiết</Typography>
-                                    )}
+                                    <OrderItemsTable items={items} />
                                 </Box>
 
                                 {/* 2. BOTTOM: Logistics & Finance (Dynamic Height with Box & Flex) */}

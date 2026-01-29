@@ -1,21 +1,18 @@
 import React from 'react';
 import { 
-    Box, Typography, Grid, Stack, Button, Divider, Avatar, 
-    Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, IconButton, Chip 
+    Box, Typography, Stack, Button, Divider, 
+    Paper, IconButton, Chip 
 } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 
-// Icons
-import LocalPhoneIcon from '@mui/icons-material/LocalPhone';
-import EmailIcon from '@mui/icons-material/Email';
-import PlaceIcon from '@mui/icons-material/Place';
-import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import StorefrontIcon from '@mui/icons-material/Storefront';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import EditIcon from '@mui/icons-material/Edit';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
+import CustomerProfileCard from '../customer/CustomerProfileCard'; 
+import OrderItemsTable from '../common/OrderItemsTable';
 
 // Custom Components
 import { LuxuryCard, CardHeader, CardContent } from '../StyledComponents';
@@ -29,128 +26,179 @@ const OrderResultView = ({ data }) => {
     const theme = useTheme();
 
     return (
-        <Grid container spacing={3} sx={{ animation: 'fadeIn 0.5s ease' }}>
-            {/* COL 1: CUSTOMER & INFO (30% -> 25%) */}
-            <Grid item xs={12} md={3}>
+        <Box sx={{ 
+            display: 'flex', 
+            flexDirection: { xs: 'column', md: 'row' }, 
+            gap: 3,
+            animation: 'fadeIn 0.5s ease' 
+        }}>
+            {/* COL 1: CUSTOMER & INFO (Sidebar) */}
+            <Box sx={{ 
+                flex: { xs: '1 1 auto', md: '0 0 380px' },
+                minWidth: 0
+            }}>
                 <Stack spacing={3}>
                     {/* LUXURY CUSTOMER BOX */}
-                    <LuxuryCard sx={{ height: 'auto' }}>
-                        <CardHeader>
-                            <Typography variant="subtitle1" fontWeight="bold">KHÁCH HÀNG</Typography>
-                            <Button size="small" variant="text" endIcon={<VerifiedUserIcon fontSize="small" />}>Chi tiết</Button>
-                        </CardHeader>
-                        <Box sx={{ p: 3, textAlign: 'center', background: 'linear-gradient(180deg, rgba(0,229,255,0.05) 0%, rgba(0,0,0,0) 100%)' }}>
-                            <Avatar sx={{ width: 80, height: 80, mx: 'auto', mb: 2, border: `2px solid ${theme.palette.primary.main}` }}>{data.customer.name.charAt(0)}</Avatar>
-                            <Typography variant="h6" fontWeight="bold">{data.customer.name}</Typography>
-                            <Chip label={data.customer.rank} color="secondary" size="small" sx={{ mt: 1, fontWeight: 'bold' }} />
-                        </Box>
-                        <Divider />
-                        <CardContent>
-                            <LabelValue icon={<LocalPhoneIcon />} label="Điện thoại" value={data.customer.phone} isLink />
-                            <LabelValue icon={<EmailIcon />} label="Email" value={data.customer.email} />
-                            <LabelValue icon={<PlaceIcon />} label="Địa chỉ giao hàng" value={data.customer.fullAddress} />
-                            <Divider sx={{ my: 2 }} />
-                            <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                                "Khách này thường mua đồ size L, thích giao hàng giờ hành chính."
-                            </Typography>
-                        </CardContent>
-                    </LuxuryCard>
+                    <Box sx={{ width: '100%' }}>
+                        <CustomerProfileCard data={data} />
+                    </Box>
 
                     {/* OPERATION BOX */}
+                </Stack>
+            </Box>
+
+            {/* COL 2: FINANCIAL & ITEMS (Main Content) */}
+            <Box sx={{ 
+                flex: 1,
+                minWidth: 0
+            }}>
+                <Stack spacing={3}>
                     <LuxuryCard sx={{ height: 'auto' }}>
                         <CardHeader><Typography variant="subtitle1" fontWeight="bold">VẬN HÀNH</Typography></CardHeader>
                         <CardContent>
-                            <LabelValue icon={<StorefrontIcon />} label="Nguồn đơn" value={data.source} />
-                            <LabelValue icon={<CreditCardIcon />} label="Thanh toán" value={data.paymentMethod} />
-                            <Divider sx={{ my: 2, borderStyle: 'dashed' }} />
-                            <LabelValue icon={<LocalShippingIcon />} label="Đơn vị vận chuyển" value={data.carrier} />
-                            <Box sx={{ p: 1.5, bgcolor: alpha(theme.palette.warning.main, 0.1), borderRadius: 1, border: `1px dashed ${theme.palette.warning.main}` }}>
-                                <Typography variant="caption" color="warning.main" display="block">TRACKING CODE</Typography>
-                                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                                    <Typography variant="subtitle2" fontWeight="bold">{data.trackingCode}</Typography>
-                                    <IconButton size="small"><ContentCopyIcon fontSize="small" /></IconButton>
+                            <Stack spacing={3}>
+                                {/* SECTION 1: TIMELINE (3 KEY MILESTONES) */}
+                                <Stack 
+                                    direction={{ xs: 'column', sm: 'row' }}
+                                    divider={<Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' }, my: 1 }} />}
+                                    spacing={2}
+                                    sx={{ 
+                                        bgcolor: alpha(theme.palette.primary.main, 0.03),
+                                        p: 2,
+                                        borderRadius: 2,
+                                        border: `1px dashed ${alpha(theme.palette.primary.main, 0.2)}`,
+                                        justifyContent: 'space-around',
+                                        alignItems: 'center'
+                                    }}
+                                >
+                                    {/* Milestone 1: Created */}
+                                    <Box sx={{ textAlign: 'center', flex: 1 }}>
+                                        <Typography variant="caption" color="text.secondary" display="block" mb={0.5} fontWeight="bold">NGÀY ĐẶT HÀNG</Typography>
+                                        <Typography variant="body2" fontWeight="bold">{data.createdDate || '---'}</Typography>
+                                    </Box>
+
+                                    {/* Milestone 2: Shipped */}
+                                    <Box sx={{ textAlign: 'center', flex: 1 }}>
+                                        <Typography variant="caption" color="text.secondary" display="block" mb={0.5} fontWeight="bold">GỬI HÀNG</Typography>
+                                        <Typography variant="body2" fontWeight="bold" color={data.shippedDate ? 'text.primary' : 'text.disabled'}>
+                                            {data.shippedDate || '---'}
+                                        </Typography>
+                                    </Box>
+
+                                    {/* Milestone 3: Delivered */}
+                                    <Box sx={{ textAlign: 'center', flex: 1 }}>
+                                        <Typography variant="caption" color="text.secondary" display="block" mb={0.5} fontWeight="bold">NHẬN HÀNG</Typography>
+                                        <Typography variant="body2" fontWeight="bold" color={data.deliveredDate ? 'success.main' : 'text.disabled'}>
+                                            {data.deliveredDate || '---'}
+                                        </Typography>
+                                    </Box>
                                 </Stack>
-                            </Box>
+
+                                <Divider />
+
+                                {/* SECTION 2: DETAILS */}
+                                <Stack spacing={2}>
+                                    {/* Row 1: 3 Metrics (Source, Payment, Carrier) - Horizontal Layout */}
+                                    <Box sx={{ 
+                                        display: 'grid', 
+                                        gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, 
+                                        gap: 2 
+                                    }}>
+                                        {[
+                                            { icon: <StorefrontIcon fontSize="small" />, label: 'Nguồn đơn', value: data.source },
+                                            { icon: <CreditCardIcon fontSize="small" />, label: 'Thanh toán', value: data.paymentMethod },
+                                            { icon: <LocalShippingIcon fontSize="small" />, label: 'Đơn vị vận chuyển', value: data.carrier }
+                                        ].map((item, idx) => (
+                                            <Box key={idx} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                                <Box sx={{ color: 'text.secondary', display: 'flex', alignItems: 'center' }}>
+                                                    {item.icon}
+                                                </Box>
+                                                <Typography variant="body2" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
+                                                    {item.label}:
+                                                </Typography>
+                                                <Typography variant="body2" fontWeight="bold">
+                                                    {item.value}
+                                                </Typography>
+                                            </Box>
+                                        ))}
+                                    </Box>
+
+                                    {/* Row 2: Tracking Codes (Order & Return) */}
+                                    <Box sx={{ 
+                                        display: 'grid', 
+                                        gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, 
+                                        gap: 2 
+                                    }}>
+                                        {/* Tracking Code (Forward) */}
+                                        <Box sx={{ 
+                                            p: 1.5, 
+                                            bgcolor: alpha(theme.palette.info.main, 0.05), 
+                                            borderRadius: 2, 
+                                            border: `1px dashed ${theme.palette.info.main}`,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between'
+                                        }}>
+                                            <Typography variant="subtitle2" color="info.main" fontWeight="900" sx={{ letterSpacing: 0.5 }}>
+                                                MÃ VẬN ĐƠN
+                                            </Typography>
+                                            
+                                            <Stack direction="row" alignItems="center" spacing={1}>
+                                                <Typography variant="body1" fontWeight="bold">
+                                                    {data.trackingCode || '---'}
+                                                </Typography>
+                                                <IconButton size="small" color="info"><ContentCopyIcon fontSize="small" /></IconButton>
+                                            </Stack>
+                                        </Box>
+
+                                        {/* Return Tracking Code (Only if exists) */}
+                                        {data.return_tracking_code && (
+                                            <Box sx={{ 
+                                                p: 1.5, 
+                                                bgcolor: alpha(theme.palette.error.main, 0.05), 
+                                                borderRadius: 2, 
+                                                border: `1px dashed ${theme.palette.error.main}`,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between'
+                                            }}>
+                                                <Typography variant="subtitle2" color="error.main" fontWeight="900" sx={{ letterSpacing: 0.5 }}>
+                                                    MÃ HOÀN HÀNG
+                                                </Typography>
+                                                
+                                                <Stack direction="row" alignItems="center" spacing={1}>
+                                                    <Typography variant="body1" fontWeight="bold" color="error.main">
+                                                        {data.return_tracking_code}
+                                                    </Typography>
+                                                    <IconButton size="small" color="error"><ContentCopyIcon fontSize="small" /></IconButton>
+                                                </Stack>
+                                            </Box>
+                                        )}
+                                    </Box>
+                                </Stack>
+                            </Stack>
                         </CardContent>
                     </LuxuryCard>
-                </Stack>
-            </Grid>
-
-            {/* COL 2: FINANCIAL & ITEMS (65% -> 75%) */}
-            <Grid item xs={12} md={9}>
-                <Stack spacing={3}>
-                    {/* ORDER STATUS BAR */}
-                    <Paper sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: 3, border: `1px solid ${theme.palette.divider}` }}>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                            <Typography variant="h5" fontWeight="900" color="primary">#{data.id}</Typography>
-                            <Divider orientation="vertical" flexItem />
-                            
-                            {/* Status & Return Code Combined Box */}
-                            {data.return_tracking_code && data.status === 'refunded' ? (
-                                <Box sx={{ 
-                                    display: 'flex', 
-                                    alignItems: 'center', 
-                                    border: `1px solid ${alpha(theme.palette.error.main, 0.3)}`,
-                                    bgcolor: alpha(theme.palette.error.main, 0.05),
-                                    borderRadius: 2,
-                                    px: 1, py: 0.5
-                                }}>
-                                    <OrderStatusChip status={data.status} />
-                                    <Divider orientation="vertical" flexItem sx={{ mx: 1.5, bgcolor: alpha(theme.palette.error.main, 0.3) }} />
-                                    <Stack direction="row" alignItems="center" spacing={1}>
-                                        <AssignmentReturnIcon fontSize="small" color="error" />
-                                        <Typography variant="body2" fontWeight="bold" color="error.main">
-                                            {data.return_tracking_code}
-                                        </Typography>
-                                        <IconButton size="small" sx={{ p: 0.5 }}><ContentCopyIcon fontSize="small" /></IconButton>
-                                    </Stack>
-                                </Box>
-                            ) : (
-                                <OrderStatusChip status={data.status} />
-                            )}
-
-                            <Divider orientation="vertical" flexItem />
-                            <Typography variant="body2" color="text.secondary">Tạo lúc: {data.createdDate}</Typography>
-                        </Box>
-                        <Button variant="outlined" startIcon={<EditIcon />}>Cập nhật</Button>
-                    </Paper>
+                    
 
                     {/* ITEM TABLE */}
                     <LuxuryCard>
                         <CardHeader><Typography variant="subtitle1" fontWeight="bold">CHI TIẾT ĐƠN HÀNG</Typography></CardHeader>
-                        <TableContainer>
-                            <Table>
-                                <TableHead>
-                                    <TableRow sx={{ '& th': { color: 'text.secondary', fontWeight: 600 } }}>
-                                        <TableCell>Sản phẩm</TableCell>
-                                        <TableCell align="center">SL</TableCell>
-                                        <TableCell align="right">Đơn giá</TableCell>
-                                        <TableCell align="right">Thành tiền</TableCell>
-                                    </TableRow>
-                                </TableHead>
-                                <TableBody>
-                                    {data.items.map((item, idx) => (
-                                        <TableRow key={idx}>
-                                            <TableCell>
-                                                <Typography variant="body2" fontWeight="500">{item.name}</Typography>
-                                                <Typography variant="caption" color="text.secondary">{item.sku}</Typography>
-                                            </TableCell>
-                                            <TableCell align="center">{item.qty}</TableCell>
-                                            <TableCell align="right">{formatNumber(item.price)}</TableCell>
-                                            <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatNumber(item.total)}</TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </TableContainer>
+                        <Box sx={{ p: 2 }}>
+                            <OrderItemsTable items={data.items} />
+                        </Box>
                     </LuxuryCard>
 
                     {/* P&L ANALYSIS */}
                     <LuxuryCard>
                         <CardHeader><Typography variant="subtitle1" fontWeight="bold">PHÂN TÍCH LỢI NHUẬN (P&L)</Typography></CardHeader>
                         <CardContent>
-                            <Grid container spacing={4}>
-                                <Grid item xs={12} md={6}>
+                            <Box sx={{ 
+                                display: 'flex', 
+                                flexDirection: { xs: 'column', md: 'row' }, 
+                                gap: { xs: 4, md: 0 } 
+                            }}>
+                                <Box sx={{ flex: 1, pr: { md: 4 } }}>
                                     <SectionTitle>DOANH THU & THU KHÁCH</SectionTitle>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                         <Typography color="text.secondary">Tổng tiền hàng</Typography>
@@ -169,9 +217,15 @@ const OrderResultView = ({ data }) => {
                                         <Typography fontWeight="bold">KHÁCH CẦN TRẢ</Typography>
                                         <Typography variant="h6" fontWeight="bold" color="primary.main">{formatCurrency(data.totalCollected)}</Typography>
                                     </Box>
-                                </Grid>
+                                </Box>
 
-                                <Grid item xs={12} md={6} sx={{ borderLeft: `1px dashed ${theme.palette.divider}`, pl: 4 }}>
+                                <Box sx={{ 
+                                    flex: 1, 
+                                    pl: { md: 4 }, 
+                                    borderLeft: { md: `1px dashed ${theme.palette.divider}` },
+                                    borderTop: { xs: `1px dashed ${theme.palette.divider}`, md: 'none' },
+                                    pt: { xs: 4, md: 0 }
+                                }}>
                                     <SectionTitle>CHI PHÍ & LỢI NHUẬN (ADMIN ONLY)</SectionTitle>
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                         <Typography variant="body2" color="text.secondary">Giá vốn (COGS)</Typography>
@@ -180,7 +234,7 @@ const OrderResultView = ({ data }) => {
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                                         <Typography variant="body2" color="text.secondary">Chi phí vận hành (Ship+Sàn+Ads)</Typography>
                                         <Typography variant="body2" color="warning.main">
-                                            -{formatNumber(data.shippingCostReal + data.platformFee + data.adsCost)}
+                                            -{formatNumber((data.shippingCostReal || 0) + (data.platformFee || 0) + (data.adsCost || 0))}
                                         </Typography>
                                     </Box>
                                     <Divider sx={{ my: 1.5 }} />
@@ -191,13 +245,13 @@ const OrderResultView = ({ data }) => {
                                             <Chip label={`Margin: ${data.netMargin}%`} size="small" color="success" sx={{ height: 20 }} />
                                         </Box>
                                     </Box>
-                                </Grid>
-                            </Grid>
+                                </Box>
+                            </Box>
                         </CardContent>
                     </LuxuryCard>
                 </Stack>
-            </Grid>
-        </Grid>
+            </Box>
+        </Box>
     );
 };
 
