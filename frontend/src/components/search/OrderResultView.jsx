@@ -187,20 +187,40 @@ const OrderResultView = ({ data }) => {
                         <CardContent>
                             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: { xs: 4, md: 0 } }}>
                                 
-                                {/* Client Side (Revenue) */}
+                                {/* Client Side (Revenue Breakdown) */}
                                 <Box sx={{ flex: 1, pr: { md: 4 } }}>
-                                    <SectionTitle>DOANH THU & THU KHÁCH</SectionTitle>
-                                    <FinanceRow label="Tổng tiền hàng" value={formatNumber(data.subtotal)} />
-                                    <FinanceRow label="Voucher/Giảm giá" value={formatNumber(data.discountVoucher)} valueColor="error.main" isNegative />
-                                    <FinanceRow label="Phí ship thu khách" value={formatNumber(data.shippingFeeCustomer)} isPositive />
+                                    <SectionTitle>DOANH THU & PHÍ SÀN</SectionTitle>
+                                    <FinanceRow label="Giá bán (Original Price)" value={formatNumber(data.original_price)} />
+                                    <FinanceRow label="Trợ giá (Voucher/Subsidy)" value={formatNumber(data.subsidy_amount)} isPositive valueColor="success.main" />
+                                    <FinanceRow label="Khách trả (Subtotal)" value={formatNumber(data.sku_price)} isBold />
                                     
+                                    <Divider sx={{ my: 1.5, borderStyle: 'dashed' }} />
+                                    
+                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
+                                        <Typography variant="body2" color="text.secondary">Phí sàn & QC (Fees)</Typography>
+                                        <Stack direction="row" spacing={1} alignItems="center">
+                                            {data.takeRate > 0 && (
+                                                <Chip 
+                                                    label={`Take Rate: ${formatNumber(data.takeRate)}%`} 
+                                                    size="small" 
+                                                    color="warning" 
+                                                    variant="outlined"
+                                                    sx={{ height: 20, fontSize: '0.65rem', fontWeight: 'bold' }} 
+                                                />
+                                            )}
+                                            <Typography variant="body2" color="error.main">
+                                                -{formatNumber(data.totalFees)}
+                                            </Typography>
+                                        </Stack>
+                                    </Box>
+
                                     <Divider sx={{ my: 1.5 }} />
                                     
                                     <FinanceRow 
-                                        label="KHÁCH CẦN TRẢ" 
-                                        value={formatCurrency(data.totalCollected)} 
-                                        valueColor="primary.main" 
+                                        label="Thực nhận (Net Revenue)" 
+                                        value={formatCurrency(data.netRevenue)} 
                                         isBold 
+                                        valueColor="primary.main" 
                                     />
                                 </Box>
 
@@ -212,28 +232,23 @@ const OrderResultView = ({ data }) => {
                                     borderTop: { xs: `1px dashed ${theme.palette.divider}`, md: 'none' },
                                     pt: { xs: 4, md: 0 }
                                 }}>
-                                    <SectionTitle>CHI PHÍ & LỢI NHUẬN (ADMIN)</SectionTitle>
-                                    <FinanceRow label="Giá vốn (COGS)" value={formatNumber(data.cogs)} isNegative />
-                                    <FinanceRow 
-                                        label="Chi phí vận hành (Ship+Sàn+Ads)" 
-                                        value={formatNumber(totalOpsCost)} 
-                                        valueColor="warning.main"
-                                        isNegative 
-                                    />
+                                    <SectionTitle>HIỆU QUẢ KINH DOANH (NET)</SectionTitle>
+                                    <FinanceRow label="Doanh thu thực nhận" value={formatNumber(data.netRevenue)} />
+                                    <FinanceRow label="Giá vốn hàng bán (COGS)" value={formatNumber(data.cogs)} isNegative valueColor="error.main" />
                                     
                                     <Divider sx={{ my: 1.5 }} />
                                     
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <Typography fontWeight="bold">LỢI NHUẬN RÒNG</Typography>
                                         <Box sx={{ textAlign: 'right' }}>
-                                            <Typography variant="h5" fontWeight="900" color="success.main">
-                                                +{formatCurrency(data.netProfit)}
+                                            <Typography variant="h5" fontWeight="900" color={data.netProfit >= 0 ? "success.main" : "error.main"}>
+                                                {data.netProfit >= 0 ? '+' : ''}{formatCurrency(data.netProfit)}
                                             </Typography>
                                             <Chip 
-                                                label={`Margin: ${data.netMargin}%`} 
+                                                label={`Margin: ${formatNumber(data.profitMargin)}%`} 
                                                 size="small" 
-                                                color="success" 
-                                                sx={{ height: 20, fontWeight: 'bold' }} 
+                                                color={data.profitMargin >= 0 ? "success" : "error"} 
+                                                sx={{ height: 20, fontWeight: 'bold', mt: 0.5 }} 
                                             />
                                         </Box>
                                     </Box>

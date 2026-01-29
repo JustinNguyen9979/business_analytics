@@ -1,6 +1,7 @@
 # FILE: Backend/app/main.py
 
 import json, crud, models, schemas, standard_parser
+from services.search_service import search_service
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, status, Query, Body, Request
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import ORJSONResponse
@@ -470,7 +471,7 @@ def search_anything(
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     
-    result = crud.customer.search_entities(db, db_brand.id, q)
+    result = search_service.search_entities(db, db_brand.id, q)
     if not result:
         # Trả về 200 kèm status not_found để frontend xử lý êm ái hơn là báo lỗi 404
         return {"status": "not_found", "message": "Không tìm thấy kết quả phù hợp."}
@@ -490,7 +491,7 @@ def get_search_suggestions(
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     
-    return crud.customer.suggest_entities(db, db_brand.id, q)
+    return search_service.suggest_entities(db, db_brand.id, q)
 
 @app.put("/brands/{brand_slug}/customers/{customer_identifier}")
 def update_customer_api(
@@ -506,9 +507,9 @@ def update_customer_api(
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
         
-    result = crud.customer.update_customer_info(db, db_brand.id, customer_identifier, update_data)
+    updated_customer = crud.customer.update_customer_info(db, db_brand.id, customer_identifier, update_data)
     
-    if not result:
+    if not updated_customer:
         raise HTTPException(status_code=404, detail="Không tìm thấy Khách hàng.")
         
-    return result
+    return search_service.get_customer_profile(db, db_brand.id, updated_customer)
