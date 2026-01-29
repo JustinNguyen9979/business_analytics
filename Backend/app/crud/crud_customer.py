@@ -544,18 +544,39 @@ class CRUDCustomer:
 
     def search_entities(self, db: Session, brand_id: int, query: str):
         """
-        Tìm kiếm thực thể:
-        Nếu là tìm khách hàng, cũng phải tuân thủ việc lấy từ bảng Customer làm gốc.
+        Tìm kiếm thông minh: 
+        - Hỗ trợ tìm chính xác hoặc gần đúng (case-insensitive)
+        - Order: order_code, tracking_id, return_tracking_code (via Revenue)
+        - Customer: username, phone, email
         """
         query = query.strip()
         if not query:
             return None
 
-        # 1. ƯU TIÊN 1: Tìm theo Mã đơn hàng hoặc Mã vận đơn
+        # 1. TÌM KIẾM ĐƠN HÀNG (Order Code hoặc Tracking ID)
+        # Sử dụng ilike để tìm kiếm không phân biệt hoa thường
         order = db.query(Order).filter(
             Order.brand_id == brand_id,
-            (Order.order_code == query) | (Order.tracking_id == query)
+            or_(
+                Order.order_code.ilike(query), 
+                Order.tracking_id.ilike(query)
+            )
         ).first()
+
+        # Nếu không tìm thấy trong Order, thử tìm trong Revenue (Mã vận đơn hoàn - Return Tracking Code)
+        if not order:
+            from models import Revenue
+            from sqlalchemy import cast, String
+            rev_match = db.query(Revenue).filter(
+                Revenue.brand_id == brand_id,
+                cast(Revenue.order_refund, String).ilike(query) # Cast sang String để dùng ilike
+            ).first()
+            
+            if rev_match:
+                order = db.query(Order).filter(
+                    Order.brand_id == brand_id,
+                    Order.order_code == rev_match.order_code
+                ).first()
 
         if order:
             from models import Revenue
@@ -571,7 +592,7 @@ class CRUDCustomer:
                 "paymentMethod": order.details.get("payment_method") if order.details else "---",
                 "source": order.source,
                 "trackingCode": order.tracking_id or "---",
-                "return_tracking_code": rev.order_refund if rev else None,
+                "return_tracking_code": rev.order_refund if rev and rev.order_refund else "---",
                 "carrier": order.details.get("shipping_provider_name") if order.details else "---",
                 "customer": {
                     "name": order.details.get("customer_name") or order.username if order.details else order.username,
@@ -589,10 +610,14 @@ class CRUDCustomer:
                 "netMargin": round(((rev.net_revenue - order.cogs) / rev.net_revenue * 100), 1) if rev and rev.net_revenue > 0 else 0
             }
 
-        # 2. ƯU TIÊN 2: Tìm khách hàng (Tìm chính xác tuyệt đối trên cột username)
+        # 2. TÌM KIẾM KHÁCH HÀNG (Username, Phone, Email)
         customer = db.query(Customer).filter(
             Customer.brand_id == brand_id,
-            Customer.username == query
+            or_(
+                Customer.username.ilike(query),
+                Customer.phone.ilike(query),
+                Customer.email.ilike(query)
+            )
         ).first()
 
         if customer:
@@ -603,43 +628,51 @@ class CRUDCustomer:
     def suggest_entities(self, db: Session, brand_id: int, query: str, limit: int = 10):
         """
         Gợi ý kết quả khi người dùng đang gõ (Autocomplete).
-        Tìm kiếm gần đúng trong Customers (username, phone) và Orders (order_code).
+        Tìm kiếm gần đúng trong Customers (username, phone, email) và Orders (order_code).
         """
         if not query or len(query) < 2:
             return []
 
         suggestions = []
         
-        # 1. Gợi ý khách hàng (Ưu tiên username và phone)
+        # 1. Gợi ý khách hàng (Ưu tiên username, phone, email)
         customers = db.query(Customer).filter(
             Customer.brand_id == brand_id,
             or_(
                 Customer.username.ilike(f"%{query}%"),
-                Customer.phone.ilike(f"%{query}%")
+                Customer.phone.ilike(f"%{query}%"),
+                Customer.email.ilike(f"%{query}%")
             )
         ).limit(limit).all()
 
         for c in customers:
+            label = c.username
+            if c.phone: label += f" ({c.phone})"
+            
             suggestions.append({
                 "type": "customer",
                 "value": c.username,
-                "label": f"{c.username} ({c.phone or 'No phone'})",
-                "sub_label": "Khách hàng"
+                "label": label,
+                "sub_label": c.email or "Khách hàng"
             })
 
         # 2. Gợi ý đơn hàng (Nếu còn chỗ)
         if len(suggestions) < limit:
+            remaining = limit - len(suggestions)
             orders = db.query(Order).filter(
                 Order.brand_id == brand_id,
-                Order.order_code.ilike(f"%{query}%")
-            ).limit(limit - len(suggestions)).all()
+                or_(
+                    Order.order_code.ilike(f"%{query}%"),
+                    Order.tracking_id.ilike(f"%{query}%")
+                )
+            ).limit(remaining).all()
 
             for o in orders:
                 suggestions.append({
                     "type": "order",
                     "value": o.order_code,
                     "label": f"Đơn hàng: {o.order_code}",
-                    "sub_label": o.source or "---"
+                    "sub_label": o.tracking_id or o.source
                 })
 
         return suggestions

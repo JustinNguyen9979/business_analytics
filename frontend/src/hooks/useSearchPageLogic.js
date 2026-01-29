@@ -51,7 +51,7 @@ const useSearchPageLogic = () => {
         [brandSlug]
     );
 
-    const handleQueryChange = (newValue) => {
+    const onSearchInputChange = (newValue) => {
         setQuery(newValue);
         debouncedFetchSuggestions(newValue);
     };
@@ -85,6 +85,7 @@ const useSearchPageLogic = () => {
     const handleSearch = async (e) => {
         if (e.key === 'Enter' || e.type === 'click') {
             performSearch(query);
+            setIsMenuOpen(false); // Đảm bảo đóng menu khi ấn Enter
         }
     };
 
@@ -92,11 +93,13 @@ const useSearchPageLogic = () => {
         setQuery('');
         setResult(null);
         setSuggestions([]);
+        setIsMenuOpen(false);
     };
 
     return {
         query,
-        setQuery: handleQueryChange, // Redirect setQuery qua hàm xử lý logic gợi ý
+        setQuery, // Export raw setter để update text mà không fetch
+        handleSearchChange: onSearchInputChange, // Hàm này dùng khi user GÕ phím (vừa update text vừa fetch)
         result,
         setResult,
         isSearching,
