@@ -323,7 +323,10 @@ class SearchService:
     def _enrich_order_items(self, db: Session, brand_id: int, details: dict):
         """Map SKU to Product Name."""
         items = details.get("items", []) if details else []
-        product_map = self._get_product_map(db, brand_id)
+        
+        # Optimize: Chỉ fetch những SKU có trong đơn hàng
+        skus = [item.get('sku') for item in items if item.get('sku')]
+        product_map = self._get_product_map(db, brand_id, skus=skus)
         
         for item in items:
             sku = item.get('sku')
@@ -344,7 +347,16 @@ class SearchService:
         # 2. Lấy dữ liệu tài chính
         order_codes = [o.order_code for o in all_orders if o.order_code]
         revenue_map, fees_map, gmv_map, refunded_codes, refund_tracking_map = self._get_revenue_map(db, brand_id, order_codes)
-        product_map = self._get_product_map(db, brand_id)
+        
+        # Optimize: Gom tất cả SKU từ 100 đơn hàng để query 1 lần
+        all_skus = set()
+        for o in all_orders:
+            if o.details and isinstance(o.details, dict):
+                for item in o.details.get("items", []):
+                    if item.get("sku"):
+                        all_skus.add(item.get("sku"))
+        
+        product_map = self._get_product_map(db, brand_id, skus=list(all_skus))
 
         # 3. Build Response
         return self._build_customer_response(
@@ -440,12 +452,18 @@ class SearchService:
             "details": full_details
         }
 
-    def _get_product_map(self, db: Session, brand_id: int):
-        """Helper: Lấy Map SKU -> Product Name."""
-        products = db.query(Product.sku, Product.name).filter(
+    def _get_product_map(self, db: Session, brand_id: int, skus: list = None):
+        """Helper: Lấy Map SKU -> Product Name. Có hỗ trợ filter theo danh sách SKU để tối ưu."""
+        query = db.query(Product.sku, Product.name).filter(
             Product.brand_id == brand_id,
             Product.name.isnot(None)
-        ).all()
+        )
+        
+        # Nếu có danh sách SKU, chỉ fetch đúng những thằng đó (Tránh fetch toàn bộ catalog)
+        if skus and len(skus) > 0:
+            query = query.filter(Product.sku.in_(skus))
+            
+        products = query.all()
         return {p.sku: p.name for p in products}
 
     def _get_revenue_map(self, db: Session, brand_id: int, order_codes: list):

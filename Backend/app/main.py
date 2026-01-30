@@ -7,7 +7,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import ORJSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from database import SessionLocal, engine
 from datetime import date
 from cache import redis_client
@@ -40,7 +40,7 @@ def get_db():
 
 def get_brand_from_slug(brand_slug: str, db: Session = Depends(get_db)):
     db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
-    if db_brand is None:
+    if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     return db_brand
 
@@ -458,7 +458,7 @@ def get_top_customers(
     # Kết quả trả về là List[Dict], Pydantic sẽ tự validate sang List[CustomerAnalyticsItem]
     return result['data']
 
-@app.get("/brands/{brand_slug}/search")
+@app.get("/brands/{brand_slug}/search", response_model=Union[schemas.GlobalSearchResult, Dict[str, Any]])
 def search_anything(
     brand_slug: str,
     q: str = Query(..., min_length=1),
@@ -478,7 +478,7 @@ def search_anything(
     
     return result
 
-@app.get("/brands/{brand_slug}/search-suggestions")
+@app.get("/brands/{brand_slug}/search-suggestions", response_model=List[schemas.SearchSuggestionItem])
 def get_search_suggestions(
     brand_slug: str,
     q: str = Query(..., min_length=2),

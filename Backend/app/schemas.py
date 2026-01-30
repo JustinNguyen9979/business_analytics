@@ -1,29 +1,52 @@
 # FILE: backend/app/schemas.py
 
 from pydantic import BaseModel, ConfigDict
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import date, datetime
 
-# ==========================================
-# === 1. CORE BASE CLASSES (ABSTRACTIONS) ===
-# ==========================================
+# ==============================================================================
+# === 1. CORE MIXINS (TÁI SỬ DỤNG LOGIC)                                     ===
+# ==============================================================================
 
 class ORMBase(BaseModel):
     """Base schema config for SQLAlchemy integration"""
     model_config = ConfigDict(from_attributes=True)
 
+class CustomerContactMixin(BaseModel):
+    """Thông tin liên lạc chung của khách hàng"""
+    phone: Optional[str] = "---"
+    email: Optional[str] = "---"
+    gender: Optional[str] = "---"
+    default_address: Optional[str] = "---"
+    province: Optional[str] = "---"
+    district: Optional[str] = "---"
+
+class OrderCountersMixin(BaseModel):
+    """Các bộ đếm đơn hàng (Snake Case cho Database logic)"""
+    total_orders: int = 0
+    completed_orders: int = 0
+    cancelled_orders: int = 0
+    bomb_orders: int = 0
+    refunded_orders: int = 0
+
+class OrderCountersCamelMixin(BaseModel):
+    """Các bộ đếm đơn hàng (Camel Case cho Frontend UI)"""
+    orderCount: int = 0
+    successCount: int = 0
+    cancelCount: int = 0
+    bombOrders: int = 0
+    refundedOrders: int = 0
+
+# ==============================================================================
+# === 2. PRIMITIVE SCHEMAS (INPUTS & DB MAPPING)                             ===
+# ==============================================================================
+
 class DBEntity(ORMBase):
-    """Standard DB Entity with ID and Brand linkage"""
     id: int
     brand_id: int
 
 class SourcedDBEntity(DBEntity):
-    """Entity that tracks data source (e.g., shopee, tiktok)"""
     source: str
-
-# ==========================================
-# === 2. PRIMITIVE SCHEMAS (INPUTS)      ===
-# ==========================================
 
 class DataRequest(BaseModel):
     brand_slug: str
@@ -37,38 +60,26 @@ class ProductBase(BaseModel):
     cost_price: Optional[int] = 0
 
 class ProductCreate(ProductBase): pass
-
-class Product(ProductBase, DBEntity): 
-    pass
+class Product(ProductBase, DBEntity): pass
 
 # --- CUSTOMER ---
-class CustomerBase(BaseModel):
+class CustomerBase(OrderCountersMixin, ORMBase):
     username: str
     province: Optional[str] = None
     district: Optional[str] = None
     total_spent: float = 0.0
     aov: float = 0.0
-    total_orders: int = 0
-    completed_orders: int = 0
-    cancelled_orders: int = 0
-    bomb_orders: int = 0
-    refunded_orders: int = 0
     last_order_date: Optional[datetime] = None
     avg_repurchase_cycle: Optional[float] = 0.0
 
 class CustomerCreate(CustomerBase): pass
 
-class CustomerUpdate(BaseModel):
-    """Schema for updating customer info via API"""
-    phone: Optional[str] = None
-    email: Optional[str] = None
-    gender: Optional[str] = None
-    default_address: Optional[str] = None
+class CustomerUpdate(CustomerContactMixin):
+    """Schema cập nhật khách hàng - Tái sử dụng ContactMixin"""
     notes: Optional[str] = None
     tags: Optional[List[str]] = None
 
-class Customer(CustomerBase, DBEntity): 
-    pass
+class Customer(CustomerBase, DBEntity): pass
 
 # --- ORDER ---
 class OrderBase(BaseModel):
@@ -88,10 +99,9 @@ class OrderBase(BaseModel):
     return_tracking_code: Optional[str] = None
     gmv: float = 0.0
 
-class Order(OrderBase, SourcedDBEntity): 
-    pass
+class Order(OrderBase, SourcedDBEntity): pass
 
-# --- REVENUE ---
+# --- REVENUE & MARKETING ---
 class RevenueBase(BaseModel):
     order_code: Optional[str]
     order_date: Optional[date] = None
@@ -100,10 +110,8 @@ class RevenueBase(BaseModel):
     gmv: float = 0.0
     details: Optional[Dict[str, Any]] = None
 
-class Revenue(RevenueBase, SourcedDBEntity): 
-    pass
+class Revenue(RevenueBase, SourcedDBEntity): pass
 
-# --- MARKETING SPEND ---
 class MarketingSpendBase(BaseModel):
     date: date
     ad_spend: float = 0.0
@@ -111,51 +119,20 @@ class MarketingSpendBase(BaseModel):
     conversions: int = 0; impressions: int = 0; reach: int = 0; clicks: int = 0
 
 class MarketingSpendCreate(MarketingSpendBase): pass
-
-class MarketingSpend(MarketingSpendBase, SourcedDBEntity): 
-    pass
+class MarketingSpend(MarketingSpendBase, SourcedDBEntity): pass
 
 # --- BRAND ---
-class BrandBase(BaseModel): 
-    name: str
-
-class BrandInfo(BrandBase, ORMBase):
-    id: int
-    slug: str
-
+class BrandBase(BaseModel): name: str
+class BrandInfo(BrandBase, ORMBase): id: int; slug: str
 class BrandCreate(BrandBase): pass
-
 class Brand(BrandBase, ORMBase):
-    id: int
-    slug: str
-    products: List[Product] = []
-    orders: List[Order] = []
-    revenues: List[Revenue] = []
+    id: int; slug: str
+    products: List[Product] = []; orders: List[Order] = []; revenues: List[Revenue] = []
 
-# ==========================================
-# === 3. SHARED & COMPOSITE ITEMS        ===
-# ==========================================
+# ==============================================================================
+# === 3. METRIC MIXINS (DASHBOARD LOGIC)                                     ===
+# ==============================================================================
 
-class ProductItem(ORMBase):
-    sku: str
-    name: Optional[str] = "Unknown"
-    quantity: int = 0
-    total_quantity: int = 0
-    revenue: float = 0.0
-
-class LocationItem(ORMBase):
-    province: str
-    orders: int = 0
-    revenue: float = 0.0
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-    metrics: Optional[Dict[str, Any]] = {}
-    completed: int = 0; cancelled: int = 0; bomb: int = 0; refunded: int = 0
-
-class FinancialEventItem(BaseModel):
-    date: str; type: str; amount: float; order_code: Optional[str] = None; note: Optional[str] = None
-
-# --- METRIC MIXINS ---
 class FinanceMetricsMixin(BaseModel):
     net_revenue: float = 0; gmv: float = 0
     total_cost: float = 0; cogs: float = 0; execution_cost: float = 0; subsidy_amount: float = 0
@@ -167,9 +144,8 @@ class MarketingMetricsMixin(BaseModel):
     impressions: int = 0; clicks: int = 0; conversions: int = 0; reach: int = 0
     frequency: float = 0; conversion_rate: float = 0
 
-class OperationMetricsMixin(BaseModel):
-    total_orders: int = 0; completed_orders: int = 0; cancelled_orders: int = 0
-    refunded_orders: int = 0; bomb_orders: int = 0
+class OperationMetricsMixin(OrderCountersMixin):
+    """Kế thừa Counters đã định nghĩa ở Bước 1"""
     aov: float = 0; upt: float = 0
     unique_skus_sold: int = 0; total_quantity_sold: int = 0
     completion_rate: float = 0; refund_rate: float = 0; cancellation_rate: float = 0; bomb_rate: float = 0
@@ -181,6 +157,22 @@ class CustomerMetricsMixin(BaseModel):
     cac: float = 0; retention_rate: float = 0; churn_rate: float = 0
     ltv: float = 0; arpu: float = 0; avg_repurchase_cycle: float = 0
 
+class ProductItem(ORMBase):
+    sku: str; name: Optional[str] = "Unknown"; quantity: int = 0; total_quantity: int = 0; revenue: float = 0.0
+
+class TopProduct(ORMBase):
+    sku: str; name: Optional[str] = "Unknown"; total_quantity: int = 0; revenue: float = 0.0
+
+class LocationItem(ORMBase):
+    province: str; orders: int = 0; revenue: float = 0.0
+    latitude: Optional[float] = None; longitude: Optional[float] = None
+    metrics: Optional[Dict[str, Any]] = {}
+
+class CustomerMapDistributionItem(ORMBase):
+    province: str; orders: int = 0; revenue: float = 0.0
+    completed: int = 0; cancelled: int = 0; bomb: int = 0; refunded: int = 0
+    latitude: Optional[float] = None; longitude: Optional[float] = None
+
 class BreakdownMetricsMixin(BaseModel):
     hourly_breakdown: Optional[Dict[str, int]] = {}
     payment_method_breakdown: Optional[Dict[str, int]] = {}
@@ -190,18 +182,17 @@ class BreakdownMetricsMixin(BaseModel):
     top_refunded_products: Optional[Dict[str, List[Dict[str, Any]]]] = {}
     frequency_distribution: Optional[Dict[str, int]] = {}
     customer_segment_distribution: Optional[List[Dict[str, Any]]] = []
-    financial_events: Optional[List[FinancialEventItem]] = []
+    financial_events: Optional[List[Dict[str, Any]]] = []
 
-
-# ==========================================
+# ==============================================================================
 # === 4. RESPONSE SCHEMAS (VIEW MODELS)  ===
-# ==========================================
+# ==============================================================================
 
 class KpiSet(FinanceMetricsMixin, MarketingMetricsMixin, OperationMetricsMixin, CustomerMetricsMixin, BreakdownMetricsMixin, ORMBase):
     pass
 
-class BrandWithKpis(BrandInfo):
-    kpis: KpiSet
+class BrandWithKpis(Brand):
+    kpis: Optional[KpiSet] = None
 
 class DailyKpi(FinanceMetricsMixin, MarketingMetricsMixin, OperationMetricsMixin, CustomerMetricsMixin, ORMBase):
     date: date
@@ -213,34 +204,22 @@ class OperationKpisResponse(OperationMetricsMixin, BreakdownMetricsMixin, ORMBas
     platform_comparison: List[Dict[str, Any]] = []
 
 class CustomerKpisResponse(CustomerMetricsMixin, ORMBase):
-    trend_data: List[DailyKpi] = []
-    segment_data: List[Dict[str, Any]] = []
-    frequency_data: List[Dict[str, Any]] = []
-    previous_period: Optional[Dict[str, Any]] = {}
+    trend_data: List[DailyKpi] = []; segment_data: List[Dict[str, Any]] = []
+    frequency_data: List[Dict[str, Any]] = []; previous_period: Optional[Dict[str, Any]] = {}
 
-class CustomerAnalyticsItem(BaseModel):
+class CustomerAnalyticsItem(OrderCountersMixin):
+    """Tái sử dụng OrderCountersMixin cho danh sách khách hàng"""
     username: str
-    total_spent: float = 0
-    total_orders: int = 0
-    completed_orders: int = 0
-    cancelled_orders: int = 0
-    bomb_orders: int = 0
-    aov: float = 0
+    total_spent: float = 0; aov: float = 0
     last_order_date: Optional[date] = None
-    province: Optional[str] = None
-    district: Optional[str] = None
-
-class CustomerAnalyticsResponse(BaseModel):
-    data: List[CustomerAnalyticsItem]
+    province: Optional[str] = None; district: Optional[str] = None
 
 class CustomerPaginationResponse(BaseModel):
-    data: List[CustomerAnalyticsItem]
-    total: int = 0
-    page: int = 1
-    limit: int = 20
+    data: List[CustomerAnalyticsItem]; total: int = 0; page: int = 1; limit: int = 20
 
 # Optimized Flat Structure for Customer Detail (Unified with Search)
-class CustomerDetailResponse(BaseModel):
+class CustomerDetailResponse(OrderCountersCamelMixin, ORMBase):
+    """Kế thừa CamelCase Counters cho UI"""
     id: str
     type: str = "customer"
     source: Optional[str] = "---"
@@ -256,30 +235,31 @@ class CustomerDetailResponse(BaseModel):
     notes: Optional[str] = "---"
     lastOrderDate: Optional[datetime] = None
     
-    # --- Metrics ---
-    rank: Optional[str] = "MEMBER"
-    nextRank: Optional[str] = "MAX"
-    rankProgress: float = 0.0
-    
-    ltv: float = 0.0
-    totalProfit: float = 0.0
-    totalFees: float = 0.0
-    aov: float = 0.0
-    
-    orderCount: int = 0
-    successCount: int = 0
-    refundedOrders: int = 0
-    cancelCount: int = 0
-    bombOrders: int = 0
+    # Metrics
+    rank: Optional[str] = "MEMBER"; nextRank: Optional[str] = "MAX"; rankProgress: float = 0.0
+    ltv: float = 0.0; totalProfit: float = 0.0; totalFees: float = 0.0; aov: float = 0.0
     avgRepurchaseCycle: float = 0.0
     
-    # --- List ---
     recentOrders: List[Order] = []
 
-    model_config = ConfigDict(from_attributes=True)
+# ==============================================================================
+# === 5. SEARCH & DISCOVERY SCHEMAS      ===
+# ==============================================================================
 
+class SearchSuggestionItem(BaseModel):
+    type: str; value: str; label: str; sub_label: Optional[str] = None
 
-# Aliases for backward compatibility if needed in frontend
-TopProduct = ProductItem
-CustomerMapDistributionItem = LocationItem
-CustomerDistributionItem = LocationItem
+class OrderSearchResult(BaseModel):
+    type: str = "order"
+    id: str; status: str; createdDate: str
+    shippedDate: Optional[str] = None; deliveredDate: Optional[str] = None
+    paymentMethod: str; source: str; trackingCode: str; orderCode: str
+    return_tracking_code: Optional[str] = "---"; carrier: str
+    
+    customer: Dict[str, Any]; items: List[Dict[str, Any]]
+    
+    original_price: float = 0.0; subsidy_amount: float = 0.0; sku_price: float = 0.0
+    totalCollected: float = 0.0; cogs: float = 0.0; netProfit: float = 0.0
+    netRevenue: float = 0.0; totalFees: float = 0.0; profitMargin: float = 0.0; takeRate: float = 0.0
+
+GlobalSearchResult = Union[OrderSearchResult, CustomerDetailResponse]

@@ -120,7 +120,7 @@ const TrackingInfo = ({ label, code, colorType = 'info' }) => {
 const OrderResultView = ({ data }) => {
     const theme = useTheme();
 
-    const hasReturn = !!data.return_tracking_code && !['0', '0.0', ''].includes(String(data.return_tracking_code).trim());
+    const hasReturn = !!data.return_tracking_code && !['0', '0.0', '', '---'].includes(String(data.return_tracking_code).trim());
 
     return (
         <Box sx={{ 
@@ -201,7 +201,7 @@ const OrderResultView = ({ data }) => {
                                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
                                         <Typography variant="body2" color="text.secondary">Phí sàn & QC (Fees)</Typography>
                                         <Stack direction="row" spacing={1} alignItems="center">
-                                            {(data.takeRate && Math.abs(data.takeRate) > 0 && data.netRevenue > 0) && (
+                                            {(!!data.takeRate && Math.abs(data.takeRate) > 0 && data.netRevenue > 0) && (
                                                 <Chip 
                                                     label={`Take Rate: ${formatNumber(Math.abs(data.takeRate))}%`} 
                                                     size="small" 
@@ -236,7 +236,12 @@ const OrderResultView = ({ data }) => {
                                 }}>
                                     <SectionTitle>HIỆU QUẢ KINH DOANH (NET)</SectionTitle>
                                     <FinanceRow label="Doanh thu thực nhận" value={formatNumber(data.netRevenue)} />
-                                    <FinanceRow label="Giá vốn hàng bán (COGS)" value={formatNumber(data.cogs)} isNegative valueColor="error.main" />
+                                    <FinanceRow 
+                                        label="Giá vốn hàng bán (COGS)" 
+                                        value={formatNumber(data.status === 'bomb' ? 0 : data.cogs)} 
+                                        isNegative={data.status !== 'bomb'} 
+                                        valueColor={data.status === 'bomb' ? 'text.primary' : 'error.main'} 
+                                    />
                                     
                                     <Divider sx={{ my: 1.5 }} />
                                     
