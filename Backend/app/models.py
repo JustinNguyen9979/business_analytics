@@ -124,7 +124,16 @@ class Order(Base):
 
     __table_args__ = (
         Index('ix_order_brand_id_order_date', 'brand_id', 'order_date'),
-        UniqueConstraint('order_code', 'brand_id', name='uq_order_brand_code')
+        UniqueConstraint('order_code', 'brand_id', name='uq_order_brand_code'),
+        
+        # Index GIN cho tìm kiếm nhanh (Order)
+        Index('idx_order_search_gin', 'order_code', 'tracking_id', 'username',
+              postgresql_using='gin',
+              postgresql_ops={
+                  'order_code': 'gin_trgm_ops',
+                  'tracking_id': 'gin_trgm_ops',
+                  'username': 'gin_trgm_ops'
+              }),
     )
     
     owner_brand = relationship("Brand", back_populates="orders")
@@ -149,6 +158,14 @@ class Revenue(Base):
 
     __table_args__ = (
         Index('ix_revenue_brand_id_transaction_date', 'brand_id', 'transaction_date'),
+
+        # Index GIN cho tìm kiếm nhanh (Revenue)
+        Index('idx_revenue_search_gin', 'order_code', 'order_refund',
+              postgresql_using='gin',
+              postgresql_ops={
+                  'order_code': 'gin_trgm_ops',
+                  'order_refund': 'gin_trgm_ops'
+              }),
     )
 
     owner_brand = relationship("Brand", back_populates="revenues")
@@ -245,6 +262,17 @@ class Customer(Base):
     default_address = Column(String, nullable=True)
 
     owner_brand = relationship("Brand", back_populates="customers")
+
+    __table_args__ = (
+        # Khai báo Index GIN cho SQLAlchemy biết (postgresql_ops chỉ định dùng trgm)
+        Index('idx_customer_search_gin', 'username', 'phone', 'email', 
+              postgresql_using='gin', 
+              postgresql_ops={
+                  'username': 'gin_trgm_ops', 
+                  'phone': 'gin_trgm_ops', 
+                  'email': 'gin_trgm_ops'
+              }),
+    )
 
 class ImportLog(Base):
     __tablename__ = "import_logs"

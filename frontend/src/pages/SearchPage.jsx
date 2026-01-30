@@ -59,6 +59,7 @@ function SearchPage() {
                     fullWidth
                     freeSolo
                     disableClearable
+                    filterOptions={(x) => x}
                     inputValue={query}
                     openOnFocus={false} 
                     sx={{ 
