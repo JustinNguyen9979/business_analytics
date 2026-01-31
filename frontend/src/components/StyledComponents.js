@@ -1,7 +1,7 @@
 // FILE: frontend/src/components/StyledComponents.js
 
 import { styled, alpha } from '@mui/material/styles';
-import { Card, Box, TextField, Paper } from '@mui/material';
+import { Card, Box, TextField, Paper, Typography, Avatar } from '@mui/material';
 
 // Styled Component cho Card "Thêm mới" (đã có)
 export const StyledAddCard = styled(Card)(({ theme }) => ({
@@ -207,4 +207,32 @@ export const CardHeader = styled(Box)(({ theme }) => ({
 
 export const CardContent = styled(Box)(({ theme }) => ({
     padding: theme.spacing(3),
+}));
+
+export const NoteTypography = styled(Typography)(({ theme }) => ({
+    fontStyle: 'italic',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    display: '-webkit-box',
+    WebkitLineClamp: 5,
+    WebkitBoxOrient: 'vertical',
+    wordBreak: 'break-word',
+    cursor: 'default',
+    userSelect: 'none',
+    color: theme.palette.text.secondary
+}));
+
+export const RankAvatar = styled(Avatar, {
+    shouldForwardProp: (prop) => prop !== 'glowColor',
+})(({ theme, glowColor }) => ({
+    width: 100,
+    height: 100,
+    margin: '0 auto',
+    border: `4px solid ${theme.palette.background.paper}`,
+    backgroundColor: theme.palette.background.default,
+    color: glowColor,
+    boxShadow: `0 0 30px ${glowColor}`,
+    fontWeight: 900,
+    fontSize: '2.5rem',
+    transition: 'all 0.5s ease'
 }));

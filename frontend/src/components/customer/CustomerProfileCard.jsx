@@ -20,7 +20,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 
 // Custom Components
-import { LuxuryCard, CardContent } from '../StyledComponents';
+import { LuxuryCard, CardContent, NoteTypography, RankAvatar } from '../StyledComponents';
 import { LabelValue, SectionTitle } from '../search/SearchCommon';
 import { updateCustomerAPI } from '../../services/api';
 
@@ -122,15 +122,9 @@ const CustomerProfileCard = ({ data: initialData, sx = {} }) => {
             
             {/* Avatar & Main Info */}
             <Box sx={{ px: 3, pb: 4, mt: -6, textAlign: 'center', position: 'relative' }}>
-                <Avatar sx={{ 
-                    width: 100, height: 100, mx: 'auto', 
-                    border: `4px solid ${theme.palette.background.paper}`, 
-                    bgcolor: 'background.default', color: rankStyle.glow,
-                    boxShadow: `0 0 30px ${rankStyle.glow}`, fontWeight: 900, fontSize: '2.5rem',
-                    transition: 'all 0.5s ease'
-                }}>
+                <RankAvatar glowColor={rankStyle.glow}>
                     {(data.name || '?').charAt(0).toUpperCase()}
-                </Avatar>
+                </RankAvatar>
                 
                 {/* Tên khách hàng - Hiệu ứng Marquee khi tên quá dài */}
                 <Box className="marquee-box" sx={{ mt: 2, mb: 1, mx: 'auto', maxWidth: '90%' }}>
@@ -257,24 +251,10 @@ const CustomerProfileCard = ({ data: initialData, sx = {} }) => {
                     ) : (
                         <Box sx={{ display: 'flex', gap: 1 }}>
                             <AssignmentIcon sx={{ fontSize: 18, color: 'text.secondary', flexShrink: 0, mt: '2px' }} />
-                            <Tooltip title={(!data.notes || data.notes === "---" ) ? "Chưa có ghi chú..." : data.notes} arrow placement="top">
-                                <Typography 
-                                    variant="body2" 
-                                    color="text.secondary" 
-                                    sx={{ 
-                                        fontStyle: 'italic',
-                                        overflow: 'hidden',
-                                        textOverflow: 'ellipsis',
-                                        display: '-webkit-box',
-                                        WebkitLineClamp: 3,
-                                        WebkitBoxOrient: 'vertical',
-                                        wordBreak: 'break-word',
-                                        cursor: 'default',
-                                        userSelect: 'none'
-                                    }}
-                                >
-                                    {(!data.notes || data.notes === "---") ? "Chưa có ghi chú..." : data.notes}
-                                </Typography>
+                            <Tooltip title={(!data.notes || data.notes === '---') ? 'Chưa có ghi chú...' : data.notes} arrow placement="top">
+                                <NoteTypography variant="body2">
+                                    {(!data.notes || data.notes === '---') ? 'Chưa có ghi chú...' : data.notes}
+                                </NoteTypography>
                             </Tooltip>
                         </Box>
                     )}
