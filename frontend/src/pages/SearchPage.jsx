@@ -183,7 +183,16 @@ function SearchPage() {
                                 <Box sx={{ flexGrow: 1 }}>
                                     {/* Thêm class highlight-text để target khi hover */}
                                     <Typography className="highlight-text" variant="body1" sx={{ fontWeight: 600, color: '#e0e0e0', transition: 'all 0.2s ease' }}>
-                                        {option.label.split('(')[0]}
+                                        {(() => {
+                                            const text = option.label.split('(')[0];
+                                            const parts = text.split(new RegExp(`(${query})`, 'gi'));
+
+                                            return parts.map((part, i ) => 
+                                                part.toLowerCase() === query.toLowerCase()
+                                                    ? <span key={i} style={{ color: theme.palette.primary.main, textShadow: `0 0 8px ${theme.palette.primary.main}` }}>{part}</span>
+                                                    : part
+                                                );
+                                        })()}
                                     </Typography>
                                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', mt: 0.3 }}>
                                         {option.type === 'customer' 
