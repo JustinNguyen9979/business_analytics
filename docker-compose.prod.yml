@@ -1,61 +1,50 @@
-
-
 services:
   backend:
     build:
       context: ./backend
-    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000 --reload"
-    volumes:
-      - ./backend/app:/app
+    # PRODUCTION COMMAND: Không dùng --reload, tăng workers nếu cần
+    # Ở đây em dùng 1 worker mặc định, nếu máy mạnh có thể tăng lên (vd: --workers 4)
+    command: sh -c "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port 8000"
+    # Trong Prod, thường ta không mount volume code (/app) để đảm bảo code trong container là cố định
+    # Tuy nhiên, nếu anh muốn sửa file .env dễ dàng thì vẫn giữ env_file
     ports:
-      - "8000:8000"
+      - "8000:8000" # Có thể đóng port này lại nếu chỉ muốn truy cập qua Nginx (Frontend)
     depends_on:
       - db
       - cache
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
-    restart: unless-stopped
+      - ENVIRONMENT=production
+    restart: always
 
-  # === SERVICE WORKER CHỈ LÀM VIỆC ===
   worker:
     build: { context: ./backend }
-    # Bỏ cờ -B
     command: celery -A celery_worker.celery_app worker --loglevel=info -P gevent --concurrency=100
-    volumes: [ ./backend/app:/app ]
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     depends_on: [ db, cache, backend ]
-    restart: unless-stopped
+    restart: always
 
-  # === SERVICE BEAT MỚI CHỈ ĐỂ LẬP LỊCH ===
   beat:
     build: { context: ./backend }
-    # Lệnh riêng cho beat
     command: celery -A celery_worker.celery_app beat --loglevel=info
-    volumes: [ ./backend/app:/app ]
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:${POSTGRES_PORT}/${POSTGRES_DB}
       - REDIS_PASSWORD=${REDIS_PASSWORD}
     depends_on: [ db, cache, backend ]
-    restart: unless-stopped
+    restart: always
 
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile.dev # Sử dụng Dockerfile phát triển
-    volumes:
-      - ./frontend:/app # Ánh xạ toàn bộ thư mục frontend vào container
-      - /app/node_modules # Loại trừ node_modules để không bị ghi đè bởi thư mục rỗng trên máy host
+      dockerfile: Dockerfile # Sử dụng Dockerfile production vừa tạo
     ports:
-      - "80:5173" # Ánh xạ cổng 80 của máy anh vào 5173 của Vite
-      - "24678:24678" # Port cho Vite HMR (giữ nguyên để hot reload hoạt động)
-    environment:
-      - WEBHOOK_URL=${WEBHOOK_URL}
-    restart: unless-stopped
+      - "80:80" # Chạy trên cổng 80 chuẩn (http://localhost)
     depends_on:
       - backend
+    restart: always
 
   db:
     image: postgres:13
@@ -65,16 +54,12 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=${POSTGRES_DB}
-    ports:
-      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
-    restart: unless-stopped
+    restart: always
 
   cache:
     image: redis:6.2-alpine
     restart: always
-    ports: [ '6379:6379' ]
     command: redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
-
 
 volumes:
   postgres_data:

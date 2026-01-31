@@ -39,10 +39,6 @@ export default defineConfig({
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           // Tách MUI riêng (vì nó rất nặng)
           'mui-vendor': ['@mui/material', '@mui/icons-material', '@mui/x-date-pickers'],
-          // Tách Plotly riêng (Cái này quan trọng nhất)
-          'plotly-vendor': ['plotly.js', 'react-plotly.js'],
-          // Tách Map riêng
-          'map-vendor': ['@vnedyalk0v/react19-simple-maps', 'd3-geo', 'd3-scale'],
         },
       },
     },

@@ -3,7 +3,8 @@ import {
     Box, Typography, Stack, Divider, Avatar, 
     Paper, Chip, LinearProgress, IconButton, 
     TextField, Button, CircularProgress,
-    MenuItem, Select, FormControl, InputLabel
+    MenuItem, Select, FormControl, InputLabel,
+    Tooltip
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useParams } from 'react-router-dom';
@@ -254,10 +255,28 @@ const CustomerProfileCard = ({ data: initialData, sx = {} }) => {
                     {isEditing ? (
                         <TextField placeholder="Nhập ghi chú..." value={formData.notes} onChange={handleInputChange('notes')} fullWidth size="small" variant="standard" multiline InputProps={{ disableUnderline: true }} sx={{ '& .MuiInputBase-root': { fontSize: '0.875rem', fontStyle: 'italic' } }} />
                     ) : (
-                        <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', display: 'flex', gap: 1 }}>
-                            <AssignmentIcon sx={{ fontSize: 18, color: 'text.secondary' }} />
-                            {data.notes || 'Chưa có ghi chú.'}
-                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 1 }}>
+                            <AssignmentIcon sx={{ fontSize: 18, color: 'text.secondary', flexShrink: 0, mt: '2px' }} />
+                            <Tooltip title={(!data.notes || data.notes === "---" ) ? "Chưa có ghi chú..." : data.notes} arrow placement="top">
+                                <Typography 
+                                    variant="body2" 
+                                    color="text.secondary" 
+                                    sx={{ 
+                                        fontStyle: 'italic',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        display: '-webkit-box',
+                                        WebkitLineClamp: 3,
+                                        WebkitBoxOrient: 'vertical',
+                                        wordBreak: 'break-word',
+                                        cursor: 'default',
+                                        userSelect: 'none'
+                                    }}
+                                >
+                                    {(!data.notes || data.notes === "---") ? "Chưa có ghi chú..." : data.notes}
+                                </Typography>
+                            </Tooltip>
+                        </Box>
                     )}
                     {data.tags && data.tags.length > 0 && (
                         <Stack direction="row" spacing={1} mt={2} flexWrap="wrap" useFlexGap>

@@ -40,10 +40,25 @@ const useSearchPageLogic = () => {
                 const data = await fetchSearchSuggestionsAPI(brandSlug, trimmedVal);
                 
                 // [TỐI ƯU] Nếu user nhập chính xác 100% tên hoặc giá trị đã gợi ý, không cần hiện menu nữa
-                const exactMatch = data && data.some(s => 
-                    s.value.toLowerCase() === trimmedVal.toLowerCase() || 
-                    s.label.split(' (')[0].toLowerCase() === trimmedVal.toLowerCase()
-                );
+                const exactMatch = data && data.some(s => {
+                    const lowerInput = trimmedVal.toLowerCase();
+                    const lowerValue = s.value.toLowerCase();
+                    
+                    // 1. So sánh Value (thường là username hoặc order code)
+                    if (lowerValue === lowerInput) return true;
+
+                    // 2. So sánh Label (đã loại bỏ prefix)
+                    // Backend trả về: "Vận đơn: XYZ", "Đơn hàng: ABC", "Đơn hoàn: 123"
+                    const rawLabel = s.label.toLowerCase();
+                    const cleanLabel = rawLabel
+                        .replace('vận đơn: ', '')
+                        .replace('đơn hàng: ', '')
+                        .replace('đơn hoàn: ', '')
+                        .split(' (')[0] // Loại bỏ phần phụ (nếu có)
+                        .trim();
+                    
+                    return cleanLabel === lowerInput;
+                });
 
                 if (exactMatch) {
                     setSuggestions([]);

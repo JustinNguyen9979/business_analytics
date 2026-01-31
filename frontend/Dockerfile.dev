@@ -1,7 +1,7 @@
 # FILE: frontend/Dockerfile.dev (DÀNH RIÊNG CHO DEVELOPMENT)
 
-# Dùng image Node.js phiên bản 20
-FROM node:20-alpine
+# Dùng image Node.js phiên bản 22 (LTS mới nhất tương thích Vite 7)
+FROM node:22-alpine
 
 # Đặt thư mục làm việc
 WORKDIR /app

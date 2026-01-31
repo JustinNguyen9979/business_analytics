@@ -1,7 +1,7 @@
 import React from 'react';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Backdrop, CircularProgress, Typography, Box } from '@mui/material';
+import { styled, keyframes } from '@mui/material/styles';
 import { useTheme } from '@mui/material/styles';
-import { readUInt16BE } from 'plotly.js/dist/plotly-cartesian';
 
 /**
 * Component overlay hiển thị trạng thái loading, thường dùng để phủ lên các biểu đồ hoặc nội dung.
