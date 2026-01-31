@@ -236,3 +236,67 @@ export const RankAvatar = styled(Avatar, {
     fontSize: '2.5rem',
     transition: 'all 0.5s ease'
 }));
+
+export const StyledOptionItem = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'itemType'
+})(({ theme, itemType }) => {
+    const isCustomer = itemType === 'customer';
+    const mainColor = isCustomer ? theme.palette.primary.main : theme.palette.error.main;
+
+    return {
+        padding: '14px 24px !important',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+        position: 'relative',
+        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+        cursor: 'pointer',
+        
+        '&:hover': {
+            backgroundColor: 'rgba(0, 229, 255, 0.03) !important',
+            paddingLeft: '30px !important',
+            
+            '& .highlight-text': {
+                color: theme.palette.primary.main,
+                textShadow: `0 0 12px ${alpha(theme.palette.primary.main, 0.6)}`,
+            },
+            
+            '& .icon-box': {
+                backgroundColor: alpha(mainColor, 0.2),
+                transform: 'scale(1.1) rotate(5deg)',
+                boxShadow: `0 0 15px ${alpha(mainColor, 0.4)}`,
+                color: mainColor
+            },
+            
+            '&::before': {
+                content: '""',
+                position: 'absolute',
+                left: 0, top: '20%', bottom: '20%',
+                width: '3px',
+                borderRadius: '0 4px 4px 0',
+                backgroundColor: mainColor,
+                boxShadow: `0 0 8px ${mainColor}`
+            }
+        },
+        '&:last-child': {
+            borderBottom: 'none'
+        }
+    };
+});
+
+export const StyledIconBox = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'itemType'
+})(({ theme, itemType }) => {
+    const isCustomer = itemType === 'customer';
+    const mainColor = isCustomer ? theme.palette.primary.main : theme.palette.error.main;
+    
+    return {
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center',
+        width: 42, 
+        height: 42,
+        borderRadius: '12px',
+        backgroundColor: alpha(mainColor, 0.05),
+        color: mainColor,
+        transition: 'all 0.3s ease'
+    };
+});

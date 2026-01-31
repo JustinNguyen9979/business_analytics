@@ -12,7 +12,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 
 // UI Components
-import { MainContainer, SearchHeader, GlowingInput } from '../components/StyledComponents';
+import { MainContainer, SearchHeader, GlowingInput, StyledOptionItem, StyledIconBox } from '../components/StyledComponents';
 
 // View Components
 import OrderResultView from '../components/search/OrderResultView';
@@ -131,67 +131,28 @@ function SearchPage() {
                         ) : null
                     )}
                     renderOption={(props, option) => (
-                        <Box 
+                        <StyledOptionItem 
                             component="li" 
                             {...props} 
                             key={option.value + option.type} 
-                            sx={{ 
-                                p: '14px 24px !important', 
-                                borderBottom: '1px solid rgba(255,255,255,0.05)',
-                                position: 'relative',
-                                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                                '&:hover': {
-                                    bgcolor: 'rgba(0, 229, 255, 0.03) !important', // Tint rất rất nhẹ thay vì xám
-                                    paddingLeft: '30px !important', // Hiệu ứng trượt nhẹ nội dung
-                                    cursor: 'pointer',
-                                    '& .highlight-text': {
-                                        color: '#00E5FF', // Chuyển màu chữ chính sang Neon Cyan
-                                        textShadow: '0 0 12px rgba(0, 229, 255, 0.6)', // Glow chữ
-                                    },
-                                    '& .icon-box': {
-                                        bgcolor: option.type === 'customer' ? 'rgba(0, 229, 255, 0.2)' : 'rgba(255, 23, 68, 0.2)', // Icon sáng lên
-                                        transform: 'scale(1.1) rotate(5deg)', // Icon động đậy
-                                        boxShadow: option.type === 'customer' ? '0 0 15px rgba(0, 229, 255, 0.4)' : '0 0 15px rgba(255, 23, 68, 0.4)'
-                                    }
-                                },
-                                // Thanh chỉ thị bên trái (Neon Bar)
-                                '&:hover::before': {
-                                    content: '""',
-                                    position: 'absolute',
-                                    left: 0, top: '20%', bottom: '20%',
-                                    width: '3px',
-                                    borderRadius: '0 4px 4px 0',
-                                    backgroundColor: option.type === 'customer' ? '#00E5FF' : '#FF1744',
-                                    boxShadow: option.type === 'customer' ? '0 0 8px #00E5FF' : '0 0 8px #FF1744'
-                                },
-                                '&:last-child': {
-                                    borderBottom: 'none'
-                                }
-                            }}
+                            itemType={option.type}
                         >
                             <Stack direction="row" spacing={2} alignItems="center" sx={{ width: '100%' }}>
-                                <Box className="icon-box" sx={{ 
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    width: 42, height: 42,
-                                    borderRadius: '12px', 
-                                    bgcolor: option.type === 'customer' ? 'rgba(0,229,255,0.05)' : 'rgba(255,23,68,0.05)', // Mặc định mờ hơn
-                                    color: option.type === 'customer' ? '#00E5FF' : '#FF1744',
-                                    transition: 'all 0.3s ease'
-                                }}>
+                                <StyledIconBox itemType={option.type} className="icon-box">
                                     {option.type === 'customer' ? <PersonIcon /> : <ReceiptIcon />}
-                                </Box>
+                                </StyledIconBox>
                                 <Box sx={{ flexGrow: 1 }}>
                                     {/* Thêm class highlight-text để target khi hover */}
                                     <Typography className="highlight-text" variant="body1" sx={{ fontWeight: 600, color: '#e0e0e0', transition: 'all 0.2s ease' }}>
                                         {(() => {
                                             const text = option.label.split('(')[0];
+                                            if (!query.trim()) return text;
                                             const parts = text.split(new RegExp(`(${query})`, 'gi'));
-
-                                            return parts.map((part, i ) => 
-                                                part.toLowerCase() === query.toLowerCase()
+                                            return parts.map((part, i) => 
+                                                part.toLowerCase() === query.toLowerCase() 
                                                     ? <span key={i} style={{ color: theme.palette.primary.main, textShadow: `0 0 8px ${theme.palette.primary.main}` }}>{part}</span>
                                                     : part
-                                                );
+                                            );
                                         })()}
                                     </Typography>
                                     <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.4)', display: 'block', mt: 0.3 }}>
@@ -202,7 +163,7 @@ function SearchPage() {
                                     </Typography>
                                 </Box>
                             </Stack>
-                        </Box>
+                        </StyledOptionItem>
                     )}
                     renderInput={(params) => (
                         <GlowingInput 
