@@ -14,7 +14,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 // Common & Custom Components
 import CustomerProfileCard from '../customer/CustomerProfileCard'; 
 import OrderItemsTable from '../common/OrderItemsTable';
-import { LuxuryCard, CardHeader, CardContent } from '../StyledComponents';
+import { LuxuryCard, CardHeader, CardContent, ProfitResultBox, FinanceRow } from '../StyledComponents.jsx';
 import { SectionTitle } from './SearchCommon';
 
 // Utils
@@ -73,19 +73,6 @@ const MetricItem = ({ icon, label, value }) => (
         </Typography>
         <Typography variant="body2" fontWeight="bold">
             {value}
-        </Typography>
-    </Box>
-);
-
-const FinanceRow = ({ label, value, valueColor = 'text.primary', isBold = false, isNegative = false, isPositive = false }) => (
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
-        <Typography variant="body2" color="text.secondary">{label}</Typography>
-        <Typography 
-            variant={isBold ? 'subtitle2' : 'body2'} 
-            fontWeight={isBold ? 'bold' : 'normal'}
-            color={valueColor}
-        >
-            {isNegative && '-'}{isPositive && '+'}{value}
         </Typography>
     </Box>
 );
@@ -193,7 +180,7 @@ const OrderResultView = ({ data }) => {
                                 <Box sx={{ flex: 1, pr: { md: 4 } }}>
                                     <SectionTitle>DOANH THU & PHÍ SÀN</SectionTitle>
                                     <FinanceRow label="Giá bán (Original Price)" value={formatNumber(data.original_price)} />
-                                    <FinanceRow label="Trợ giá (Voucher/Subsidy)" value={formatNumber(data.subsidy_amount)} isNegative valueColor="success.main" />
+                                    <FinanceRow label="Trợ giá (Voucher/Subsidy)" value={formatNumber(data.subsidy_amount)} isNegative valueColor="#f38836" />
                                     <FinanceRow label="Khách trả (Subtotal)" value={formatNumber(data.sku_price)} isBold />
                                     
                                     <Divider sx={{ my: 1.5, borderStyle: 'dashed' }} />
@@ -246,14 +233,7 @@ const OrderResultView = ({ data }) => {
                                     <Divider sx={{ my: 1.5 }} />
                                     
                                     {/* Final Profit Result Box */}
-                                    <Box sx={{ 
-                                        mt: 2, 
-                                        p: 2, 
-                                        borderRadius: 2,
-                                        bgcolor: (theme) => alpha(data.netProfit >= 0 ? theme.palette.success.main : theme.palette.error.main, 0.05),
-                                        border: '1px dashed',
-                                        borderColor: data.netProfit >= 0 ? 'success.main' : 'error.main'
-                                    }}>
+                                    <ProfitResultBox isPositive={data.netProfit >= 0}>
                                         <Stack direction="row" justifyContent="space-between" alignItems="center">
                                             <Box>
                                                 <Typography variant="subtitle2" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
@@ -271,7 +251,7 @@ const OrderResultView = ({ data }) => {
                                                 {data.netProfit > 0 ? '+' : ''}{formatCurrency(data.netProfit)}
                                             </Typography>
                                         </Stack>
-                                    </Box>
+                                    </ProfitResultBox>
                                 </Box>
                             </Box>
                         </CardContent>

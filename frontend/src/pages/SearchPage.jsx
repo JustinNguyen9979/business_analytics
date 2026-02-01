@@ -12,7 +12,7 @@ import PersonIcon from '@mui/icons-material/Person';
 import ReceiptIcon from '@mui/icons-material/Receipt';
 
 // UI Components
-import { MainContainer, SearchHeader, GlowingInput, StyledOptionItem, StyledIconBox } from '../components/StyledComponents';
+import { MainContainer, SearchHeader, GlowingInput, StyledOptionItem, StyledIconBox } from '../components/StyledComponents.jsx';
 
 // View Components
 import OrderResultView from '../components/search/OrderResultView';
@@ -110,26 +110,26 @@ function SearchPage() {
                         if (query.length >= 2 && suggestions.length > 0) setIsMenuOpen(true);
                     }}
                     loading={isLoadingSuggestions}
-                    PaperComponent={({ children }) => (
-                        suggestions.length > 0 ? (
+                    slots={{
+                        paper: (props) => (
                             <Paper 
-                                variant="glass" // Sử dụng variant 'glass' đã định nghĩa trong theme
+                                {...props}
+                                variant="glass" 
                                 elevation={0}
                                 sx={{ 
                                     mt: 1, 
-                                    // Ghi đè thêm một chút để đạt hiệu ứng "Liquid Glass" cực mượt
                                     background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.03))',
                                     backdropFilter: 'blur(30px) saturate(150%)',
                                     WebkitBackdropFilter: 'blur(30px) saturate(150%)',
                                     border: '1px solid rgba(255, 255, 255, 0.15)',
                                     boxShadow: '0 25px 60px rgba(0, 0, 0, 0.6), inset 0 0 2px rgba(255,255,255,0.2)',
                                     borderRadius: '24px',
-                                    overflow: 'hidden'
-                                }}>
-                                {children}
-                            </Paper>
-                        ) : null
-                    )}
+                                    overflow: 'hidden',
+                                    ...props.sx // Kết hợp với sx của MUI nếu có
+                                }}
+                            />
+                        )
+                    }}
                     renderOption={(props, option) => (
                         <StyledOptionItem 
                             component="li" 

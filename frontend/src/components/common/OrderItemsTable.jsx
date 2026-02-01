@@ -4,6 +4,7 @@ import {
     Typography, useTheme
 } from '@mui/material';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { WrapText, StyledTableHeader } from '../StyledComponents.jsx';
 
 const OrderItemsTable = ({ items = [] }) => {
     const theme = useTheme();
@@ -18,16 +19,16 @@ const OrderItemsTable = ({ items = [] }) => {
 
     return (
         <TableContainer sx={{ borderRadius: 2, border: `1px solid ${theme.palette.divider}`, bgcolor: 'background.paper' }}>
-            <Table size="small">
+            <Table size="small" sx={{ tableLayout: 'fixed' }}>
                 <TableHead>
-                    <TableRow sx={{ bgcolor: 'action.hover' }}>
-                        <TableCell sx={{ fontWeight: 'bold' }}>SKU</TableCell>
-                        <TableCell sx={{ fontWeight: 'bold' }}>Tên Sản Phẩm</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Giá Gốc</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Số Lượng</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Trợ Giá</TableCell>
-                        <TableCell align="right" sx={{ fontWeight: 'bold' }}>Thành tiền</TableCell>
-                    </TableRow>
+                    <StyledTableHeader>
+                        <TableCell sx={{ width: '280px' }}>SKU</TableCell>
+                        <TableCell>Tên Sản Phẩm</TableCell>
+                        <TableCell align="right" sx={{ width: '100px' }}>Giá Gốc</TableCell>
+                        <TableCell align="right" sx={{ width: '60px' }}>SL</TableCell>
+                        <TableCell align="right" sx={{ width: '100px' }}>Trợ Giá</TableCell>
+                        <TableCell align="right" sx={{ width: '120px' }}>Thành tiền</TableCell>
+                    </StyledTableHeader>
                 </TableHead>
                 <TableBody>
                     {items.map((item, index) => {
@@ -42,9 +43,17 @@ const OrderItemsTable = ({ items = [] }) => {
 
                         return (
                             <TableRow key={index} hover>
-                                <TableCell sx={{ fontFamily: 'monospace', color: 'primary.light' }}>{sku}</TableCell>
+                                <TableCell sx={{ 
+                                    fontFamily: 'monospace', 
+                                    color: 'primary.light',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis'
+                                }} title={sku}>
+                                    {sku}
+                                </TableCell>
                                 <TableCell>
-                                    <Typography variant="body2">{name}</Typography>
+                                    <WrapText variant="body2">{name}</WrapText>
                                 </TableCell>
                                 <TableCell align="right">{formatNumber(price)}</TableCell>
                                 <TableCell align="right">{qty}</TableCell>

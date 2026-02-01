@@ -15,12 +15,13 @@ import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
-import { formatCurrency, formatDate } from '../../utils/formatters';
+import { formatCurrency, formatDate, formatNumber } from '../../utils/formatters';
 import OrderStatusChip from '../common/OrderStatusChip';
 
 import OrderItemsTable from '../common/OrderItemsTable';
+import { ProfitResultBox, FinanceRow } from '../StyledComponents.jsx';
 
-const OrderRow = ({ order }) => {
+const OrderRow = ({ order, data }) => {
     const [open, setOpen] = useState(false);
     const [copied, setCopied] = useState(false);
     const theme = useTheme();
@@ -28,6 +29,10 @@ const OrderRow = ({ order }) => {
     const details = order.details || {};
     const items = details.items || [];
     const hasItems = items.length > 0;
+
+    // Logic hiển thị mã đơn hoàn (Fix hiển thị 0.0)
+    const rawReturnCode = order.order_refund || order.return_tracking_code;
+    const displayReturnCode = (rawReturnCode && rawReturnCode !== '0.0' && rawReturnCode !== 0) ? rawReturnCode : '---';
 
     const handleCopy = (text) => {
         if (!text) return;
@@ -63,29 +68,44 @@ const OrderRow = ({ order }) => {
                         {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
                     </IconButton>
                 </TableCell>
-                <TableCell sx={{ fontFamily: 'monospace', fontWeight: 500 }}>{order.order_code}</TableCell>
-                <TableCell sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>{order.tracking_id || '---'}</TableCell>
-                <TableCell>{dateStr}</TableCell>
-                <TableCell sx={{ color: 'text.secondary', fontSize: '0.85rem' }}>{timeStr}</TableCell>
+                <TableCell sx={{ 
+                    fontFamily: 'monospace', 
+                    fontWeight: 500,
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                }}>
+                    {order.order_code}
+                </TableCell>
+                <TableCell sx={{ 
+                    fontFamily: 'monospace', 
+                    color: 'text.secondary',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                }}>
+                    {order.tracking_id || '---'}
+                </TableCell>
+                <TableCell sx={{ whiteSpace: 'nowrap' }}>{dateStr}</TableCell>
+                <TableCell sx={{ color: 'text.secondary', fontSize: '0.85rem', whiteSpace: 'nowrap' }}>{timeStr}</TableCell>
                 <TableCell>
                     <OrderStatusChip status={order.status} category={order.category} />
                 </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.light' }}>
+                <TableCell align="right" sx={{ fontWeight: 'bold', color: 'primary.light', whiteSpace: 'nowrap' }}>
                     {formatCurrency(order.net_revenue || 0)}
                 </TableCell>
-                <TableCell sx={{ maxWidth: 150 }}>
+                <TableCell>
                     <Tooltip title={details.cancel_reason || '---'} arrow placement="top">
-                        <Typography noWrap variant="body2" sx={{ fontSize: 'inherit', cursor: 'help' }}>
+                        <Typography noWrap variant="body2" sx={{ fontSize: 'inherit', cursor: 'help', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {details.cancel_reason || '---'}
                         </Typography>
                     </Tooltip>
                 </TableCell>
-                <TableCell sx={{ textTransform: 'capitalize', color: 'text.secondary' }}>{order.source}</TableCell>
             </TableRow>
 
             {/* Collapsible Detail Row */}
             <TableRow>
-                <TableCell style={{ padding: '10px' }} colSpan={9}>
+                <TableCell style={{ padding: '10px' }} colSpan={8}>
                     <Collapse in={open} timeout="auto" unmountOnExit>
                         <Box sx={{ p: 3, bgcolor: 'background.default', borderRadius: 2, border: `1px solid ${theme.palette.divider}` }}>
                             <Stack spacing={3}>
@@ -116,6 +136,11 @@ const OrderRow = ({ order }) => {
                                                 </Box>
                                                 <Divider />
                                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <Typography variant="h7" color="text.secondary">Nguồn đơn</Typography>
+                                                    <Typography variant="body2" fontWeight="bold">{order.source || '---'}</Typography>
+                                                </Box>
+                                                <Divider />
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <Typography variant="h7" color="text.secondary">Ngày nhận hàng</Typography>
                                                     <Typography variant="body2" fontWeight="bold">
                                                         {details.delivered_date ? formatDate(details.delivered_date) : 'Đang cập nhật'}
@@ -130,14 +155,14 @@ const OrderRow = ({ order }) => {
                                                     </Box>
                                                 </Box>
                                                 <Divider />
-                                                {order.return_tracking_code && (order.category === 'refunded' || (order.status && order.status.toLowerCase().includes('hoan'))) ? (
+                                                {displayReturnCode !== '---' ? (
                                                     <Box sx={{ 
                                                         display: 'flex', 
                                                         flexDirection: 'column', 
                                                         gap: 1,
                                                         p: 1.5, 
                                                         borderRadius: 2, 
-                                                        border: `1px solid ${alpha(theme.palette.error.main, 0.3)}`,
+                                                        border: `1.5px dashed ${alpha(theme.palette.error.main, 0.4)}`,
                                                         bgcolor: alpha(theme.palette.error.main, 0.03)
                                                     }}>
                                                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -155,13 +180,13 @@ const OrderRow = ({ order }) => {
                                                             </Box>
                                                             <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0 }}>
                                                                 <Typography variant="body2" fontWeight="bold" color="error.dark" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                                                                    {order.return_tracking_code}
+                                                                    {displayReturnCode}
                                                                 </Typography>
                                                                 <Tooltip title={copied ? "Đã sao chép" : "Sao chép mã đơn"}>
                                                                     <IconButton 
                                                                         size="small" 
                                                                         sx={{ p: 0.5, color: copied ? 'success.main' : 'error.main' }}
-                                                                        onClick={() => handleCopy(order.return_tracking_code)}
+                                                                        onClick={() => handleCopy(displayReturnCode)}
                                                                     >
                                                                         {copied ? <CheckCircleIcon sx={{ fontSize: 16 }} /> : <ContentCopyIcon sx={{ fontSize: 16 }} />}
                                                                     </IconButton>
@@ -181,7 +206,7 @@ const OrderRow = ({ order }) => {
                                             </Stack>
                                         </Paper>
                                     </Box>
-
+                                    
                                     {/* Finance */}
                                     <Box sx={{ flex: 1, minWidth: { xs: '100%', md: '45%' } }}>
                                         <Box sx={{ display: 'flex', alignItems: 'center', mb: 1.5, gap: 1 }}>
@@ -189,27 +214,79 @@ const OrderRow = ({ order }) => {
                                             <Typography variant="subtitle2" fontWeight="bold">CHI TIẾT TÀI CHÍNH</Typography>
                                         </Box>
                                         <Paper variant="outlined" sx={{ p: 2, bgcolor: 'rgba(0, 229, 255, 0.02)', height: 'auto' }}>
-                                            <Stack spacing={2}>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <Typography variant="h7" color="text.secondary">Tổng giá trị đơn (GMV)</Typography>
-                                                    <Typography variant="body2" fontWeight="medium">{formatCurrency(order.gmv)}</Typography>
+                                            <Stack spacing={0}>
+                                                {/* Breakdown Doanh Thu & Phí Sàn */}
+                                                <FinanceRow label="Giá niêm yết (Original)" value={formatCurrency(order.original_price || 0)} />
+                                                
+                                                {(order.subsidy_amount > 0 || order.subsidy_amount < 0) && (
+                                                    <FinanceRow 
+                                                        label="Trợ giá (Subsidy)" 
+                                                        value={formatCurrency(Math.abs(order.subsidy_amount || 0))} 
+                                                        isNegative 
+                                                        valueColor="#f38836" 
+                                                    />
+                                                )}
+
+                                                <FinanceRow label="Khách trả (Subtotal)" value={formatCurrency(order.sku_price || 0)} isBold />
+
+                                                <Divider sx={{ borderStyle: 'dashed', my: 1, opacity: 0.5 }} />
+
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                                    <Typography variant="body2" color="text.secondary">Phí sàn & QC (Fees)</Typography>
+                                                    <Stack direction="row" spacing={1} alignItems="center">
+                                                        {(!!order.takeRate && Math.abs(order.takeRate) > 0 && order.net_revenue > 0) && (
+                                                            <Chip 
+                                                                label={`${Math.round(Math.abs(order.takeRate))}%`} 
+                                                                size="small" 
+                                                                color="warning" 
+                                                                variant="outlined"
+                                                                sx={{ height: 16, fontSize: '0.6rem', fontWeight: 'bold' }} 
+                                                            />
+                                                        )}
+                                                        <Typography variant="body2" color="error.main">{formatCurrency(order.total_fees || 0)}</Typography>
+                                                    </Stack>
                                                 </Box>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <Typography variant="h7" color="text.secondary">Tổng Chi Phí</Typography>
-                                                    <Typography variant="body2" color="error.main" fontWeight="medium">{formatCurrency(order.total_fees || 0)}</Typography>
-                                                </Box>
-                                                <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center' }}>
+
+                                                <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', pb: 1.5 }}>
                                                     <Divider sx={{ width: '100%' }} />
                                                 </Box>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', pt: 1 }}>
+
+                                                {/* Final Net Revenue */}
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
                                                     <Box>
-                                                        <Typography variant="subtitle2" color="primary.main" fontWeight="800">DOANH THU ĐƠN HÀNG</Typography>
-                                                        <Typography variant="h7" color="text.secondary"></Typography>
+                                                        <Typography variant="subtitle2" color="primary.main" fontWeight="800">DOANH THU THỰC NHẬN (NET)</Typography>
                                                     </Box>
-                                                    <Typography variant="h5" color="primary.main" fontWeight="900">
-                                                        {formatCurrency(order.net_revenue)}
+                                                    <Typography variant="h6" color="primary.main" fontWeight="900">
+                                                        {formatCurrency(order.net_revenue || 0)}
                                                     </Typography>
                                                 </Box>
+                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                                    <Typography variant="body2" color="text.secondary">Giá vốn (COGS)</Typography>
+                                                    <Typography variant="body2" color={order.category === 'bomb' ? 'text.primary' : 'error.main'}>
+                                                        -{formatCurrency(order.cogs || 0)}
+                                                    </Typography>
+                                                </Box>
+
+                                                {/* HIỆU QUẢ KINH DOANH (Business Efficiency) */}
+                                                <ProfitResultBox isPositive={order.netProfit >= 0}>
+                                                    
+                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <Box>
+                                                            <Typography variant="subtitle2" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
+                                                                Lợi nhuận ròng
+                                                            </Typography>
+                                                            <Stack direction="row" spacing={0.5} alignItems="center" mt={0.5}>
+                                                                <Typography variant="caption" color="text.secondary">Margin:</Typography>
+                                                                <Typography variant="body2" fontWeight="bold" color={order.profitMargin >= 0 ? "success.main" : "error.main"}>
+                                                                    {formatNumber(order.profitMargin)}%
+                                                                </Typography>
+                                                            </Stack>
+                                                        </Box>
+                                                        <Typography variant="h6" fontWeight="900" color={order.netProfit >= 0 ? "success.main" : "error.main"}>
+                                                            {order.netProfit > 0 ? '+' : ''}{formatCurrency(order.netProfit || 0)}
+                                                        </Typography>
+                                                    </Box>
+                                                </ProfitResultBox>
                                             </Stack>
                                         </Paper>
                                     </Box>

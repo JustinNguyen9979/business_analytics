@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Dialog, DialogTitle, DialogContent, TextField, Button, DialogActions } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 // 1. IMPORT STYLED COMPONENT MỚI
-import { StyledAddCard } from '../StyledComponents';
+import { StyledAddCard } from '../StyledComponents.jsx';
 
 function CreateBrandCard({ onCreate }) {
     const [open, setOpen] = useState(false);

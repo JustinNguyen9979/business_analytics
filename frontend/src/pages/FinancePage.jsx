@@ -125,12 +125,11 @@ function FinancePage() {
             <LazyLoader height={350}>
                 <Box sx={{ display: 'flex', gap: 3, mb: 4, flexWrap: 'wrap' }}>
                     {(() => {
-                        const isExpanded = platformData.length > 5;
-                        const minWidth = isExpanded ? '30%' : '300px'; 
+                        const minWidth = '18%'; // Đổi thành 18% để 5 box có thể nằm trên 1 hàng (5 * 18% = 90% + gap)
 
                         if (loading) {
                             return Array.from(new Array(5)).map((_, index) => (
-                                <DashboardBox key={index} minWidth={minWidth} height={350}>
+                                <DashboardBox key={index} minWidth={minWidth} height={350} sx={{ flex: `1 1 ${minWidth}` }}>
                                     <Skeleton variant="rectangular" width="100%" height="100%" sx={{ borderRadius: 2 }} />
                                 </DashboardBox>
                             ));
@@ -142,6 +141,7 @@ function FinancePage() {
                                 title={config.title}
                                 minWidth={minWidth}
                                 height={350}
+                                sx={{ flex: `1 1 ${minWidth}` }}
                             >
                                 <Suspense fallback={<Skeleton variant="rectangular" width="100%" height="100%" />}>
                                     <SourceDistributionChart

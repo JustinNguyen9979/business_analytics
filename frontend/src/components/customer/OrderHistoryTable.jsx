@@ -6,36 +6,31 @@ import {
 
 // Components
 import OrderRow from './OrderRow';
+import { StyledTableHeader } from '../StyledComponents.jsx';
 
-const OrderHistoryTable = ({ orders, maxHeight = 500 }) => {
+const OrderHistoryTable = ({ orders, data, maxHeight = 500 }) => {
     return (
         <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: maxHeight, bgcolor: 'background.paper' }}>
             <Table stickyHeader size="small" sx={{ 
-                '& .MuiTableCell-root': { borderBottom: 'none' },
-                '& .MuiTableCell-head': { 
-                    bgcolor: '#000000 !important', 
-                    color: '#ffffff !important',
-                    fontWeight: 'bold',
-                    opacity: 1
-                }
+                tableLayout: 'fixed', // Quan trọng: Cố định layout để không bị nhảy khi mở rộng row
+                '& .MuiTableCell-root': { borderBottom: 'none' }
             }}>
                 <TableHead>
-                    <TableRow sx={{ borderBottom: 'none' }}>
-                        <TableCell></TableCell>
-                        <TableCell>Mã Đơn Hàng</TableCell>
-                        <TableCell>Mã Vận Đơn</TableCell>
-                        <TableCell>Ngày Đặt</TableCell>
-                        <TableCell>Giờ Đặt</TableCell>
-                        <TableCell>Trạng Thái</TableCell>
-                        <TableCell align="right">Doanh Thu</TableCell>
-                        <TableCell>Lý Do</TableCell>
-                        <TableCell>Nguồn</TableCell>
-                    </TableRow>
+                    <StyledTableHeader>
+                        <TableCell sx={{ width: '45px' }}></TableCell>
+                        <TableCell sx={{ width: '170px' }}>Mã Đơn Hàng</TableCell>
+                        <TableCell sx={{ width: '180px' }}>Mã Vận Đơn</TableCell>
+                        <TableCell sx={{ width: '95px' }}>Ngày Đặt</TableCell>
+                        <TableCell sx={{ width: '90px' }}>Giờ Đặt</TableCell>
+                        <TableCell sx={{ width: '140px' }}>Trạng Thái</TableCell>
+                        <TableCell align="right" sx={{ width: '120px' }}>Doanh Thu</TableCell>
+                        <TableCell sx={{ width: '150px' }}>Lý Do</TableCell>
+                    </StyledTableHeader>
                 </TableHead>
                 <TableBody>
                     {orders && orders.length > 0 ? (
                         orders.map((order) => (
-                            <OrderRow key={order.order_code || order.id} order={order} />
+                            <OrderRow key={order.order_code || order.id} order={order} data={data} />
                         ))
                     ) : (
                         <TableRow>

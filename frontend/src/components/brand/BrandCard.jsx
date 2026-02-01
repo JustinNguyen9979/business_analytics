@@ -5,7 +5,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
-import { StyledBrandCard } from '../StyledComponents';
+import { StyledBrandCard } from '../StyledComponents.jsx';
 
 
 function BrandCard({ brand, onClick, onRename, onClone, onDelete }) {

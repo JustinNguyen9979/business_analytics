@@ -39,7 +39,7 @@ const CustomerKpiCard = React.memo(({ label, value, previousValue, unit, color }
     <Paper 
         variant="glass" 
         sx={{ 
-            flex: '1 1 240px',
+            flex: '1 1 200px',
             p: 2.5, 
             display: 'flex', 
             flexDirection: 'column', 
@@ -341,7 +341,7 @@ function CustomerPage() {
             <DashboardRow>
                 {globalLoading ? (
                     Array.from(new Array(4)).map((_, index) => (
-                        <Skeleton key={index} variant="rectangular" height={160} sx={{ flex: '1 1 240px', borderRadius: 2 }} />
+                        <Skeleton key={index} variant="rectangular" height={160} sx={{ flex: '1 1 200px', borderRadius: 2 }} />
                     ))
                 ) : (
                     kpiData.map((kpi, index) => (

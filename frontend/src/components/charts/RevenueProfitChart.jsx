@@ -75,9 +75,12 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
 
     // 2. CONFIG FORMAT TRỤC
     const formatYAxis = (value) => {
-        if (value >= 1000000000) return (value / 1000000000).toFixed(1) + 'B' + unit;
-        if (value >= 1000000) return (value / 1000000).toFixed(1) + 'M' + unit;
-        if (value >= 1000) return (value / 1000).toFixed(0) + 'k' + unit;
+        const absValue = Math.abs(value);
+        const sign = value < 0 ? '-' : '';
+        
+        if (absValue >= 1000000000) return sign + (absValue / 1000000000).toFixed(1) + 'B' + unit;
+        if (absValue >= 1000000) return sign + (absValue / 1000000).toFixed(1) + 'M' + unit;
+        if (absValue >= 1000) return sign + (absValue / 1000).toFixed(0) + 'k' + unit;
         return value.toLocaleString() + unit;
     };
 
@@ -152,7 +155,7 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
             <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart
                     data={chartData}
-                    margin={{ top: 20, right: 30, left: 30, bottom: 20 }}
+                    margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
                 >
                     <CartesianGrid strokeDasharray="3 3" vertical={true} stroke={theme.palette.divider} opacity={0.7} />
                     
@@ -166,7 +169,7 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                             angle: -45,
                             textAnchor: 'end'
                         }}
-                        height={60} // Tăng chiều cao để nhường chỗ cho chữ xoay nghiêng
+                        height={45} // Giảm từ 60 xuống 45
                         interval={0}
                     />
                     
@@ -175,10 +178,10 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                         allowDataOverflow={false}
                         axisLine={{ stroke: theme.palette.text.secondary, strokeWidth: 1 }}
                         tickLine={{ stroke: theme.palette.text.secondary }}
-                        tick={{ fill: theme.palette.text.secondary, fontSize: 12 }}
+                        tick={{ fill: theme.palette.text.secondary, fontSize: 11 }}
                         tickFormatter={formatYAxis}
-                        width={60}
-                        tickCount={10}
+                        width={60} // Tăng lên 60 để hiển thị trọn vẹn
+                        tickCount={6} // Giảm số lượng tick để thoáng hơn
                     />
                     
                     {!hideTooltip && (
@@ -187,12 +190,12 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                     
                     <Legend 
                         verticalAlign="bottom" 
-                        height={36} 
+                        height={25} // Giảm từ 36 xuống 25
                         iconType="plainline"
-                        iconSize={20}
-                        wrapperStyle={{ paddingTop: '20px' }}
+                        iconSize={14}
+                        wrapperStyle={{ paddingTop: '10px' }} // Giảm từ 20px xuống 10px
                         formatter={(value, entry) => {
-                            return <span style={{ color: theme.palette.text.primary, marginRight: 20 }}>{value}</span>;
+                            return <span style={{ color: theme.palette.text.primary, marginRight: 15, fontSize: '11px' }}>{value}</span>;
                         }}
                     />
 

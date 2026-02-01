@@ -1,7 +1,7 @@
 // FILE: frontend/src/components/StyledComponents.js
 
 import { styled, alpha } from '@mui/material/styles';
-import { Card, Box, TextField, Paper, Typography, Avatar } from '@mui/material';
+import { Card, Box, TextField, Paper, Typography, Avatar, TableRow } from '@mui/material';
 
 // Styled Component cho Card "Thêm mới" (đã có)
 export const StyledAddCard = styled(Card)(({ theme }) => ({
@@ -222,6 +222,32 @@ export const NoteTypography = styled(Typography)(({ theme }) => ({
     color: theme.palette.text.secondary
 }));
 
+// Component hỗ trợ xuống dòng tự động cho văn bản dài
+export const WrapText = styled(Typography)(({ theme }) => ({
+    whiteSpace: 'normal',
+    wordBreak: 'break-word',
+    display: '-webkit-box',
+    WebkitLineClamp: 2, // Giới hạn tối đa 2 dòng, quá nữa sẽ hiện ...
+    WebkitBoxOrient: 'vertical',
+    overflow: 'hidden',
+    lineHeight: 1.4,
+}));
+
+// Style cho hàng tiêu đề của bảng
+export const StyledTableHeader = styled(TableRow)(({ theme }) => ({
+    backgroundColor: alpha(theme.palette.primary.main, 0.08),
+    borderBottom: `2px solid ${alpha(theme.palette.primary.main, 0.3)}`,
+    '& .MuiTableCell-head': {
+        fontWeight: 800,
+        color: theme.palette.primary.main,
+        fontSize: '0.75rem',
+        textTransform: 'uppercase',
+        letterSpacing: '0.8px',
+        borderBottom: 'none',
+        padding: '12px 16px',
+    }
+}));
+
 export const RankAvatar = styled(Avatar, {
     shouldForwardProp: (prop) => prop !== 'glowColor',
 })(({ theme, glowColor }) => ({
@@ -250,7 +276,8 @@ export const StyledOptionItem = styled(Box, {
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
         cursor: 'pointer',
         
-        '&:hover': {
+        // Gộp hover và focus (dùng phím mũi tên) để hiệu ứng đồng nhất
+        '&:hover, &.Mui-focused': {
             backgroundColor: 'rgba(0, 229, 255, 0.03) !important',
             paddingLeft: '30px !important',
             
@@ -300,3 +327,33 @@ export const StyledIconBox = styled(Box, {
         transition: 'all 0.3s ease'
     };
 });
+
+// --- NEW COMPONENT: Profit Result Box (Tái sử dụng) ---
+export const ProfitResultBox = styled(Box, {
+    shouldForwardProp: (prop) => prop !== 'isPositive'
+})(({ theme, isPositive }) => ({
+    marginTop: theme.spacing(2),
+    padding: theme.spacing(2),
+    borderRadius: theme.shape.borderRadius,
+    backgroundColor: alpha(isPositive ? theme.palette.success.main : theme.palette.error.main, 0.05),
+    border: '1px dashed',
+    borderColor: isPositive ? theme.palette.success.main : theme.palette.error.main,
+    transition: 'all 0.3s ease',
+    '&:hover': {
+        backgroundColor: alpha(isPositive ? theme.palette.success.main : theme.palette.error.main, 0.1),
+    }
+}));
+
+// --- REUSABLE FINANCE ROW COMPONENT ---
+export const FinanceRow = ({ label, value, valueColor = 'text.primary', isBold = false, isNegative = false, isPositive = false }) => (
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
+        <Typography variant="body2" color="text.secondary">{label}</Typography>
+        <Typography 
+            variant={isBold ? 'subtitle2' : 'body2'} 
+            fontWeight={isBold ? 'bold' : 'normal'}
+            color={valueColor}
+        >
+            {isNegative && '-'}{isPositive && '+'}{value}
+        </Typography>
+    </Box>
+);

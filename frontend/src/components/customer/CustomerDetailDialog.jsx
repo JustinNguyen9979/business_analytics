@@ -80,6 +80,7 @@ const CustomerDetailDialog = ({ open, onClose, username }) => {
                             <SectionTitle sx={{ mt: 0 }}>LỊCH SỬ GIAO DỊCH</SectionTitle>
                             <OrderHistoryTable 
                                 orders={data.recentOrders} 
+                                data={data}
                                 maxHeight={600}
                             />
                         </Box>

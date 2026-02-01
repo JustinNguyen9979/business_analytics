@@ -430,14 +430,36 @@ class SearchService:
                 if sku and sku in product_map:
                     item['product_name'] = product_map[sku]
 
+        # --- Logic tính toán tài chính (Giống _build_order_search_result) ---
+        if category == 'refunded':
+            calc_cogs = 0.0
+        else:
+            calc_cogs = order.cogs or 0.0
+
+        net_profit = net_revenue - calc_cogs
+        
+        profit_margin = 0.0
+        if net_revenue and net_revenue > 0:
+            profit_margin = (net_profit / net_revenue) * 100
+            
+        take_rate = 0.0
+        if gmv and gmv > 0:
+            take_rate = (total_fees / gmv) * 100
+
+        calculated_original_price = sum((
+            item.get("original_price", 0.0) * item.get("quantity") or 0)
+            for item in order.details.get("items", [])
+        ) if order.details else 0.0
+
         return {
             "id": order.id,
             "brand_id": order.brand_id,
             "username": order.username,
             "total_quantity": order.total_quantity or 0,
-            "cogs": order.cogs or 0.0,
-            "original_price": order.original_price or 0.0,
+            "cogs": calc_cogs,
+            "original_price": calculated_original_price,
             "sku_price": order.sku_price or 0.0,
+            "subsidy_amount": order.subsidy_amount or 0.0,
             
             "order_code": order.order_code,
             "tracking_id": order.tracking_id,
@@ -448,6 +470,12 @@ class SearchService:
             "net_revenue": net_revenue,
             "gmv": gmv,
             "total_fees": total_fees,
+            
+            # Các trường tính toán mới thêm
+            "netProfit": net_profit,
+            "profitMargin": profit_margin,
+            "takeRate": take_rate,
+
             "source": order.source or "---",
             "details": full_details
         }

@@ -20,7 +20,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import CancelIcon from '@mui/icons-material/Cancel';
 
 // Custom Components
-import { LuxuryCard, CardContent, NoteTypography, RankAvatar } from '../StyledComponents';
+import { LuxuryCard, CardContent, NoteTypography, RankAvatar } from '../StyledComponents.jsx';
 import { LabelValue, SectionTitle } from '../search/SearchCommon';
 import { updateCustomerAPI } from '../../services/api';
 

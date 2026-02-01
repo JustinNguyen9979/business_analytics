@@ -126,13 +126,13 @@ function SourceDistributionChart({ data, dataKey, title, format }) {
         // TRƯỜNG HỢP 2: PIE CHART (Cho Tiền, Số lượng...)
         return (
             <ResponsiveContainer width="100%" height="100%">
-                <PieChart margin={{ top: 0, bottom: 0, left: 20, right: 20 }}>
+                <PieChart margin={{ top: 0, bottom: 0, left: 10, right: 10 }}>
                     <Pie
                         data={chartData}
                         cx="50%"
                         cy="50%"
-                        innerRadius="45%"
-                        outerRadius="70%"
+                        innerRadius="35%"
+                        outerRadius="55%"
                         paddingAngle={isPlaceholder ? 0 : 2}
                         dataKey="value"
                         stroke="none"
@@ -149,7 +149,7 @@ function SourceDistributionChart({ data, dataKey, title, format }) {
                             }
 
                             const RADIAN = Math.PI / 180;
-                            const radius = outerRadius * 1.25; 
+                            const radius = outerRadius * 1.2; 
                             const x = cx + radius * Math.cos(-midAngle * RADIAN);
                             const y = cy + radius * Math.sin(-midAngle * RADIAN);
                           
@@ -160,7 +160,7 @@ function SourceDistributionChart({ data, dataKey, title, format }) {
                                 fill={theme.palette.text.primary} 
                                 textAnchor={x > cx ? 'start' : 'end'} 
                                 dominantBaseline="central"
-                                style={{ fontSize: '12px', fontWeight: 600 }}
+                                style={{ fontSize: '11px', fontWeight: 600 }}
                               >
                                 {`${(percent * 100).toFixed(1)}%`}
                               </text>

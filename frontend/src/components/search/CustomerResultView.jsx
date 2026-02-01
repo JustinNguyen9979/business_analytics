@@ -4,7 +4,7 @@ import {
 } from '@mui/material';
 
 // Custom Components
-import { LuxuryCard, CardHeader, CardContent } from '../StyledComponents';
+import { LuxuryCard, CardHeader, CardContent } from '../StyledComponents.jsx';
 import OrderHistoryTable from '../customer/OrderHistoryTable';
 import CustomerProfileCard from '../customer/CustomerProfileCard'; 
 
@@ -48,6 +48,7 @@ const CustomerResultView = ({ data }) => {
 
                         <OrderHistoryTable 
                             orders={data.recentOrders} 
+                            data={data}
                             maxHeight={700}
                         />
                     </LuxuryCard>
