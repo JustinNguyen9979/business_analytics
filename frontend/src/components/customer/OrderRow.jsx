@@ -260,33 +260,39 @@ const OrderRow = ({ order, data }) => {
                                                         {formatCurrency(order.net_revenue || 0)}
                                                     </Typography>
                                                 </Box>
-                                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                                                    <Typography variant="body2" color="text.secondary">Giá vốn (COGS)</Typography>
-                                                    <Typography variant="body2" color={order.category === 'bomb' ? 'text.primary' : 'error.main'}>
-                                                        -{formatCurrency(order.cogs || 0)}
-                                                    </Typography>
-                                                </Box>
-
-                                                {/* HIỆU QUẢ KINH DOANH (Business Efficiency) */}
-                                                <ProfitResultBox isPositive={order.netProfit >= 0}>
-                                                    
-                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                        <Box>
-                                                            <Typography variant="subtitle2" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
-                                                                Lợi nhuận ròng
-                                                            </Typography>
-                                                            <Stack direction="row" spacing={0.5} alignItems="center" mt={0.5}>
-                                                                <Typography variant="caption" color="text.secondary">Margin:</Typography>
-                                                                <Typography variant="body2" fontWeight="bold" color={order.profitMargin >= 0 ? "success.main" : "error.main"}>
-                                                                    {formatNumber(order.profitMargin)}%
-                                                                </Typography>
-                                                            </Stack>
-                                                        </Box>
-                                                        <Typography variant="h6" fontWeight="900" color={order.netProfit >= 0 ? "success.main" : "error.main"}>
-                                                            {order.netProfit > 0 ? '+' : ''}{formatCurrency(order.netProfit || 0)}
+                                                
+                                                {/* Chỉ hiển thị COGS nếu đơn không bị hủy và có doanh thu */}
+                                                {!(order.category === 'cancelled' || (order.status && (order.status.toLowerCase().includes('hủy') || order.status.toLowerCase().includes('cancel')))) && order.net_revenue > 0 && (
+                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                                        <Typography variant="body2" color="text.secondary">Giá vốn (COGS)</Typography>
+                                                        <Typography variant="body2" color={order.category === 'bomb' ? 'text.primary' : 'error.main'}>
+                                                            -{formatCurrency(order.cogs || 0)}
                                                         </Typography>
                                                     </Box>
-                                                </ProfitResultBox>
+                                                )}
+
+                                                {/* HIỆU QUẢ KINH DOANH (Business Efficiency) - Chỉ hiển thị nếu đơn không bị hủy và có doanh thu */}
+                                                {!(order.category === 'cancelled' || (order.status && (order.status.toLowerCase().includes('hủy') || order.status.toLowerCase().includes('cancel')))) && order.net_revenue > 0 && (
+                                                    <ProfitResultBox isPositive={order.netProfit >= 0}>
+                                                        
+                                                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <Box>
+                                                                <Typography variant="subtitle2" fontWeight="bold" color="text.secondary" sx={{ textTransform: 'uppercase' }}>
+                                                                    Lợi nhuận ròng
+                                                                </Typography>
+                                                                <Stack direction="row" spacing={0.5} alignItems="center" mt={0.5}>
+                                                                    <Typography variant="caption" color="text.secondary">Margin:</Typography>
+                                                                    <Typography variant="body2" fontWeight="bold" color={order.profitMargin >= 0 ? "success.main" : "error.main"}>
+                                                                        {formatNumber(order.profitMargin)}%
+                                                                    </Typography>
+                                                                </Stack>
+                                                            </Box>
+                                                            <Typography variant="h6" fontWeight="900" color={order.netProfit >= 0 ? "success.main" : "error.main"}>
+                                                                {order.netProfit > 0 ? '+' : ''}{formatCurrency(order.netProfit || 0)}
+                                                            </Typography>
+                                                        </Box>
+                                                    </ProfitResultBox>
+                                                )}
                                             </Stack>
                                         </Paper>
                                     </Box>
