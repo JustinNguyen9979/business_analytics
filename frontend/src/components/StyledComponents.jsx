@@ -1,7 +1,10 @@
 // FILE: frontend/src/components/StyledComponents.js
 
 import { styled, alpha } from '@mui/material/styles';
-import { Card, Box, TextField, Paper, Typography, Avatar, TableRow } from '@mui/material';
+import { Card, Box, TextField, Paper, Typography, Avatar, TableRow, Tooltip, IconButton } from '@mui/material';
+import React, { useState } from 'react';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 // Styled Component cho Card "Thêm mới" (đã có)
 export const StyledAddCard = styled(Card)(({ theme }) => ({
@@ -357,3 +360,38 @@ export const FinanceRow = ({ label, value, valueColor = 'text.primary', isBold =
         </Typography>
     </Box>
 );
+
+// --- REUSABLE COPY BUTTON COMPONENT ---
+export const CopyButton = ({ text, tooltipTitle = "Sao chép", successTooltip = "Đã sao chép", iconSize = 16, color = "primary.main" }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = (e) => {
+        e.stopPropagation();
+        if (!text) return;
+        navigator.clipboard.writeText(text)
+            .then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            })
+            .catch(err => console.error('Lỗi khi copy:', err));
+    };
+
+    return (
+        <Tooltip title={copied ? successTooltip : tooltipTitle} arrow placement="top">
+            <IconButton 
+                size="small" 
+                sx={{ 
+                    p: 0.5, 
+                    color: copied ? 'success.main' : color,
+                    transition: 'all 0.2s ease'
+                }}
+                onClick={handleCopy}
+            >
+                {copied ? 
+                    <CheckCircleIcon sx={{ fontSize: iconSize }} /> : 
+                    <ContentCopyIcon sx={{ fontSize: iconSize }} />
+                }
+            </IconButton>
+        </Tooltip>
+    );
+};

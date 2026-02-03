@@ -9,12 +9,11 @@ import { useTheme, alpha, styled } from '@mui/material/styles';
 import LocalShippingIcon from '@mui/icons-material/LocalShipping';
 import CreditCardIcon from '@mui/icons-material/CreditCard';
 import StorefrontIcon from '@mui/icons-material/Storefront';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
 // Common & Custom Components
 import CustomerProfileCard from '../customer/CustomerProfileCard'; 
 import OrderItemsTable from '../common/OrderItemsTable';
-import { LuxuryCard, CardHeader, CardContent, ProfitResultBox, FinanceRow } from '../StyledComponents.jsx';
+import { LuxuryCard, CardHeader, CardContent, ProfitResultBox, FinanceRow, CopyButton } from '../StyledComponents.jsx';
 import { SectionTitle } from './SearchCommon';
 
 // Utils
@@ -88,15 +87,11 @@ const TrackingInfo = ({ label, code, colorType = 'info' }) => {
                 <Typography variant="body1" fontWeight="bold" color={colorType === 'error' ? 'error.main' : 'text.primary'}>
                     {code}
                 </Typography>
-                <Tooltip title="Sao chép">
-                    <IconButton 
-                        size="small" 
-                        color={colorType}
-                        onClick={() => navigator.clipboard.writeText(code)}
-                    >
-                        <ContentCopyIcon fontSize="small" />
-                    </IconButton>
-                </Tooltip>
+                <CopyButton 
+                    text={code} 
+                    tooltipTitle="Sao chép" 
+                    color={`${colorType}.main`} 
+                />
             </Stack>
         </TrackingContainer>
     );

@@ -12,18 +12,15 @@ import PaymentIcon from '@mui/icons-material/Payment';
 import Inventory2Icon from '@mui/icons-material/Inventory2';
 import MonetizationOnIcon from '@mui/icons-material/MonetizationOn';
 import AssignmentReturnIcon from '@mui/icons-material/AssignmentReturn';
-import ContentCopyIcon from '@mui/icons-material/ContentCopy';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 
 import { formatCurrency, formatDate, formatNumber } from '../../utils/formatters';
 import OrderStatusChip from '../common/OrderStatusChip';
 
 import OrderItemsTable from '../common/OrderItemsTable';
-import { ProfitResultBox, FinanceRow } from '../StyledComponents.jsx';
+import { ProfitResultBox, FinanceRow, CopyButton } from '../StyledComponents.jsx';
 
 const OrderRow = ({ order, data }) => {
     const [open, setOpen] = useState(false);
-    const [copied, setCopied] = useState(false);
     const theme = useTheme();
     
     const details = order.details || {};
@@ -40,16 +37,6 @@ const OrderRow = ({ order, data }) => {
     };
 
     const displayReturnCode = isValidCode(rawReturnCode) ? rawReturnCode : '---';
-
-    const handleCopy = (text) => {
-        if (!text) return;
-        navigator.clipboard.writeText(text)
-            .then(() => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 2000);
-            })
-            .catch(err => console.error('Lỗi khi copy:', err));
-    };
 
     // Parse date
     let dateStr = '---';
@@ -189,15 +176,11 @@ const OrderRow = ({ order, data }) => {
                                                                 <Typography variant="body2" fontWeight="bold" color="error.dark" sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
                                                                     {displayReturnCode}
                                                                 </Typography>
-                                                                <Tooltip title={copied ? "Đã sao chép" : "Sao chép mã đơn"}>
-                                                                    <IconButton 
-                                                                        size="small" 
-                                                                        sx={{ p: 0.5, color: copied ? 'success.main' : 'error.main' }}
-                                                                        onClick={() => handleCopy(displayReturnCode)}
-                                                                    >
-                                                                        {copied ? <CheckCircleIcon sx={{ fontSize: 16 }} /> : <ContentCopyIcon sx={{ fontSize: 16 }} />}
-                                                                    </IconButton>
-                                                                </Tooltip>
+                                                                <CopyButton 
+                                                                    text={displayReturnCode} 
+                                                                    tooltipTitle="Sao chép mã đơn"
+                                                                    color="error.main"
+                                                                />
                                                             </Stack>
                                                         </Box>
                                                     </Box>

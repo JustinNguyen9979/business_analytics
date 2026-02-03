@@ -3,6 +3,7 @@ from sqlalchemy import or_, and_, func
 from collections import defaultdict
 from models import Order, Revenue, Product, Customer
 from kpi_utils import _classify_order_status
+import schemas
 
 class SearchService:
     def search_entities(self, db: Session, brand_id: int, query: str):
@@ -53,7 +54,7 @@ class SearchService:
             .first()
         )
 
-        if rev:
+        if rev and rev.order_code:
             order = (
                 db.query(Order)
                 .filter(
@@ -199,12 +200,12 @@ class SearchService:
         results = final_query.all()
 
         return [
-            {
-                "type": r.type,
-                "value": r.value,
-                "label": r.label,
-                "sub_label": r.sub_label
-            }
+            schemas.SearchSuggestionItem(
+                type=r.type,
+                value=r.value,
+                label=r.label,
+                sub_label=r.sub_label
+            )
             for r in results
         ]
 
@@ -212,7 +213,7 @@ class SearchService:
     # HELPERS (Private methods for internal use)
     # =========================================================================
 
-    def _build_order_search_result(self, db: Session, brand_id: int, order: Order):
+    def _build_order_search_result(self, db: Session, brand_id: int, order: Order) -> schemas.OrderSearchResult:
         """Xây dựng kết quả trả về khi tìm thấy Order."""
         rev = db.query(Revenue).filter(Revenue.brand_id == brand_id, Revenue.order_code == order.order_code).first()
         is_refunded = (rev.refund or 0) < -0.1 if rev else False
@@ -236,35 +237,35 @@ class SearchService:
             for item in order.details.get("items", [])
         ) if order.details else 0.0
 
-        return {
-            "type": "order",
-            "id": order.order_code,
-            "status": category,
-            "createdDate": order.order_date.strftime("%d/%m/%Y %H:%M") if order.order_date else "---",
-            "shippedDate": order.shipped_time.strftime("%d/%m/%Y %H:%M") if order.shipped_time else None,
-            "deliveredDate": order.delivered_date.strftime("%d/%m/%Y %H:%M") if order.delivered_date else None,
-            "paymentMethod": order.details.get("payment_method") if order.details else "---",
-            "source": order.source,
-            "trackingCode": order.tracking_id or "---",
-            "orderCode": order.order_code or "---",
-            "return_tracking_code": rev.order_refund if rev and rev.order_refund else "---",
-            "carrier": order.details.get("shipping_provider_name") if order.details else "---",
+        return schemas.OrderSearchResult(
+            type= "order",
+            id= order.order_code,
+            status= category,
+            createdDate= order.order_date.strftime("%d/%m/%Y %H:%M") if order.order_date else "---",
+            shippedDate= order.shipped_time.strftime("%d/%m/%Y %H:%M") if order.shipped_time else None,
+            deliveredDate= order.delivered_date.strftime("%d/%m/%Y %H:%M") if order.delivered_date else None,
+            paymentMethod= order.details.get("payment_method") if order.details else "---",
+            source= order.source,
+            trackingCode= order.tracking_id or "---",
+            orderCode= order.order_code or "---",
+            return_tracking_code= rev.order_refund if rev and rev.order_refund else "---",
+            carrier= order.details.get("shipping_provider_name") if order.details else "---",
             
-            "customer": customer_info,
-            "items": enriched_items,
+            customer= customer_info,
+            items= enriched_items,
             
-            "original_price": calculated_original_price,
-            "subsidy_amount": order.subsidy_amount or 0.0,
-            "sku_price": order.sku_price or 0.0,
-            "totalCollected": rev.net_revenue if rev else 0.0,
+            original_price= calculated_original_price,
+            subsidy_amount= order.subsidy_amount or 0.0,
+            sku_price= order.sku_price or 0.0,
+            totalCollected= rev.net_revenue if rev else 0.0,
             
-            "cogs": calc_cogs, 
-            "netProfit": net_profit,
-            "netRevenue": rev.net_revenue if rev else 0.0,
-            "totalFees": rev.total_fees if rev else 0.0,
-            "profitMargin": (net_profit / rev.net_revenue * 100) if rev and rev.net_revenue and rev.net_revenue > 0 else 0.0,
-            "takeRate": ((rev.total_fees / rev.gmv) * 100) if rev and rev.gmv and rev.gmv > 0 else 0.0,
-        }
+            cogs= calc_cogs, 
+            netProfit= net_profit,
+            netRevenue= rev.net_revenue if rev else 0.0,
+            totalFees= rev.total_fees if rev else 0.0,
+            profitMargin= (net_profit / rev.net_revenue * 100) if rev and rev.net_revenue and rev.net_revenue > 0 else 0.0,
+            takeRate= ((rev.total_fees / rev.gmv) * 100) if rev and rev.gmv and rev.gmv > 0 else 0.0,
+        )
 
     def _get_enriched_customer_info(self, db: Session, brand_id: int, order: Order):
         """Lấy thông tin khách hàng từ Order và enrich thêm từ bảng Customer nếu có."""
@@ -373,7 +374,7 @@ class SearchService:
             customer, all_orders, revenue_map, fees_map, gmv_map, refunded_codes, refund_tracking_map, product_map
         )
 
-    def _build_customer_response(self, customer: Customer, orders: list, revenue_map: dict, fees_map: dict, gmv_map: dict, refunded_codes: set, refund_tracking_map: dict, product_map: dict):
+    def _build_customer_response(self, customer: Customer, orders: list, revenue_map: dict, fees_map: dict, gmv_map: dict, refunded_codes: set, refund_tracking_map: dict, product_map: dict) -> schemas.CustomerDetailResponse:
         """Helper tạo object Customer Response."""
         formatted_orders = []
         count_bomb = 0
@@ -400,37 +401,37 @@ class SearchService:
         next_rank_target, next_rank_name = self._calculate_next_rank(current_spent)
         rank_progress = min(round((current_spent / next_rank_target) * 100, 1), 100) if next_rank_target > 0 else 100
 
-        return {
-            "type": "customer",
-            "id": customer.username or str(customer.id),
-            "source": customer.source or "---",
-            "name": customer.username or customer.phone or "Khách vãng lai",
-            "phone": customer.phone or "---",
-            "email": customer.email or "---",
-            "gender": customer.gender or "---",
-            "defaultAddress": customer.default_address or "---",
-            "province": customer.default_province or "---",
-            "tags": customer.tags or [],
-            "notes": customer.notes or "---",
-            "lastOrderDate": orders[0].order_date if orders else None,
+        return schemas.CustomerDetailResponse(
+            type= "customer",
+            id= customer.username or str(customer.id),
+            source= customer.source or "---",
+            name= customer.username or customer.phone or "Khách vãng lai",
+            phone= customer.phone or "---",
+            email= customer.email or "---",
+            gender= customer.gender or "---",
+            defaultAddress= customer.default_address or "---",
+            province= customer.default_province or "---",
+            tags= customer.tags or [],
+            notes= customer.notes or "---",
+            lastOrderDate= orders[0].order_date if orders else None,
             
-            "rank": customer.rank,
-            "nextRank": next_rank_name,
-            "rankProgress": rank_progress,
+            rank= customer.rank,
+            nextRank= next_rank_name,
+            rankProgress= rank_progress,
             
-            "ltv": customer.total_spent or 0.0,
-            "totalProfit": customer.profit or 0.0,
-            "aov": customer.aov or 0.0,
+            ltv= customer.total_spent or 0.0,
+            totalProfit= customer.profit or 0.0,
+            aov= customer.aov or 0.0,
             
-            "orderCount": customer.total_orders or 0,
-            "successCount": customer.success_orders or 0,
-            "refundedOrders": customer.refunded_orders or 0,
-            "cancelCount": count_cancel,
-            "bombOrders": count_bomb,
-            "recentOrders": formatted_orders
-        }
+            orderCount= customer.total_orders or 0,
+            successCount= customer.success_orders or 0,
+            refundedOrders= customer.refunded_orders or 0,
+            cancelCount= count_cancel,
+            bombOrders= count_bomb,
+            recentOrders= formatted_orders
+        )
 
-    def _format_unified_order(self, order: Order, net_revenue: float, gmv: float, total_fees: float, category: str, refund_tracking_code: str = None, product_map: dict = None):
+    def _format_unified_order(self, order: Order, net_revenue: float, gmv: float, total_fees: float, category: str, refund_tracking_code: str = None, product_map: dict = None) -> schemas.Order:
         """Helper chuẩn hóa dữ liệu đơn hàng cho UI."""
         full_details = order.details if order.details and isinstance(order.details, dict) else {}
         
@@ -461,34 +462,33 @@ class SearchService:
             for item in order.details.get("items", [])
         ) if order.details else 0.0
 
-        return {
-            "id": order.id,
-            "brand_id": order.brand_id,
-            "username": order.username,
-            "total_quantity": order.total_quantity or 0,
-            "cogs": calc_cogs,
-            "original_price": calculated_original_price,
-            "sku_price": order.sku_price or 0.0,
-            "subsidy_amount": order.subsidy_amount or 0.0,
+        return schemas.Order(
+            id=order.id,
+            brand_id=order.brand_id,
+            username=order.username,
+            total_quantity=order.total_quantity or 0,
+            cogs=calc_cogs,
+            original_price=calculated_original_price,
+            sku_price=order.sku_price or 0.0,
+            subsidy_amount=order.subsidy_amount or 0.0,
             
-            "order_code": order.order_code,
-            "tracking_id": order.tracking_id,
-            "return_tracking_code": refund_tracking_code,
-            "order_date": order.order_date.isoformat() if order.order_date else None,
-            "status": order.status,
-            "category": category,
-            "net_revenue": net_revenue,
-            "gmv": gmv,
-            "total_fees": total_fees,
+            order_code=order.order_code,
+            tracking_id=order.tracking_id,
+            return_tracking_code=refund_tracking_code,
+            order_date=order.order_date, # Pydantic handles datetime -> string/iso
+            status=order.status,
+            category=category,
+            net_revenue=net_revenue,
+            gmv=gmv,
+            total_fees=total_fees,
             
-            # Các trường tính toán mới thêm
-            "netProfit": net_profit,
-            "profitMargin": profit_margin,
-            "takeRate": take_rate,
+            netProfit=net_profit,
+            profitMargin=profit_margin,
+            takeRate=take_rate,
 
-            "source": order.source or "---",
-            "details": full_details
-        }
+            source=order.source or "---",
+            details=full_details
+        )
 
     def _get_product_map(self, db: Session, brand_id: int, skus: list = None):
         """Helper: Lấy Map SKU -> Product Name. Có hỗ trợ filter theo danh sách SKU để tối ưu."""

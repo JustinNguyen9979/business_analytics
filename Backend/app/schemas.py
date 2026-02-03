@@ -108,7 +108,14 @@ class OrderBase(BaseModel):
             return None
         return v
 
-class Order(OrderBase, SourcedDBEntity): pass
+class Order(OrderBase, SourcedDBEntity):
+    """
+    Mở rộng Order với các chỉ số tài chính computed (CamelCase để đồng bộ với OrderSearchResult/Frontend)
+    """
+    netProfit: Optional[float] = 0.0
+    profitMargin: Optional[float] = 0.0
+    takeRate: Optional[float] = 0.0
+    subsidy_amount: Optional[float] = 0.0
 
 # --- REVENUE & MARKETING ---
 class RevenueBase(BaseModel):

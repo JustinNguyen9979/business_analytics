@@ -6,6 +6,17 @@ from models import Order, Revenue, Product, Customer
 from kpi_utils import _classify_order_status, is_success_category
 from vietnam_address_mapping import get_new_province_name
 
+def is_valid(value):
+    """Kiểm tra xem dữ liệu có đáng tin hay không (Không rỗng, không phải placeholder rác)"""
+    if value is None: return False
+    val_str = str(value).strip().lower()
+    invalid_placeholders = ["---", "0", "0.0", "", "none", "nan", "null", "undefined"]
+    if val_str in invalid_placeholders:
+        return False
+    if len(val_str) < 2: # Tránh các ký tự rác kiểu "." hoặc ","
+        return False
+    return True
+
 class CRUDCustomer:
     """
     CRUDCustomer (Refactored): Tối ưu hóa logic tính toán, loại bỏ code lặp lại.
@@ -110,11 +121,20 @@ class CRUDCustomer:
             # Cập nhật thông tin định danh
             customer.source = data["latest_source"] # Cập nhật source
             
-            customer.phone = data["phone"]
-            customer.email = data["email"]
-            customer.gender = data["gender"]
-            customer.default_province = data["province"]
-            customer.default_address = data["address"]
+            fields_to_update = {
+                "phone" : data["phone"],
+                "email" : data["email"],
+                "gender" : data["gender"],
+                "default_province" : data["province"],
+                "default_address" : data["address"]
+            }
+
+            for field, new_val in fields_to_update.items():
+                current_val = getattr(customer, field)
+
+                if is_valid(new_val):
+                    if not is_valid(current_val) or current_val != new_val:
+                        setattr(customer, field, new_val)
             
             # Cập nhật chỉ số
             customer.total_spent = data["total_spent"]

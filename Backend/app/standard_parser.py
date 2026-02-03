@@ -15,6 +15,18 @@ from dateutil import parser as date_parser
 from unidecode import unidecode
 from vietnam_address_mapping import get_new_province_name 
 
+def to_clean_str(value) -> str:
+    if pd.isna(value) or value == '':
+        return ""
+    
+    s = str(value).strip()
+
+    if s.endswith('.0'):
+        prefix = s[:-2]
+        if prefix.isdigit() or (prefix.startswith('-') and prefix[1:].isdigit()):
+            s = prefix
+    return s
+
 def parse_date(date_str: str) -> Union[date, None]:
     """
     Hàm chuẩn hóa ngày tháng.
@@ -258,7 +270,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     crud.upsert_product(
                         db=db,
                         brand_id=brand_id,
-                        sku=str(row['sku']),
+                        sku=to_clean_str(row['sku']),
                         name=str(row.get('name', '')),
                         cost_price=to_int(row.get('cost_price'))
                     )
@@ -307,7 +319,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                 # --- HÀM HELPER ĐỂ XỬ LÝ DỮ LIỆU ĐƠN HÀNG ---
                 def process_order_group(group, is_update=False):
                     first_row = group.iloc[0]
-                    order_code = str(first_row.get('order_id'))
+                    order_code = to_clean_str(first_row.get('order_id'))
                     
                     # Parse ngày tháng
                     o_date_val = parse_datetime(first_row.get('order_date'))
@@ -381,7 +393,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
 
                     # Thông tin chung
                     username = first_row.get('username')
-                    tracking_id_val = str(first_row.get('tracking_id')) if not pd.isna(first_row.get('tracking_id')) else None
+                    tracking_id_val = to_clean_str(first_row.get('tracking_id')) if not pd.isna(first_row.get('tracking_id')) else None
                     payment_method_val = str(first_row.get('payment_method', ''))
                     cancel_reason_val = str(first_row.get('cancel_reason', ''))
                     province_val = get_new_province_name(str(first_row.get('province', '')))
@@ -510,7 +522,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                 revenues_to_insert = []
                 for _, row in df_revenue.iterrows():
                     # Chuẩn hóa dữ liệu từ file excel
-                    order_code = row.get('order_id')
+                    order_code = to_clean_str(row.get('order_id'))
                     transaction_date = parse_date(row.get('transaction_date'))
                     order_date = parse_date(row.get('order_date'))
 
@@ -522,7 +534,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
                     gmv = to_float(row.get('gmv'))
                     total_fees = to_float(row.get('total_fees'))
                     refund = to_float(row.get('refund'))
-                    order_refund = to_float(row.get('order_refund'))
+                    order_refund = to_clean_str(row.get('order_refund'))
 
                     # Tạo chữ ký cho dòng mới
                     new_signature = (
