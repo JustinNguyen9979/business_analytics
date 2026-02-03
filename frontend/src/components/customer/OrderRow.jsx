@@ -30,9 +30,16 @@ const OrderRow = ({ order, data }) => {
     const items = details.items || [];
     const hasItems = items.length > 0;
 
-    // Logic hiển thị mã đơn hoàn (Fix hiển thị 0.0)
+    // Logic hiển thị mã đơn hoàn (Fix hiển thị 0.0, 0, ---)
     const rawReturnCode = order.order_refund || order.return_tracking_code;
-    const displayReturnCode = (rawReturnCode && rawReturnCode !== '0.0' && rawReturnCode !== 0) ? rawReturnCode : '---';
+    
+    const isValidCode = (code) => {
+        if (!code) return false;
+        const strCode = String(code).trim();
+        return strCode !== '0' && strCode !== '0.0' && strCode !== '0.00' && strCode !== '---' && strCode !== '';
+    };
+
+    const displayReturnCode = isValidCode(rawReturnCode) ? rawReturnCode : '---';
 
     const handleCopy = (text) => {
         if (!text) return;

@@ -1,6 +1,6 @@
 # FILE: backend/app/schemas.py
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from typing import List, Optional, Dict, Any, Union
 from datetime import date, datetime
 
@@ -97,7 +97,16 @@ class OrderBase(BaseModel):
     category: Optional[str] = None
     tracking_id: Optional[str] = None
     return_tracking_code: Optional[str] = None
+    order_refund: Optional[str] = None
     gmv: float = 0.0
+
+    @field_validator('return_tracking_code', 'order_refund', mode='before', check_fields=False)
+    @classmethod
+    def clean_refund_code(cls, v):
+        """Chuyển đổi các giá trị rác (0, 0.0, ---, rỗng) thành None"""
+        if v in [0, "0", "0.0", "---", ""]:
+            return None
+        return v
 
 class Order(OrderBase, SourcedDBEntity): pass
 

@@ -1,83 +1,93 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, func, cast, String, desc, text
+from sqlalchemy import or_, and_, func
 from collections import defaultdict
 from models import Order, Revenue, Product, Customer
 from kpi_utils import _classify_order_status
-from vietnam_address_mapping import get_new_province_name
 
 class SearchService:
-    """
-    SearchService: Chuyên trách xử lý logic tìm kiếm và gợi ý (Search & Suggestion).
-    Tách biệt khỏi CRUD để giảm tải và dễ dàng mở rộng logic tìm kiếm phức tạp.
-    """
-
     def search_entities(self, db: Session, brand_id: int, query: str):
-        """
-        Tìm kiếm thông minh (Updated with pg_trgm): 
-        - Sử dụng toán tử % (similarity) kết hợp ilike để tìm kiếm mờ và chính xác.
-        - Sắp xếp kết quả dựa trên độ tương đồng (similarity score).
-        """
         query = query.strip()
-        if not query:
+        if not query or len(query) < 2:
             return None
 
-        # 1. TÌM KIẾM ĐƠN HÀNG (Order Code hoặc Tracking ID)
-        # Logic: Tìm Order có code hoặc tracking "gần giống" query nhất
-        order = db.query(Order).filter(
-            Order.brand_id == brand_id,
-            or_(
-                Order.order_code.ilike(f"%{query}%"), 
-                Order.tracking_id.ilike(f"%{query}%"),
-                Order.order_code.op('%')(query), # Fuzzy matching (pg_trgm)
-                Order.tracking_id.op('%')(query)
-            )
-        ).order_by(
-            # Sắp xếp theo độ giống tối đa của order_code hoặc tracking_id
-            func.greatest(
-                func.similarity(Order.order_code, query),
-                func.similarity(Order.tracking_id, query)
-            ).desc()
-        ).first()
-
-        # Nếu không tìm thấy trong Order, thử tìm trong Revenue (Mã vận đơn hoàn - Return Tracking Code)
-        if not order:
-            rev_match = db.query(Revenue).filter(
-                Revenue.brand_id == brand_id,
+        # =========================
+        # 1️⃣ SEARCH ORDER (ƯU TIÊN CAO NHẤT)
+        # =========================
+        order = (
+            db.query(Order)
+            .filter(
+                Order.brand_id == brand_id,
                 or_(
-                    Revenue.order_refund.ilike(f"%{query}%"),
-                    Revenue.order_refund.op('%')(query)
+                    Order.order_code.op('%')(query),
+                    Order.tracking_id.op('%')(query),
                 )
-            ).order_by(
-                func.similarity(Revenue.order_refund, query).desc()
-            ).first()
-            
-            if rev_match:
-                order = db.query(Order).filter(
-                    Order.brand_id == brand_id,
-                    Order.order_code == rev_match.order_code
-                ).first()
+            )
+            .order_by(
+                func.greatest(
+                    func.similarity(Order.order_code, query),
+                    func.similarity(Order.tracking_id, query)
+                ).desc()
+            )
+            .limit(1)
+            .first()
+        )
 
         if order:
             return self._build_order_search_result(db, brand_id, order)
 
-        # 2. TÌM KIẾM KHÁCH HÀNG (Username, Phone, Email)
-        customer = db.query(Customer).filter(
-            Customer.brand_id == brand_id,
-            or_(
-                Customer.username.ilike(f"%{query}%"),
-                Customer.phone.ilike(f"%{query}%"),
-                Customer.email.ilike(f"%{query}%"),
-                Customer.username.op('%')(query),
-                Customer.phone.op('%')(query),
-                Customer.email.op('%')(query)
+        # =========================
+        # 2️⃣ SEARCH REVENUE (RETURN ORDER)
+        # =========================
+        rev = (
+            db.query(Revenue)
+            .filter(
+                Revenue.brand_id == brand_id,
+                Revenue.order_refund.op('%')(query),
+                Revenue.order_refund != '',
+                func.length(Revenue.order_refund) > 2
             )
-        ).order_by(
-            func.greatest(
-                func.similarity(Customer.username, query),
-                func.similarity(Customer.phone, query),
-                func.similarity(Customer.email, query)
-            ).desc()
-        ).first()
+            .order_by(
+                func.similarity(Revenue.order_refund, query).desc()
+            )
+            .limit(1)
+            .first()
+        )
+
+        if rev:
+            order = (
+                db.query(Order)
+                .filter(
+                    Order.brand_id == brand_id,
+                    Order.order_code == rev.order_code
+                )
+                .first()
+            )
+            if order:
+                return self._build_order_search_result(db, brand_id, order)
+
+        # =========================
+        # 3️⃣ SEARCH CUSTOMER
+        # =========================
+        customer = (
+            db.query(Customer)
+            .filter(
+                Customer.brand_id == brand_id,
+                or_(
+                    Customer.username.op('%')(query),
+                    Customer.phone.op('%')(query),
+                    Customer.email.op('%')(query),
+                )
+            )
+            .order_by(
+                func.greatest(
+                    func.similarity(Customer.username, query),
+                    func.similarity(Customer.phone, query),
+                    func.similarity(Customer.email, query),
+                ).desc()
+            )
+            .limit(1)
+            .first()
+        )
 
         if customer:
             return self.get_customer_profile(db, brand_id, customer)
