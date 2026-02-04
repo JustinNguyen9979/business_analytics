@@ -5,6 +5,7 @@ from collections import defaultdict
 from models import Order, Revenue, Product, Customer
 from kpi_utils import _classify_order_status, is_success_category
 from vietnam_address_mapping import get_new_province_name
+import schemas
 
 def is_valid(value):
     """Kiểm tra xem dữ liệu có đáng tin hay không (Không rỗng, không phải placeholder rác)"""
@@ -190,9 +191,10 @@ class CRUDCustomer:
         fees_map = defaultdict(float) # order_code -> total_fees
         gmv_map = defaultdict(float) # order_code -> gmv
         refunded_codes = set()
+        refund_tracking_map = {}
         
         if not order_codes:
-            return revenue_map, fees_map, gmv_map, refunded_codes
+            return revenue_map, fees_map, gmv_map, refunded_codes, refund_tracking_map
 
         chunk_size = 1000
         for i in range(0, len(order_codes), chunk_size):
@@ -221,17 +223,9 @@ class CRUDCustomer:
                 
                 # Lưu mã hoàn hàng vào map (nếu có)
                 if order_refund:
-                    # Tận dụng gmv_map hoặc tạo map mới?
-                    # Để code gọn, ta thêm vào một thuộc tính động hoặc trả về map mới
-                    # Ở đây tốt nhất là gán vào fees_map tạm thời hoặc tạo map riêng
-                    # TẠO MAP MỚI là an toàn nhất
-                    if 'refund_tracking_map' not in locals(): refund_tracking_map = {}
                     refund_tracking_map[code] = order_refund
 
-        # Trả về thêm refund_tracking_map (cần sửa return signature)
-        # TUY NHIÊN, để tránh sửa quá nhiều chỗ gọi hàm, ta có thể gán nó vào một biến tạm global
-        # hoặc sửa hàm trả về. Sửa hàm trả về là chuẩn nhất.
-        return revenue_map, fees_map, gmv_map, refunded_codes, locals().get('refund_tracking_map', {})
+        return revenue_map, fees_map, gmv_map, refunded_codes, refund_tracking_map
 
     def _accumulate_order_data(self, stats: dict, order: Order, net_revenue: float, is_refunded: bool):
         """
@@ -375,10 +369,14 @@ class CRUDCustomer:
             total_found = limit
 
         start_idx = (page - 1) * page_size
-        return {
-            "data": results[start_idx : start_idx + page_size],
-            "total": total_found, "page": page, "limit": page_size
-        }
+        paginated_data = results[start_idx : start_idx + page_size]
+
+        return schemas.CustomerPaginationResponse(
+            data=[schemas.CustomerAnalyticsItem(**item) for item in paginated_data],
+            total=total_found,
+            page=page,
+            limit=page_size
+        )
 
     def update_customer_info(self, db: Session, brand_id: int, customer_identifier: str, update_data):
         """

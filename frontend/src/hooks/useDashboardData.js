@@ -166,25 +166,55 @@ export const useDashboardData = (brandSlug, filters) => {
                 return; // Dừng, không gọi API nữa
             }
 
-            // --- XỬ LÝ 2: GỌI API BÌNH THƯỜNG ---
-            const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
-            try {
-                // ĐÃ SỬA: Truyền thêm filter.source vào params
-                const [currentRes, previousRes] = await Promise.all([
-                    fetchAsyncData('daily_kpis_chart', brandSlug, filter.range, { source: filter.source }, controller.signal),
-                    fetchAsyncData('daily_kpis_chart', brandSlug, prevRange, { source: filter.source }, controller.signal)
-                ]);
-                const processedCurrent = processChartData(currentRes?.data, filter);
-                const processedPrevious = processChartData(previousRes?.data, { range: prevRange, type: filter.type });
+                            // --- XỬ LÝ 2: GỌI API BÌNH THƯỜNG ---
 
-                updateState('lineChart', { 
-                    data: {
-                        current: processedCurrent.aggregatedData,
-                        previous: processedPrevious.aggregatedData,
-                        aggregationType: processedCurrent.aggregationType,
-                    }, 
-                    loading: false 
-                });
+                        const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
+
+                        try {
+
+                            // ĐÃ SỬA: Truyền thêm filter.source vào params
+
+                            const [currentRes, previousRes] = await Promise.all([
+
+                                fetchAsyncData('daily_kpis_chart', brandSlug, filter.range, { source: filter.source }, controller.signal),
+
+                                fetchAsyncData('daily_kpis_chart', brandSlug, prevRange, { source: filter.source }, controller.signal)
+
+                            ]);
+
+            
+
+                            // Lấy aggregationType từ backend trả về (nếu có)
+
+                            const currentAggType = currentRes?.aggregationType || null;
+
+                            const prevAggType = previousRes?.aggregationType || null;
+
+            
+
+                            const processedCurrent = processChartData(currentRes?.data, filter, currentAggType);
+
+                            const processedPrevious = processChartData(previousRes?.data, { range: prevRange, type: filter.type }, prevAggType);
+
+            
+
+                            updateState('lineChart', { 
+
+                                data: {
+
+                                    current: processedCurrent.aggregatedData,
+
+                                    previous: processedPrevious.aggregatedData,
+
+                                    aggregationType: processedCurrent.aggregationType,
+
+                                }, 
+
+                                loading: false 
+
+                            });
+
+            
             } catch (err) {
                 if (!axios.isCancel(err)) {
                     updateState('lineChart', { error: err.message || 'Lỗi tải dữ liệu biểu đồ.', loading: false });

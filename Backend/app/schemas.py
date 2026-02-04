@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict, field_validator
 from typing import List, Optional, Dict, Any, Union
-from datetime import date, datetime
+import datetime
 
 # ==============================================================================
 # === 1. CORE MIXINS (TÁI SỬ DỤNG LOGIC)                                     ===
@@ -69,7 +69,7 @@ class CustomerBase(OrderCountersMixin, ORMBase):
     district: Optional[str] = None
     total_spent: float = 0.0
     aov: float = 0.0
-    last_order_date: Optional[datetime] = None
+    last_order_date: Optional[datetime.datetime] = None
     avg_repurchase_cycle: Optional[float] = 0.0
 
 class CustomerCreate(CustomerBase): pass
@@ -84,7 +84,7 @@ class Customer(CustomerBase, DBEntity): pass
 # --- ORDER ---
 class OrderBase(BaseModel):
     order_code: str
-    order_date: Optional[datetime] = None
+    order_date: Optional[datetime.datetime] = None
     status: Optional[str] = None
     username: Optional[str] = None
     total_quantity: int = 0
@@ -120,8 +120,8 @@ class Order(OrderBase, SourcedDBEntity):
 # --- REVENUE & MARKETING ---
 class RevenueBase(BaseModel):
     order_code: Optional[str]
-    order_date: Optional[date] = None
-    transaction_date: Optional[date]
+    order_date: Optional[datetime.date] = None
+    transaction_date: Optional[datetime.date]
     net_revenue: float = 0.0
     gmv: float = 0.0
     details: Optional[Dict[str, Any]] = None
@@ -129,7 +129,7 @@ class RevenueBase(BaseModel):
 class Revenue(RevenueBase, SourcedDBEntity): pass
 
 class MarketingSpendBase(BaseModel):
-    date: date
+    date: datetime.date
     ad_spend: float = 0.0
     cpm: float = 0.0; ctr: float = 0.0; cpa: float = 0.0; cpc: float = 0.0
     conversions: int = 0; impressions: int = 0; reach: int = 0; clicks: int = 0
@@ -176,6 +176,19 @@ class CustomerMetricsMixin(BaseModel):
 class ProductItem(ORMBase):
     sku: str; name: Optional[str] = "Unknown"; quantity: int = 0; total_quantity: int = 0; revenue: float = 0.0
 
+class KpiBase(ORMBase):
+    """Base class for all KPI sets to manage the date field consistently"""
+    date: Optional[datetime.date] = None
+
+class PlatformComparisonItem(BaseModel):
+    platform: str
+    net_revenue: float = 0.0; gmv: float = 0.0; profit: float = 0.0
+    total_cost: float = 0.0; ad_spend: float = 0.0; cogs: float = 0.0; execution_cost: float = 0.0
+    completed_orders: int = 0; total_orders: int = 0; cancelled_orders: int = 0
+    refunded_orders: int = 0; bomb_orders: int = 0
+    avg_processing_time: float = 0.0; avg_shipping_time: float = 0.0
+    roi: float = 0.0; profit_margin: float = 0.0; take_rate: float = 0.0
+
 class TopProduct(ORMBase):
     sku: str; name: Optional[str] = "Unknown"; total_quantity: int = 0; revenue: float = 0.0
 
@@ -204,20 +217,20 @@ class BreakdownMetricsMixin(BaseModel):
 # === 4. RESPONSE SCHEMAS (VIEW MODELS)  ===
 # ==============================================================================
 
-class KpiSet(FinanceMetricsMixin, MarketingMetricsMixin, OperationMetricsMixin, CustomerMetricsMixin, BreakdownMetricsMixin, ORMBase):
+class KpiSet(KpiBase, FinanceMetricsMixin, MarketingMetricsMixin, OperationMetricsMixin, CustomerMetricsMixin, BreakdownMetricsMixin):
     pass
 
 class BrandWithKpis(Brand):
     kpis: Optional[KpiSet] = None
 
-class DailyKpi(FinanceMetricsMixin, MarketingMetricsMixin, OperationMetricsMixin, CustomerMetricsMixin, ORMBase):
-    date: date
+class DailyKpi(KpiBase, FinanceMetricsMixin, MarketingMetricsMixin, OperationMetricsMixin, CustomerMetricsMixin):
+    pass
 
 class DailyKpiResponse(BaseModel):
     data: List[DailyKpi]
 
 class OperationKpisResponse(OperationMetricsMixin, BreakdownMetricsMixin, ORMBase):
-    platform_comparison: List[Dict[str, Any]] = []
+    platform_comparison: List[PlatformComparisonItem] = []
 
 class CustomerKpisResponse(CustomerMetricsMixin, ORMBase):
     trend_data: List[DailyKpi] = []; segment_data: List[Dict[str, Any]] = []
@@ -227,7 +240,7 @@ class CustomerAnalyticsItem(OrderCountersMixin):
     """Tái sử dụng OrderCountersMixin cho danh sách khách hàng"""
     username: str
     total_spent: float = 0; aov: float = 0
-    last_order_date: Optional[date] = None
+    last_order_date: Optional[datetime.date] = None
     province: Optional[str] = None; district: Optional[str] = None
 
 class CustomerPaginationResponse(BaseModel):
@@ -249,7 +262,7 @@ class CustomerDetailResponse(OrderCountersCamelMixin, ORMBase):
     lastLogin: Optional[str] = "Gần đây"
     tags: List[str] = []
     notes: Optional[str] = "---"
-    lastOrderDate: Optional[datetime] = None
+    lastOrderDate: Optional[datetime.datetime] = None
     
     # Metrics
     rank: Optional[str] = "MEMBER"; nextRank: Optional[str] = "MAX"; rankProgress: float = 0.0
@@ -279,3 +292,43 @@ class OrderSearchResult(BaseModel):
     netRevenue: float = 0.0; totalFees: float = 0.0; profitMargin: float = 0.0; takeRate: float = 0.0
 
 GlobalSearchResult = Union[OrderSearchResult, CustomerDetailResponse]
+
+# ==============================================================================
+# === 6. COMMON UTILITY SCHEMAS (MESSAGES & TASKS)                           ===
+# ==============================================================================
+
+class MessageResponse(BaseModel):
+    """Thông báo phản hồi đơn giản"""
+    message: str
+
+class TaskResponse(BaseModel):
+    """Phản hồi khi kích hoạt một background task (Celery)"""
+    task_id: str
+    status: str
+    cache_key: Optional[str] = None
+
+class RecalculationResponse(MessageResponse):
+    """Kết quả tính toán lại dữ liệu"""
+    days_processed: int
+
+class DeleteDataResponse(MessageResponse):
+    """Kết quả sau khi xóa dữ liệu trong một khoảng thời gian"""
+    fully_deleted_sources: List[str]
+
+class SearchNotFoundResponse(MessageResponse):
+
+    """Phản hồi khi không tìm thấy kết quả tìm kiếm"""
+
+    status: str = "not_found"
+
+
+
+class TaskStatusResponse(BaseModel):
+
+    """Phản hồi trạng thái xử lý của task"""
+
+    status: str
+
+    data: Optional[Any] = None
+
+    error: Optional[str] = None

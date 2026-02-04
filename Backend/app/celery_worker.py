@@ -9,6 +9,8 @@ from worker_utils import get_db_session
 import crud
 import kpi_utils
 import models
+import schemas
+from datetime import date, timedelta, datetime
 from services import dashboard_service, data_service
 from cache import redis_client
 from sqlalchemy import func, distinct
@@ -56,11 +58,6 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
                     func.sum(models.DailyStat.total_orders).label('total_orders'),
                     func.sum(models.DailyStat.cogs).label('cogs'),
                     func.sum(models.DailyStat.execution_cost).label('execution_cost'),
-                    func.sum(models.DailyStat.aov).label('aov'),
-                    func.sum(models.DailyStat.upt).label('upt'),
-                    func.sum(models.DailyStat.completion_rate).label('completion_rate'),
-                    func.sum(models.DailyStat.cancellation_rate).label('cancellation_rate'),
-                    func.sum(models.DailyStat.refund_rate).label('refund_rate'),
                     func.sum(models.DailyStat.completed_orders).label('completed_orders'),
                     func.sum(models.DailyStat.cancelled_orders).label('cancelled_orders'),
                     func.sum(models.DailyStat.refunded_orders).label('refunded_orders'),
@@ -76,119 +73,76 @@ def process_data_request(request_type: str, cache_key: str, brand_id: int, param
 
                 # Chuyển kết quả từ SQLAlchemy Row thành dictionary
                 if summary_query:
-                    # Chuyển Row thành Dict và ép kiểu về số (tránh None)
                     d = {key: (value or 0) for key, value in summary_query._mapping.items()}
                 else:
-                    d = {
-                        'net_revenue': 0, 'gmv': 0, 'profit': 0, 'total_cost': 0, 'ad_spend': 0,
-                        'total_orders': 0, 'cogs': 0, 'execution_cost': 0, 
-                        'completed_orders': 0, 'cancelled_orders': 0, 'refunded_orders': 0,
-                        'unique_skus_sold': 0, 'total_quantity_sold': 0, 'total_customers': 0,
-                        'new_customers': 0, 'returning_customers': 0
-                    }
+                    d = {}
 
                 # BƯỚC 3: TÍNH TOÁN LẠI CÁC TỶ LỆ (%) DỰA TRÊN TỔNG
-                # ROI = Lợi nhuận / Tổng chi phí
-                d['roi'] = (d['profit'] / d['total_cost']) if d['total_cost'] > 0 else 0
+                # Sử dụng kpi_utils để tính toán các chỉ số phái sinh một cách thống nhất
+                final_metrics = kpi_utils.calculate_derived_metrics(d)
                 
-                # Profit Margin = Lợi nhuận / Doanh thu ròng
-                d['profit_margin'] = (d['profit'] / d['net_revenue']) if d['net_revenue'] != 0 else 0
+                # Validate qua Schema và dump ra JSON-friendly dict
+                result_data = schemas.KpiSet(**final_metrics).model_dump(mode='json')
                 
-                # Take Rate = Phí thực thi / GMV
-                d['take_rate'] = (d['execution_cost'] / d['gmv']) if d['gmv'] > 0 else 0
-                
-                # AOV = GMV / Đơn thành công
-                d['aov'] = (d['gmv'] / d['completed_orders']) if d['completed_orders'] > 0 else 0
-                
-                # UPT = Tổng số lượng bán / Đơn thành công
-                d['upt'] = (d['total_quantity_sold'] / d['completed_orders']) if d['completed_orders'] > 0 else 0
-                
-                # Tỷ lệ hoàn thành = Đơn thành công / Tổng đơn
-                d['completion_rate'] = (d['completed_orders'] / d['total_orders']) if d['total_orders'] > 0 else 0
-                
-                # Tỷ lệ hủy = Đơn hủy / Tổng đơn
-                d['cancellation_rate'] = (d['cancelled_orders'] / d['total_orders']) if d['total_orders'] > 0 else 0
-                
-                # Tỷ lệ hoàn = Đơn hoàn / Tổng đơn
-                d['refund_rate'] = (d['refunded_orders'] / d['total_orders']) if d['total_orders'] > 0 else 0
-
-                # Gán vào result_data
-                result_data = d
-                
-                # CÁC CHỈ SỐ MỚI (TÍNH TOÁN NHANH) VẪN GIỮ LẠI
-                result_data['cac'] = (result_data['ad_spend'] / result_data['new_customers']) if result_data['new_customers'] > 0 else 0
-                result_data['retention_rate'] = (result_data['returning_customers'] / result_data['total_customers']) if result_data['total_customers'] > 0 else 0
-                result_data['ltv'] = (result_data['profit'] / result_data['total_customers']) if result_data['total_customers'] > 0 else 0
-                result_data['cpo'] = (result_data['ad_spend'] / result_data['total_orders']) if result_data['total_orders'] else 0
-                result_data['roas'] = (result_data['gmv'] / result_data['ad_spend']) if result_data['ad_spend'] else 0
-
-
             # --------------------------------------------------------------
             # --- Nhánh 2: BIỂU ĐỒ ---
             # --------------------------------------------------------------
             elif request_type == "daily_kpis_chart":
-                # Lấy danh sách source từ params gửi lên
                 req_source = params.get("source")
-                # Lấy interval (day/week/month) - Mặc định là day
                 interval = params.get("interval", "day")
 
-                # Chuẩn hóa source thành list nếu cần
                 source_list = None
                 if req_source is not None:
-                    if isinstance(req_source, list):
-                        source_list = req_source
-                    else:
-                        source_list = [req_source]
+                    source_list = req_source if isinstance(req_source, list) else [req_source]
 
-                # Gọi hàm mới hỗ trợ aggregation
+                # Gọi hàm mới hỗ trợ aggregation (Trả về List[KpiSet])
+                chart_items = dashboard_service.get_aggregated_kpis_chart(
+                    db, brand_id, start_date, end_date, source_list=source_list, interval=interval
+                )
+                
                 result_data = {
-                    "data": dashboard_service.get_aggregated_kpis_chart(
-                        db, brand_id, start_date, end_date, source_list=source_list, interval=interval
-                    ),
-                    "aggregationType": interval # Trả về để Frontend biết cách vẽ trục X
+                    "data": [item.model_dump(mode='json') for item in chart_items],
+                    "aggregationType": interval
                 }
 
             # --------------------------------------------------------------
-            # --- Nhánh 3: TOP SẢN PHẨM (Vẫn cần Raw Data Order Items) ---
+            # --- Nhánh 3: TOP SẢN PHẨM ---
             # --------------------------------------------------------------
             elif request_type == "top_products":
                 limit = params.get("limit", 10)
-                result_data = dashboard_service.get_top_selling_products(db, brand_id, start_date, end_date, limit)
+                products = dashboard_service.get_top_selling_products(db, brand_id, start_date, end_date, limit)
+                result_data = [p.model_dump(mode='json') for p in products]
 
             # --------------------------------------------------------------
             # --- Nhánh 4: TOP KHÁCH HÀNG THEO KỲ (DYNAMIC) ---
             # --------------------------------------------------------------
             elif request_type == "top_customers_period":
-                # Frontend gửi: limit (là page_size), page
                 page_size = int(params.get("limit", 20)) 
                 page = int(params.get("page", 1))
                 
-                # Xử lý source param
                 req_source = params.get("source")
                 source_list = None
                 if req_source is not None:
-                    if isinstance(req_source, list):
-                        source_list = req_source
-                    else:
-                        source_list = [req_source]
+                    source_list = req_source if isinstance(req_source, list) else [req_source]
                 
-                result_data = crud.customer.get_top_customers_in_period(
+                pagination_result = crud.customer.get_top_customers_in_period(
                     db, 
                     brand_id, 
                     start_date, 
                     end_date, 
-                    limit=20000, # Max calculation limit (Hard cap)
+                    limit=20000,
                     page=page,
                     page_size=page_size,
                     source_list=source_list
                 )
+                result_data = pagination_result.model_dump(mode='json')
 
             # --------------------------------------------------------------
             # --- Nhánh 5: KPI THEO PLATFORM ---
             # --------------------------------------------------------------
             elif request_type == "kpis_by_platform":
-                # Vì DailyStat hiện tại chưa lưu cột 'source', ta vẫn dùng logic cũ cho phần này
-                result_data = dashboard_service.get_kpis_by_platform(db, brand_id, start_date, end_date)
+                platforms = dashboard_service.get_kpis_by_platform(db, brand_id, start_date, end_date)
+                result_data = [p.model_dump(mode='json') for p in platforms]
 
             else:
                 raise ValueError(f"Loại yêu cầu không hợp lệ: {request_type}")

@@ -48,7 +48,7 @@ def get_brand_from_slug(brand_slug: str, db: Session = Depends(get_db)):
 # === 1. ENDPOINTS QUẢN LÝ THƯƠNG HIỆU (BRAND MANAGEMENT) ===
 # ==============================================================================
 
-@app.get("/")
+@app.get("/", response_model=schemas.MessageResponse)
 def read_root(): 
     return {"message": "Chào mừng đến với CEO Dashboard API!"}
 
@@ -84,7 +84,7 @@ def clone_brand_api(brand_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand để nhân bản.")
     return cloned
 
-@app.post("/brands/{brand_slug}/trigger-recalculation", status_code=status.HTTP_202_ACCEPTED)
+@app.post("/brands/{brand_slug}/trigger-recalculation", status_code=status.HTTP_202_ACCEPTED, response_model=schemas.MessageResponse)
 @limiter.limit("5/minute")
 def trigger_recalculation_api(request: Request, brand: models.Brand = Depends(get_brand_from_slug)):
     """
@@ -99,7 +99,7 @@ def trigger_recalculation_api(request: Request, brand: models.Brand = Depends(ge
 # === 2. ENDPOINTS XỬ LÝ DỮ LIỆU (DATA PROCESSING) ===
 # ==============================================================================
 
-@app.post("/brands/{brand_slug}/upload-standard-file", status_code=status.HTTP_202_ACCEPTED)
+@app.post("/brands/{brand_slug}/upload-standard-file", status_code=status.HTTP_202_ACCEPTED, response_model=schemas.MessageResponse)
 @limiter.limit("5/minute")
 async def upload_standard_file(
     request: Request,
@@ -145,7 +145,7 @@ async def upload_standard_file(
         
     return {"message": "Upload và xử lý dữ liệu thành công!"}
 
-@app.post("/brands/{brand_slug}/recalculate-and-wait", status_code=status.HTTP_200_OK)
+@app.post("/brands/{brand_slug}/recalculate-and-wait", status_code=status.HTTP_200_OK, response_model=schemas.MessageResponse)
 @limiter.limit("3/minute")
 def recalculate_and_wait(request: Request, brand: models.Brand = Depends(get_brand_from_slug)):
     """
@@ -173,7 +173,7 @@ def get_brand_sources(brand: models.Brand = Depends(get_brand_from_slug), db: Se
     """Lấy danh sách tất cả các 'source' duy nhất cho một brand."""
     return crud.get_sources_for_brand(db, brand.id)
 
-@app.post("/brands/{brand_slug}/delete-data-in-range", status_code=status.HTTP_200_OK)
+@app.post("/brands/{brand_slug}/delete-data-in-range", status_code=status.HTTP_200_OK, response_model=schemas.DeleteDataResponse)
 @limiter.limit("5/minute")
 def delete_data_in_range(
     request: Request,
@@ -220,7 +220,7 @@ def generate_cache_key(brand_id: int, request_type: str, params: Dict[str, Any])
     param_string = ":".join(f"{k}={v}" for k, v in sorted(params.items()))
     return f"data_req:{brand_id}:{request_type}:{param_string}"
 
-@app.post("/data-requests", status_code=status.HTTP_202_ACCEPTED)
+@app.post("/data-requests", status_code=status.HTTP_202_ACCEPTED, response_model=schemas.TaskResponse)
 @limiter.limit("60/minute")
 def request_data_processing(
     request: Request,
@@ -263,7 +263,7 @@ def request_data_processing(
     # Trả về task_id để frontend có thể "hỏi thăm"
     return {"task_id": task.id, "status": "PROCESSING", "cache_key": cache_key}
 
-@app.get("/data-requests/status/{cache_key}")
+@app.get("/data-requests/status/{cache_key}", response_model=schemas.TaskStatusResponse)
 def get_request_status(cache_key: str):
     """
     Endpoint để Frontend "hỏi thăm" xem dữ liệu đã được xử lý xong chưa.
@@ -283,7 +283,7 @@ def get_request_status(cache_key: str):
         # Vẫn đang xử lý
         return {"status": "PROCESSING"}
 
-@app.post("/brands/{brand_slug}/recalculate", status_code=status.HTTP_200_OK)
+@app.post("/brands/{brand_slug}/recalculate", status_code=status.HTTP_200_OK, response_model=schemas.RecalculationResponse)
 @limiter.limit("5/minute")
 def recalculate_brand_data(request: Request, brand: models.Brand = Depends(get_brand_from_slug), db: Session = Depends(get_db)):
     """Tính toán lại toàn bộ dữ liệu của một brand một cách đồng bộ."""
@@ -446,7 +446,7 @@ def get_top_customers(
     end_date = date(2030, 12, 31)
     
     # Gọi hàm tính toán động
-    # Lưu ý: Hàm này trả về dict {data, total, ...}, ta chỉ cần data
+    # Lưu ý: Hàm này trả về CustomerPaginationResponse, ta chỉ cần list data
     result = crud.customer.get_top_customers_in_period(
         db, 
         brand_id=db_brand.id, 
@@ -455,10 +455,10 @@ def get_top_customers(
         limit=limit
     )
     
-    # Kết quả trả về là List[Dict], Pydantic sẽ tự validate sang List[CustomerAnalyticsItem]
-    return result['data']
+    # Kết quả trả về là List[CustomerAnalyticsItem]
+    return result.data
 
-@app.get("/brands/{brand_slug}/search", response_model=Union[schemas.GlobalSearchResult, Dict[str, Any]])
+@app.get("/brands/{brand_slug}/search", response_model=Union[schemas.GlobalSearchResult, schemas.SearchNotFoundResponse])
 def search_anything(
     brand_slug: str,
     q: str = Query(..., min_length=1),
@@ -493,7 +493,7 @@ def get_search_suggestions(
     
     return search_service.suggest_entities(db, db_brand.id, q)
 
-@app.put("/brands/{brand_slug}/customers/{customer_identifier}")
+@app.put("/brands/{brand_slug}/customers/{customer_identifier}", response_model=schemas.CustomerDetailResponse)
 def update_customer_api(
     brand_slug: str,
     customer_identifier: str,

@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from typing import List, Dict, Any, Optional
 import json
 from decimal import Decimal
@@ -29,59 +29,55 @@ def get_aggregated_kpis_chart(
     end_date: date, 
     source_list: Optional[List[str]] = None,
     interval: str = 'day'
-) -> List[Dict[str, Any]]:
+) -> List[schemas.KpiSet]:
     """
     Lấy dữ liệu KPI biểu đồ, hỗ trợ gom nhóm theo Tuần/Tháng ngay tại Backend.
     Giúp giảm tải cho Frontend khi xem khoảng thời gian dài.
     """
-    # 1. Lấy dữ liệu thô theo ngày (Đã có Cache Redis tối ưu ở tầng này)
-    daily_data = get_daily_kpis_for_range(db, brand_id, start_date, end_date, source_list)
+    # 1. Lấy dữ liệu thô theo ngày
+    daily_data_objs = get_daily_kpis_for_range(db, brand_id, start_date, end_date, source_list)
     
-    if not daily_data or interval == 'day':
-        return daily_data
+    if not daily_data_objs or interval == 'day':
+        return daily_data_objs
 
     # 2. Gom nhóm (Grouping)
     grouped_map = defaultdict(list)
     
-    for item in daily_data:
+    for item in daily_data_objs:
         try:
-            # Parse ngày từ string (do get_daily_kpis_for_range trả về dict với date là string ISO)
-            d_str = item.get('date')
-            current_date = date.fromisoformat(d_str)
+            current_date = item.date
+            if not current_date: continue
             
-            key = ""
+            key_date = None
             if interval == 'month':
-                # Gom về ngày đầu tháng: 2023-01-15 -> 2023-01-01
-                key = current_date.replace(day=1).isoformat()
-                
+                # Gom về ngày đầu tháng
+                key_date = current_date.replace(day=1)
             elif interval == 'week':
-                # Gom về ngày đầu tuần (Thứ 2): 
-                # weekday(): Mon=0, Sun=6
-                start_of_week = current_date - timedelta(days=current_date.weekday())
-                key = start_of_week.isoformat()
+                # Gom về ngày đầu tuần (Thứ 2)
+                key_date = current_date - timedelta(days=current_date.weekday())
             else:
-                key = d_str # Fallback
+                key_date = current_date
 
-            grouped_map[key].append(item)
+            grouped_map[key_date].append(item.model_dump())
         except Exception as e:
-            print(f"Error grouping date {item.get('date')}: {e}")
+            print(f"Error grouping date {item.date}: {e}")
             continue
 
     # 3. Tổng hợp (Aggregation) từng nhóm
     results = []
-    for date_key, items in grouped_map.items():
-        # Dùng lại logic chuẩn của kpi_utils để cộng dồn JSON và số liệu
-        agg = kpi_utils.aggregate_data_points(items)
+    for date_key, records in grouped_map.items():
+        # Dùng lại logic chuẩn của kpi_utils để cộng dồn
+        agg = kpi_utils.aggregate_data_points(records)
         
         # Tính lại các chỉ số % (ROI, AOV...)
-        final = kpi_utils.calculate_derived_metrics(agg)
+        final_metrics = kpi_utils.calculate_derived_metrics(agg)
         
         # Gán lại ngày đại diện
-        final['date'] = date_key
-        results.append(final)
+        final_metrics['date'] = date_key
+        results.append(schemas.KpiSet(**final_metrics))
     
     # Sắp xếp lại theo thời gian
-    results.sort(key=lambda x: x['date'])
+    results.sort(key=lambda x: x.date)
     
     return results
 
@@ -91,7 +87,7 @@ def get_daily_kpis_for_range(
     start_date: date, 
     end_date: date, 
     source_list: Optional[List[str]] = None
-) -> List[Dict[str, Any]]:
+) -> List[schemas.KpiSet]:
     """
     Sử dụng chiến lược Hybrid:
     - ALL sources -> Query bảng DailyStat.
@@ -108,18 +104,19 @@ def get_daily_kpis_for_range(
     try:
         cached_data = redis_client.get(cache_key)
         if cached_data:
-            # print(f"DEBUG: HIT CACHE for {cache_key}")
-            return json.loads(cached_data)
+            # Parse lại thành list các đối tượng KpiSet
+            raw_list = json.loads(cached_data)
+            return [schemas.KpiSet(**item) for item in raw_list]
     except Exception as e:
         print(f"WARNING: Redis Error: {e}")
 
     strategy, clean_sources = kpi_utils.normalize_source_strategy(source_list)
     
     # Chuẩn bị khung dữ liệu cho toàn bộ dải ngày (để tránh ngày bị thiếu)
-    date_map = {}
+    date_map = {} # Dict[date, schemas.KpiSet]
     curr = start_date
     while curr <= end_date:
-        date_map[curr] = _create_empty_daily_stat(curr)
+        date_map[curr] = schemas.KpiSet(date=curr)
         curr += timedelta(days=1)
 
     # --- EXECUTE QUERY ---
@@ -134,12 +131,9 @@ def get_daily_kpis_for_range(
         ).all()
         
         for stat in stats:
-            # Map model object -> dict (Optimized with Pydantic)
-            # Use KpiSet schema to validate and dump all matching fields automatically
-            kpi_data = schemas.KpiSet.model_validate(stat).model_dump()
-            kpi_data['date'] = stat.date.isoformat()
-            
-            date_map[stat.date] = kpi_data
+            # Map model object -> Pydantic KpiSet
+            kpi_obj = schemas.KpiSet.model_validate(stat)
+            date_map[stat.date] = kpi_obj
 
     elif strategy == kpi_utils.STRATEGY_FILTERED:
         # Query DailyAnalytics và cộng gộp theo ngày
@@ -149,30 +143,28 @@ def get_daily_kpis_for_range(
             models.DailyAnalytics.source.in_(clean_sources)
         ).all()
         
-        # Group by Date in memory (vì logic aggregate phức tạp, python xử lý linh hoạt hơn SQL thuần lúc này)
-        data_by_date = {} # Key: date, Value: list of analytics records
+        # Group by Date in memory
+        data_by_date = {} 
         for record in analytics:
             d = record.date
             if d not in data_by_date: data_by_date[d] = []
-            
-            # Convert record to dict
             data_by_date[d].append(schemas.KpiSet.model_validate(record).model_dump())
             
         # Aggregate từng ngày
         for d, records in data_by_date.items():
             aggregated = kpi_utils.aggregate_data_points(records)
             final_metrics = kpi_utils.calculate_derived_metrics(aggregated)
-            final_metrics['date'] = d.isoformat()
-            date_map[d] = final_metrics
+            final_metrics['date'] = d
+            date_map[d] = schemas.KpiSet(**final_metrics)
 
     result_data = [date_map[d] for d in sorted(date_map.keys())]
 
-    # 3. SAVE CACHE
+    # 3. SAVE CACHE (Lưu dạng dict để json.dumps được)
     try:
         redis_client.setex(
             cache_key,
             3600, # 1 giờ
-            json.dumps(result_data, default=json_serial)
+            json.dumps([item.model_dump(mode='json') for item in result_data])
         )
     except Exception as e:
         print(f"WARNING: Redis Set Error: {e}")
@@ -185,7 +177,7 @@ def _fetch_and_aggregate_kpis(
     start_date: date, 
     end_date: date, 
     source_list: Optional[List[str]] = None
-) -> Dict[str, Any]:
+) -> schemas.KpiSet:
     """
     Helper function: 
     1. Lấy dữ liệu KPI theo ngày (get_daily_kpis_for_range).
@@ -197,16 +189,17 @@ def _fetch_and_aggregate_kpis(
     
     if not daily_kpis:
         # Trả về object rỗng nếu không có dữ liệu
-        return kpi_utils.calculate_derived_metrics({})
+        return schemas.KpiSet()
 
-    # 2. Aggregate
-    aggregated = kpi_utils.aggregate_data_points(daily_kpis)
+    # 2. Aggregate (Chuyển list KpiSet thành list dict để dùng hàm aggregate cũ)
+    records = [item.model_dump() for item in daily_kpis]
+    aggregated = kpi_utils.aggregate_data_points(records)
     
     # 3. Tính toán metrics
     aggregated['_day_count'] = (end_date - start_date).days + 1
-    final_kpis = kpi_utils.calculate_derived_metrics(aggregated)
+    final_metrics = kpi_utils.calculate_derived_metrics(aggregated)
     
-    return final_kpis
+    return schemas.KpiSet(**final_metrics)
 
 def get_aggregated_operation_kpis(
     db: Session, 
@@ -214,18 +207,19 @@ def get_aggregated_operation_kpis(
     start_date: date, 
     end_date: date, 
     source_list: Optional[List[str]] = None
-) -> Dict[str, Any]:
+) -> schemas.OperationKpisResponse:
     """
     Service lấy KPI vận hành tổng hợp (1 cục duy nhất) cho toàn bộ khoảng thời gian.
     Dùng cho các Card chỉ số tổng quan ở đầu Dashboard.
     """
     # Sử dụng helper function đã refactor
-    final_kpis = _fetch_and_aggregate_kpis(db, brand_id, start_date, end_date, source_list)
+    final_kpis_obj = _fetch_and_aggregate_kpis(db, brand_id, start_date, end_date, source_list)
     
-    # Thêm dữ liệu so sánh platform
-    final_kpis['platform_comparison'] = get_kpis_by_platform(db, brand_id, start_date, end_date, source_list)
+    # Dump ra dict để bổ sung thêm trường platform_comparison trước khi validate vào response schema
+    response_data = final_kpis_obj.model_dump()
+    response_data['platform_comparison'] = get_kpis_by_platform(db, brand_id, start_date, end_date, source_list)
 
-    return final_kpis
+    return schemas.OperationKpisResponse(**response_data)
 
 def get_top_selling_products(
     db: Session, 
@@ -234,7 +228,7 @@ def get_top_selling_products(
     end_date: date, 
     limit: int = 10,
     source_list: Optional[List[str]] = None
-) -> List[Dict[str, Any]]:
+) -> List[schemas.TopProduct]:
     """
     Lấy top sản phẩm bán chạy từ dữ liệu đã aggregate sẵn (DailyStat/DailyAnalytics).
     Nhanh hơn nhiều so với query trực tiếp bảng Order.
@@ -296,9 +290,9 @@ def get_top_selling_products(
             product_map[sku]['total_quantity'] += quantity
             product_map[sku]['revenue'] += revenue
 
-    # 4. Convert về list và Sort
-    result = list(product_map.values())
-    result.sort(key=lambda x: x['total_quantity'], reverse=True)
+    # 4. Convert về list, Validate qua Schema và Sort
+    result = [schemas.TopProduct(**item) for item in product_map.values()]
+    result.sort(key=lambda x: x.total_quantity, reverse=True)
     
     return result[:limit]
 
@@ -328,7 +322,7 @@ def get_kpis_by_platform(
     start_date: date, 
     end_date: date,
     source_list: Optional[List[str]] = None
-) -> List[Dict[str, Any]]:
+) -> List[schemas.PlatformComparisonItem]:
     """
     So sánh hiệu quả giữa các sàn (Shopee, TikTok...)
     Query trực tiếp từ DailyAnalytics và Group By Source.
@@ -365,14 +359,14 @@ def get_kpis_by_platform(
     results = query.group_by(models.DailyAnalytics.source).all()
     
     final_data = []
-    total_summary = {
+    total_summary_dict = {
         'platform': 'Tổng cộng',
         'net_revenue': 0, 'gmv': 0, 'profit': 0, 'ad_spend': 0, 'total_cost': 0,
         'cogs': 0, 'execution_cost': 0,
         'completed_orders': 0, 'total_orders': 0, 'cancelled_orders': 0,
         'refunded_orders': 0, 'bomb_orders': 0,
         'roi': 0, 'profit_margin': 0,
-        'avg_processing_time': 0, 'avg_shipping_time': 0 # Thêm field tổng
+        'avg_processing_time': 0, 'avg_shipping_time': 0 
     }
     
     # Biến tạm để tính avg tổng
@@ -387,51 +381,51 @@ def get_kpis_by_platform(
         avg_proc = (row.weighted_proc_time / n_orders) if n_orders > 0 else 0
         avg_ship = (row.weighted_ship_time / n_orders) if n_orders > 0 else 0
         
-        item = {
+        item_dict = {
             'platform': source.capitalize(),
-            'net_revenue': row.netRevenue or 0,
-            'gmv': row.gmv or 0,
-            'profit': row.profit or 0,
-            'total_cost': row.totalCost or 0,
-            'ad_spend': row.adSpend or 0,
-            'cogs': row.cogs or 0,
-            'execution_cost': row.executionCost or 0,
-            'completed_orders': row.completedOrders or 0,
-            'total_orders': row.totalOrders or 0,
-            'cancelled_orders': row.cancelledOrders or 0,
-            'refunded_orders': row.refundedOrders or 0,
-            'bomb_orders': row.bombOrders or 0,
-            'avg_processing_time': avg_proc,
-            'avg_shipping_time': avg_ship
+            'net_revenue': float(row.netRevenue or 0),
+            'gmv': float(row.gmv or 0),
+            'profit': float(row.profit or 0),
+            'total_cost': float(row.totalCost or 0),
+            'ad_spend': float(row.adSpend or 0),
+            'cogs': float(row.cogs or 0),
+            'execution_cost': float(row.executionCost or 0),
+            'completed_orders': int(row.completedOrders or 0),
+            'total_orders': int(row.totalOrders or 0),
+            'cancelled_orders': int(row.cancelledOrders or 0),
+            'refunded_orders': int(row.refundedOrders or 0),
+            'bomb_orders': int(row.bombOrders or 0),
+            'avg_processing_time': float(avg_proc),
+            'avg_shipping_time': float(avg_ship)
         }
         # Tính tỷ lệ
-        item['roi'] = (item['profit'] / item['total_cost']) if item['total_cost'] > 0 else 0
-        item['profit_margin'] = (item['profit'] / item['net_revenue']) if item['net_revenue'] != 0 else 0
-        item['take_rate'] = (item['execution_cost'] / item['gmv']) if item['gmv'] > 0 else 0
+        item_dict['roi'] = (item_dict['profit'] / item_dict['total_cost']) if item_dict['total_cost'] > 0 else 0
+        item_dict['profit_margin'] = (item_dict['profit'] / item_dict['net_revenue']) if item_dict['net_revenue'] != 0 else 0
+        item_dict['take_rate'] = (item_dict['execution_cost'] / item_dict['gmv']) if item_dict['gmv'] > 0 else 0
         
-        final_data.append(item)
+        final_data.append(schemas.PlatformComparisonItem(**item_dict))
         
         # Cộng dồn vào tổng
-        for k in total_summary:
-            if k in item and isinstance(item[k], (int, float)) and 'avg' not in k:
-                total_summary[k] += item[k]
+        for k in total_summary_dict:
+            if k in item_dict and isinstance(item_dict[k], (int, float)) and 'avg' not in k:
+                total_summary_dict[k] += item_dict[k]
         
         # Cộng dồn trọng số thời gian cho tổng
         total_weighted_proc += (row.weighted_proc_time or 0)
         total_weighted_ship += (row.weighted_ship_time or 0)
                 
     # Tính lại tỷ lệ tổng
-    total_summary['roi'] = (total_summary['profit'] / total_summary['total_cost']) if total_summary['total_cost'] > 0 else 0
-    total_summary['profit_margin'] = (total_summary['profit'] / total_summary['net_revenue']) if total_summary['net_revenue'] != 0 else 0
-    total_summary['take_rate'] = (total_summary['execution_cost'] / total_summary['gmv']) if total_summary['gmv'] > 0 else 0
+    total_summary_dict['roi'] = (total_summary_dict['profit'] / total_summary_dict['total_cost']) if total_summary_dict['total_cost'] > 0 else 0
+    total_summary_dict['profit_margin'] = (total_summary_dict['profit'] / total_summary_dict['net_revenue']) if total_summary_dict['net_revenue'] != 0 else 0
+    total_summary_dict['take_rate'] = (total_summary_dict['execution_cost'] / total_summary_dict['gmv']) if total_summary_dict['gmv'] > 0 else 0
     
     # Tính Avg Time Tổng
-    total_orders_all = total_summary['total_orders']
-    total_summary['avg_processing_time'] = (total_weighted_proc / total_orders_all) if total_orders_all > 0 else 0
-    total_summary['avg_shipping_time'] = (total_weighted_ship / total_orders_all) if total_orders_all > 0 else 0
+    total_orders_all = total_summary_dict['total_orders']
+    total_summary_dict['avg_processing_time'] = (total_weighted_proc / total_orders_all) if total_orders_all > 0 else 0
+    total_summary_dict['avg_shipping_time'] = (total_weighted_ship / total_orders_all) if total_orders_all > 0 else 0
     
     if final_data:
-        final_data.insert(0, total_summary)
+        final_data.insert(0, schemas.PlatformComparisonItem(**total_summary_dict))
         
     return final_data
 
@@ -472,18 +466,15 @@ def get_aggregated_customer_kpis(
     start_date: date, 
     end_date: date, 
     source_list: Optional[List[str]] = None
-) -> Dict[str, Any]:
+) -> schemas.CustomerKpisResponse:
     """
     Service lấy KPI Khách hàng tổng hợp và dữ liệu cho các biểu đồ CustomerPage.
     """
     # 1. Lấy dữ liệu Aggregate hiện tại (KPI Card & Segment Data)
-    aggregated = _fetch_and_aggregate_kpis(db, brand_id, start_date, end_date, source_list)
+    aggregated_obj = _fetch_and_aggregate_kpis(db, brand_id, start_date, end_date, source_list)
+    aggregated_dict = aggregated_obj.model_dump()
     
     # Lấy thêm dữ liệu Daily để vẽ biểu đồ Trend
-    # (Lưu ý: _fetch_and_aggregate_kpis không trả về daily_list, nên ta gọi lại hàm lấy list nếu cần trend)
-    # Tuy nhiên, để tối ưu ta có thể sửa _fetch_and_aggregate_kpis để trả về cả 2, 
-    # NHƯNG để an toàn và giữ code đơn giản như cam kết, ta gọi lại get_daily_kpis_for_range 
-    # (Do có Redis cache nên lần gọi thứ 2 sẽ rất nhanh, không đáng lo ngại)
     daily_kpis = get_daily_kpis_for_range(db, brand_id, start_date, end_date, source_list)
 
     # --- 2.1 Tính toán dữ liệu kỳ trước (Comparison) ---
@@ -492,29 +483,29 @@ def get_aggregated_customer_kpis(
     prev_start_date = prev_end_date - duration
     
     # Sử dụng helper mới cho kỳ trước
-    prev_aggregated = _fetch_and_aggregate_kpis(db, brand_id, prev_start_date, prev_end_date, source_list)
+    prev_aggregated_obj = _fetch_and_aggregate_kpis(db, brand_id, prev_start_date, prev_end_date, source_list)
 
     # --- 2.2 Xử lý Frequency Data (Sử dụng Helper mới) ---
-    frequency_data = _process_frequency_data(aggregated.get('frequency_distribution', {}))
+    frequency_data = _process_frequency_data(aggregated_dict.get('frequency_distribution', {}))
 
-    # 3. Chuẩn bị dữ liệu trả về
-    response = {
-        "total_customers": aggregated.get("total_customers", 0),
-        "new_customers": aggregated.get("new_customers", 0),
-        "returning_customers": aggregated.get("returning_customers", 0),
-        "retention_rate": aggregated.get("retention_rate", 0),
-        "arpu": aggregated.get("arpu", 0),
-        "ltv": aggregated.get("ltv", 0),
+    # 3. Chuẩn bị dữ liệu trả về theo Schema
+    response = schemas.CustomerKpisResponse(
+        total_customers=aggregated_dict.get("total_customers", 0),
+        new_customers=aggregated_dict.get("new_customers", 0),
+        returning_customers=aggregated_dict.get("returning_customers", 0),
+        retention_rate=aggregated_dict.get("retention_rate", 0),
+        arpu=aggregated_dict.get("arpu", 0),
+        ltv=aggregated_dict.get("ltv", 0),
         
-        "previous_period": prev_aggregated,
-        "trend_data": daily_kpis,
+        previous_period=prev_aggregated_obj.model_dump(),
+        trend_data=daily_kpis,
         
         # Dữ liệu phân khúc thật từ DB
-        "segment_data": aggregated.get("customer_segment_distribution", []) or [],
+        segment_data=aggregated_dict.get("customer_segment_distribution", []) or [],
         
         # Dữ liệu thật đã tính toán
-        "frequency_data": frequency_data
-    }
+        frequency_data=frequency_data
+    )
     
     return response
 
@@ -525,7 +516,7 @@ def get_aggregated_location_distribution(
     end_date: date,
     status_filter: List[str] = ['completed'], # Mặc định chỉ lấy đơn thành công cho Dashboard
     source_list: Optional[List[str]] = None
-):
+) -> List[schemas.CustomerMapDistributionItem]:
     """
     Tổng hợp dữ liệu phân bố địa lý từ DailyStat hoặc DailyAnalytics.
     Hỗ trợ cả Data Mới (có metrics chi tiết) và Data Cũ (chỉ có total).
@@ -537,7 +528,6 @@ def get_aggregated_location_distribution(
         if strategy == kpi_utils.STRATEGY_FILTERED:
              # Query DailyAnalytics
             daily_records = db.query(models.DailyAnalytics.location_distribution).filter(
-                models.DailyAnalytics.brand_id == brand_id,
                 models.DailyAnalytics.date.between(start_date, end_date),
                 models.DailyAnalytics.source.in_(clean_sources)
             ).all()
@@ -606,10 +596,6 @@ def get_aggregated_location_distribution(
                         province_stats[province]['cancelled'] += item['metrics'].get('cancelled', {}).get('orders', 0)
                         province_stats[province]['bomb'] += item['metrics'].get('bomb', {}).get('orders', 0)
                         province_stats[province]['refunded'] += item['metrics'].get('refunded', {}).get('orders', 0)
-                    else:
-                        # Fallback cho data cũ (cố gắng map nếu có thể, hoặc chấp nhận thiếu breakdown)
-                        # Ở đây tạm thời không làm gì vì data cũ không phân loại sâu được
-                        pass
                     
                     # Lấy tọa độ chuẩn từ file config (Fix lỗi dữ liệu cũ bị ngược)
                     coords = PROVINCE_CENTROIDS.get(province)
@@ -622,8 +608,12 @@ def get_aggregated_location_distribution(
                         province_stats[province]["latitude"] = item.get('latitude')
                         province_stats[province]["longitude"] = item.get('longitude')
                             
-        results = list(province_stats.values())
-        return sorted(results, key=lambda item: item['orders'], reverse=True)
+        # Validate từng item qua Schema
+        results = [schemas.CustomerMapDistributionItem(**stats) for stats in province_stats.values()]
+        return sorted(results, key=lambda item: item.orders, reverse=True)
+    except Exception as e:
+        print(f"ERROR aggregation location: {e}")
+        return []
     except Exception as e:
         print(f"ERROR aggregation location: {e}")
         return []
