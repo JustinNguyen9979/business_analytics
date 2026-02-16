@@ -12,6 +12,7 @@ import {
 // --- Icons ---
 import MenuIcon from '@mui/icons-material/Menu';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import QueryStatsIcon from '@mui/icons-material/QueryStats';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -34,74 +35,10 @@ import { useLayout } from '../context/LayoutContext';
 import { useNotification } from '../context/NotificationContext';
 import { BrandProvider, useBrand } from '../context/BrandContext';
 
-
-
 // --- Styled Components ---
-const drawerWidth = 240;
-
-const openedMixin = (theme) => ({
-  width: drawerWidth,
-  transition: theme.transitions.create('width', {
-    easing: theme.transitions.easing.sharp,
-    duration: theme.transitions.duration.enteringScreen,
-  }),
-  overflowX: 'hidden',
-});
-
-const closedMixin = (theme) => ({
-  transition: theme.transitions.create('width', {
-    easing: theme.transitions.easing.sharp,
-    duration: theme.transitions.duration.leavingScreen,
-  }),
-  overflowX: 'hidden',
-  width: `calc(${theme.spacing(7)} + 1px)`,
-  [theme.breakpoints.up('sm')]: {
-    width: `calc(${theme.spacing(8)} + 1px)`,
-  },
-});
-
-const DrawerHeader = styled('div')(({ theme }) => ({
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'flex-end',
-  padding: theme.spacing(0, 1),
-  ...theme.mixins.toolbar,
-}));
-
-const AppBar = styled(MuiAppBar, {
-  shouldForwardProp: (prop) => prop !== 'open',
-})(({ theme, open }) => ({
-  zIndex: theme.zIndex.drawer + 1,
-  transition: theme.transitions.create(['width', 'margin'], {
-    easing: theme.transitions.easing.sharp,
-    duration: theme.transitions.duration.leavingScreen,
-  }),
-  ...(open && {
-    marginLeft: drawerWidth,
-    width: `calc(100% - ${drawerWidth}px)`,
-    transition: theme.transitions.create(['width', 'margin'], {
-      easing: theme.transitions.easing.sharp,
-      duration: theme.transitions.duration.enteringScreen,
-    }),
-  }),
-}));
-
-const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' })(
-  ({ theme, open }) => ({
-    width: drawerWidth,
-    flexShrink: 0,
-    whiteSpace: 'nowrap',
-    boxSizing: 'border-box',
-    ...(open && {
-      ...openedMixin(theme),
-      '& .MuiDrawer-paper': openedMixin(theme),
-    }),
-    ...(!open && {
-      ...closedMixin(theme),
-      '& .MuiDrawer-paper': closedMixin(theme),
-    }),
-  }),
-);
+import { 
+    Drawer, AppBar, DrawerHeader, SidebarToggle 
+} from '../components/StyledComponents';
 
 // --- Component con chứa toàn bộ layout và logic sau khi đã có context ---
 function LayoutWithBrandContext() {
@@ -174,58 +111,34 @@ function LayoutWithBrandContext() {
         <Box sx={{ display: 'flex' }}>
             <CssBaseline />
 
-            {/* <AppBar position="fixed" open={isSidebarOpen}>
-                <Toolbar>
-                    <IconButton color="inherit" aria-label="open drawer" onClick={() => setIsSidebarOpen(!isSidebarOpen)} edge="start" sx={{ marginRight: 5, ...(isSidebarOpen && { display: 'none' }) }}>
-                        <MenuIcon />
-                    </IconButton>
-                    <Typography variant="h6" noWrap component="div">
-                        Dashboard: {brandName}
-                    </Typography>
-                </Toolbar>
-            </AppBar> */}
-
             <Drawer variant="permanent" open={isSidebarOpen}>
-                <DrawerHeader>
-                    {isSidebarOpen ? (
-                        // --- TRẠNG THÁI MỞ RỘNG ---
-                        <>
-                            <Box
-                                component={RouterLink}
-                                to={`/dashboard/${brandIdentifier}`}
-                                sx={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    pl: 1,
-                                    textDecoration: 'none',
-                                    color: 'inherit',
-                                    flexGrow: 1, // Cho phép box này chiếm không gian
-                                }}
-                            >
-                                <QueryStatsIcon sx={{ color: 'primary.main', mr: 1.5, fontSize: 30 }} />
-                                <Typography variant="h6" noWrap>Analytics</Typography>
-                            </Box>
-                            <IconButton onClick={() => setIsSidebarOpen(false)}>
-                                <ChevronLeftIcon />
-                            </IconButton>
-                        </>
-                    ) : (
-                        // --- TRẠNG THÁI THU GỌN ---
-                        <IconButton
-                            component={RouterLink}
-                            to={`/dashboard/${brandIdentifier}`}
-                            onClick={() => setIsSidebarOpen(true)}
-                            sx={{
-                                width: '100%',
-                                height: '100%',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                            }}
-                        >
-                            <QueryStatsIcon sx={{ color: 'primary.main', fontSize: 30 }} />
-                        </IconButton>
-                    )}
+                <SidebarToggle onClick={() => setIsSidebarOpen(!isSidebarOpen)} size="small">
+                    {isSidebarOpen ? <ChevronLeftIcon fontSize="small" /> : <ChevronRightIcon fontSize="small" />}
+                </SidebarToggle>
+
+                <DrawerHeader sx={{ 
+                    justifyContent: isSidebarOpen ? 'flex-start' : 'center',
+                    px: isSidebarOpen ? 2 : 0,
+                    minHeight: 64
+                }}>
+                    <Box
+                        component={RouterLink}
+                        to={`/dashboard/${brandIdentifier}`}
+                        sx={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            textDecoration: 'none',
+                            color: 'inherit',
+                            minWidth: 0,
+                        }}
+                    >
+                        <QueryStatsIcon sx={{ color: 'primary.main', fontSize: 30, mr: isSidebarOpen ? 1.5 : 0 }} />
+                        {isSidebarOpen && (
+                            <Typography variant="h6" noWrap sx={{ fontWeight: 700, letterSpacing: '-0.5px' }}>
+                                Analytics
+                            </Typography>
+                        )}
+                    </Box>
                 </DrawerHeader>
                 <Divider />
                 <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>

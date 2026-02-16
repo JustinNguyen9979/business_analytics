@@ -1,10 +1,107 @@
 // FILE: frontend/src/components/StyledComponents.js
 
 import { styled, alpha } from '@mui/material/styles';
-import { Card, Box, TextField, Paper, Typography, Avatar, TableRow, Tooltip, IconButton } from '@mui/material';
+import { Card, Box, TextField, Paper, Typography, Avatar, TableRow, Tooltip, IconButton, Drawer as MuiDrawer, AppBar as MuiAppBar } from '@mui/material';
 import React, { useState } from 'react';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+
+// --- LAYOUT CONSTANTS ---
+export const drawerWidth = 240;
+
+// --- LAYOUT MIXINS ---
+export const openedMixin = (theme) => ({
+    width: drawerWidth,
+    transition: theme.transitions.create('width', {
+        easing: theme.transitions.easing.sharp,
+        duration: theme.transitions.duration.enteringScreen,
+    }),
+    overflowX: 'hidden',
+});
+
+export const closedMixin = (theme) => ({
+    transition: theme.transitions.create('width', {
+        easing: theme.transitions.easing.sharp,
+        duration: theme.transitions.duration.leavingScreen,
+    }),
+    overflowX: 'hidden',
+    width: `calc(${theme.spacing(7)} + 1px)`,
+    [theme.breakpoints.up('sm')]: {
+        width: `calc(${theme.spacing(8)} + 1px)`,
+    },
+});
+
+// --- LAYOUT COMPONENTS ---
+
+export const DrawerHeader = styled('div')(({ theme }) => ({
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    padding: theme.spacing(0, 1),
+    ...theme.mixins.toolbar,
+}));
+
+export const AppBar = styled(MuiAppBar, {
+    shouldForwardProp: (prop) => prop !== 'open',
+})(({ theme, open }) => ({
+    zIndex: theme.zIndex.drawer + 1,
+    transition: theme.transitions.create(['width', 'margin'], {
+        easing: theme.transitions.easing.sharp,
+        duration: theme.transitions.duration.leavingScreen,
+    }),
+    ...(open && {
+        marginLeft: drawerWidth,
+        width: `calc(100% - ${drawerWidth}px)`,
+        transition: theme.transitions.create(['width', 'margin'], {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+        }),
+    }),
+}));
+
+export const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' })(
+    ({ theme, open }) => ({
+        width: drawerWidth,
+        flexShrink: 0,
+        whiteSpace: 'nowrap',
+        boxSizing: 'border-box',
+        '& .MuiDrawer-paper': {
+            overflow: 'visible',
+            borderRight: `1px solid ${theme.palette.divider}`,
+        },
+        ...(open && {
+            ...openedMixin(theme),
+            '& .MuiDrawer-paper': { ...openedMixin(theme), overflow: 'visible' },
+        }),
+        ...(!open && {
+            ...closedMixin(theme),
+            '& .MuiDrawer-paper': { ...closedMixin(theme), overflow: 'visible' },
+        }),
+    }),
+);
+
+export const SidebarToggle = styled(IconButton, {
+    shouldForwardProp: (prop) => prop !== 'open',
+})(({ theme, open }) => ({
+    position: 'absolute',
+    top: 32,
+    right: -12,
+    zIndex: theme.zIndex.drawer + 2,
+    width: 24,
+    height: 24,
+    backgroundColor: theme.palette.background.paper,
+    border: `1px solid ${theme.palette.divider}`,
+    boxShadow: theme.shadows[2],
+    padding: 0,
+    '&:hover': {
+        backgroundColor: theme.palette.primary.main,
+        color: theme.palette.primary.contrastText,
+    },
+    transition: theme.transitions.create(['right', 'background-color'], {
+        easing: theme.transitions.easing.sharp,
+        duration: theme.transitions.duration.shortest,
+    }),
+}));
 
 // Styled Component cho Card "Thêm mới" (đã có)
 export const StyledAddCard = styled(Card)(({ theme }) => ({
