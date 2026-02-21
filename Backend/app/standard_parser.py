@@ -576,7 +576,7 @@ def process_standard_file(db: Session, file_content: bytes, brand_id: int, sourc
         # --- BƯỚC 4: XỬ LÝ SHEET MARKETING ---
         if marketing_sheet:
             print(f"Đang xử lý sheet '{marketing_sheet}'...")
-            df_marketing = pd.read_excel(xls, sheet_name=marketing_sheet, header=0).fillna(0)
+            df_marketing = pd.read_excel(xls, sheet_name=marketing_sheet, header=1).fillna(0)
             if not df_marketing.empty:
                 count = 0
                 for _, row in df_marketing.iterrows():

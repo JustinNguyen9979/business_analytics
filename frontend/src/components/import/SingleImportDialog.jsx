@@ -254,7 +254,14 @@ function SingleImportDialog({ open, onClose, onUploadComplete, brandSlug }) {
                 </DialogContent>
 
                 <DialogActions>
-                    <Button href="/Standard_Template.xlsx" download="Standard_Template.xlsx" startIcon={<DownloadIcon />} color="inherit" size="small" sx={{ mr: 'auto', opacity: 0.7 }}>
+                    <Button 
+                        href={`/api/brands/${brandSlug}/download-sample-file`} 
+                        download 
+                        startIcon={<DownloadIcon />} 
+                        color="inherit" 
+                        size="small" 
+                        sx={{ mr: 'auto', opacity: 0.7 }}
+                    >
                         Tải file mẫu
                     </Button>
                     <Button onClick={() => !isWorking && onClose()} disabled={isWorking} color="inherit"> Hủy </Button>

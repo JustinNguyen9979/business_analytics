@@ -4,12 +4,15 @@ import json, crud, models, schemas, standard_parser
 from services.search_service import search_service
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, status, Query, Body, Request
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import ORJSONResponse
+from fastapi.responses import ORJSONResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Union
 from database import SessionLocal, engine
 from datetime import date
+import pandas as pd
+import io
+from openpyxl.styles import Font, PatternFill, Alignment
 from cache import redis_client
 from celery_worker import process_data_request, recalculate_all_brand_data, recalculate_brand_data_specific_dates
 from slowapi import _rate_limit_exceeded_handler
@@ -289,6 +292,118 @@ def recalculate_brand_data(request: Request, brand: models.Brand = Depends(get_b
     """Tính toán lại toàn bộ dữ liệu của một brand một cách đồng bộ."""
     result = crud.recalculate_brand_data_sync(db, brand_id=brand.id)
     return result
+
+@app.get("/brands/{brand_slug}/download-sample-file")
+def download_sample_file(brand: models.Brand = Depends(get_brand_from_slug)):
+    """Tạo và trả về file Excel mẫu với định dạng chuyên nghiệp: màu sắc và kích thước cột."""
+    output = io.BytesIO()
+    
+    # Định nghĩa style
+    note_fill = PatternFill(start_color="D9E1F2", end_color="D9E1F2", fill_type="solid")  # Xanh nhạt
+    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid") # Xanh đậm
+    white_font = Font(color="FFFFFF", bold=True)
+    bold_font = Font(bold=True)
+    center_align = Alignment(horizontal="center", vertical="center")
+
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        # 1. Sheet Giá vốn
+        df_cost = pd.DataFrame([
+            {'sku': 'SP001', 'name': 'Sản phẩm mẫu A', 'cost_price': 100000},
+            {'sku': 'SP002', 'name': 'Sản phẩm mẫu B', 'cost_price': 150000}
+        ])
+        df_cost.to_excel(writer, sheet_name='Giá vốn', index=False, startrow=1)
+        ws = writer.sheets['Giá vốn']
+        notes = ["Mã SKU (Bắt buộc)", "Tên Sản Phẩm", "Giá Vốn Nhập Kho"]
+        
+        # Thiết lập độ rộng cột
+        widths = {'A': 30, 'B': 60, 'C': 20}
+        for col, width in widths.items(): ws.column_dimensions[col].width = width
+        
+        # Style cho Row 1 (Notes) và Row 2 (Headers)
+        for col_num, note in enumerate(notes, 1):
+            cell_n = ws.cell(row=1, column=col_num)
+            cell_n.value = note
+            cell_n.fill = note_fill
+            cell_n.font = bold_font
+            cell_n.alignment = center_align
+            
+            cell_h = ws.cell(row=2, column=col_num)
+            cell_h.fill = header_fill
+            cell_h.font = white_font
+            cell_h.alignment = center_align
+
+        # 2. Sheet Đơn hàng
+        df_order = pd.DataFrame([{
+            'order_id': 'ORD12345', 
+            'order_status': 'Completed', 
+            'cancel_reason': '',
+            'tracking_id': 'ORD12345',
+            'order_date': '2024-01-01 10:00:00', 
+            'shipped_time': '2024-01-02 14:00:00', 
+            'delivered_date': '2024-01-03 15:00:00',
+            'sku': 'SP001', 
+            'quantity': 2, 
+            'original_price': 250000, 
+            'subsidy_amount': 10000,
+            'sku_price': 200000, 
+            'username': 'customer_01', 
+            'payment_method': 'COD', 
+            'shipping_provider_name': 'Shopee Xpress', 'province': 'Hà Nội', 'district': 'Quận Cầu Giấy', 'address': 'Số 1 Duy Tân',
+            'phone': '0912345678', 'email': 'khachhang@example.com', 'gender': 'Nữ'
+        }])
+        df_order.to_excel(writer, sheet_name='Đơn hàng', index=False, startrow=1)
+        ws = writer.sheets['Đơn hàng']
+        notes = ["Mã Đơn Hàng", "Trạng Thái", "Lý Do Hủy", "Vận Đơn", "Ngày Đặt Hàng",  "Ngày Gửi Kho", "Ngày Giao", "SKU", "Số Lượng", "Giá Niêm Yết", "Trợ Giá", "Giá Bán", "Khách Hàng", "Thanh Toán", "Vận Chuyển", "Tỉnh", "Quận", "Địa Chỉ", "SĐT", "Email", "Giới Tính"]
+        
+        # Thiết lập độ rộng cột (A-U)
+        for i, width in enumerate([20, 22, 25, 22, 20, 20, 20, 20, 10, 15, 15, 15, 15, 20, 20, 15, 15, 15, 25, 30, 10], 1):
+            ws.column_dimensions[chr(64+i) if i <= 26 else 'A'+chr(64+i-26)].width = width
+
+        for col_num, note in enumerate(notes, 1):
+            ws.cell(row=1, column=col_num).value = note
+            ws.cell(row=1, column=col_num).fill = note_fill
+            ws.cell(row=1, column=col_num).font = bold_font
+            ws.cell(row=2, column=col_num).fill = header_fill
+            ws.cell(row=2, column=col_num).font = white_font
+
+        # 3. Sheet Doanh thu
+        df_revenue = pd.DataFrame([{
+            'order_id': 'ORD12345', 'order_refund': 'ORD-RE12345', 'order_date': '2024-01-01', 'transaction_date': '2024-01-04',
+            'net_revenue': 390000, 'gmv': 500000, 'total_fees': 50000, 'refund': 0
+        }])
+        df_revenue.to_excel(writer, sheet_name='Doanh thu', index=False, startrow=1)
+        ws = writer.sheets['Doanh thu']
+        notes = ["Mã Đơn Hàng", "Mã Đơn Hoàn", "Ngày Đặt", "Ngày Tiền Về", "Thực Nhận", "GMV", "Phí Sàn", "Hoàn Trả"]
+        for i, width in enumerate([25, 30, 18, 18, 15, 15, 15, 15], 1): ws.column_dimensions[chr(64+i)].width = width
+        for col_num, note in enumerate(notes, 1):
+            ws.cell(row=1, column=col_num).value = note
+            ws.cell(row=1, column=col_num).fill = note_fill
+            ws.cell(row=1, column=col_num).font = bold_font
+            ws.cell(row=2, column=col_num).fill = header_fill
+            ws.cell(row=2, column=col_num).font = white_font
+
+        # 4. Sheet Marketing
+        df_marketing = pd.DataFrame([{
+            'ads_date': '2024-01-01', 'adSpend': 500000, 'conversion': 10, 'impressions': 1000, 'click': 100
+        }])
+        df_marketing.to_excel(writer, sheet_name='Marketing', index=False, startrow=1)
+        ws = writer.sheets['Marketing']
+        notes = ["Ngày Chạy QC", "Chi Phí", "Chuyển Đổi", "Hiển Thị", "Click"]
+        for i, width in enumerate([18, 15, 12, 12, 12], 1): ws.column_dimensions[chr(64+i)].width = width
+        for col_num, note in enumerate(notes, 1):
+            ws.cell(row=1, column=col_num).value = note
+            ws.cell(row=1, column=col_num).fill = note_fill
+            ws.cell(row=1, column=col_num).font = bold_font
+            ws.cell(row=2, column=col_num).fill = header_fill
+            ws.cell(row=2, column=col_num).font = white_font
+
+    output.seek(0)
+    filename = f"Template_Bao_Cao_{brand.slug}.xlsx"
+    return StreamingResponse(
+        output, 
+        media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers={'Content-Disposition': f'attachment; filename="{filename}"'}
+    )
 
 # ==============================================================================
 # === 3. ENDPOINTS LẤY DỮ LIỆU CHO DASHBOARD (DATA RETRIEVAL) ===
