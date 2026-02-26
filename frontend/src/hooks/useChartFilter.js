@@ -14,6 +14,7 @@ export const useChartFilter = (globalState) => {
     // 1. State nội bộ (Local)
     const [dateRange, setDateRange] = useState(globalState?.dateRange || [dayjs().startOf('month'), dayjs().endOf('month')]);
     const [dateLabel, setDateLabel] = useState(globalState?.dateLabel || 'Tháng này');
+    const [dateType, setDateType] = useState(globalState?.dateType || 'this_month');
     const [selectedSources, setSelectedSources] = useState(globalState?.selectedSources || ['all']);
     
     // State quản lý Menu Date
@@ -25,11 +26,12 @@ export const useChartFilter = (globalState) => {
         if (globalState) {
             if (globalState.dateRange) setDateRange(globalState.dateRange);
             if (globalState.dateLabel) setDateLabel(globalState.dateLabel);
+            if (globalState.dateType) setDateType(globalState.dateType);
             // Lưu ý: OperationPage chưa có filter Source tổng, nên tạm thời chưa sync source
             // Nếu sau này có source tổng, thêm dòng này:
             // if (globalState.selectedSources) setSelectedSources(globalState.selectedSources);
         }
-    }, [globalState?.dateRange, globalState?.dateLabel, globalState?.selectedSources]);
+    }, [globalState?.dateRange, globalState?.dateLabel, globalState?.dateType, globalState?.selectedSources]);
 
     // 3. Handlers cho Local (Memoized)
     const openDateMenu = useCallback((event) => setDateAnchorEl(event.currentTarget), []);
@@ -40,6 +42,8 @@ export const useChartFilter = (globalState) => {
         const shortcut = dateShortcuts.find(s => s.type === typeOrLabel);
         
         let displayLabel = typeOrLabel;
+        let finalType = typeOrLabel;
+
         if (shortcut) {
             displayLabel = shortcut.label;
         } else if (typeOrLabel === 'custom') {
@@ -48,6 +52,7 @@ export const useChartFilter = (globalState) => {
 
         setDateRange(range);
         setDateLabel(displayLabel);
+        setDateType(finalType);
         closeDateMenu();
     }, [closeDateMenu]);
 
@@ -59,6 +64,7 @@ export const useChartFilter = (globalState) => {
         // Date Props
         dateRange,
         dateLabel,
+        dateType,
         dateMenuProps: {
             anchorEl: dateAnchorEl,
             open: Boolean(dateAnchorEl),
@@ -71,5 +77,5 @@ export const useChartFilter = (globalState) => {
         // Source Props
         selectedSources,
         applySourceFilter
-    }), [dateRange, dateLabel, dateAnchorEl, selectedSources, closeDateMenu, applyDateRange, openDateMenu, applySourceFilter]);
+    }), [dateRange, dateLabel, dateType, dateAnchorEl, selectedSources, closeDateMenu, applyDateRange, openDateMenu, applySourceFilter]);
 };

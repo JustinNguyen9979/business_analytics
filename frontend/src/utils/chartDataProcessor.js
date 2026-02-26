@@ -13,28 +13,33 @@ dayjs.extend(advancedFormat);
 
 /**
  * Xác định loại tổng hợp dữ liệu (ngày, tuần, tháng) dựa trên bộ lọc.
- * @param {string} filterType - Loại bộ lọc ('year', 'quarter', 'month').
  * @param {Array<dayjs>} dateRange - Khoảng thời gian [start, end].
+ * @param {string} filterType - Loại bộ lọc ('year', 'quarter', 'month').
  * @returns {'day' | 'week' | 'month'}
  */
-export const determineAggregation = (dateRange) => {
+export const determineAggregation = (dateRange, filterType = null) => {
     const [start, end] = dateRange;
 
     if (!start || !end) return 'day';
 
+    // Ưu tiên theo Type nếu có
+    if (filterType === 'this_year' || filterType === 'year') {
+        return 'month';
+    }
+
     // Tính tổng số ngày trong khoảng thời gian, cộng 1 để bao gồm cả ngày cuối.
     const totalDays = end.diff(start, 'day') + 1;
 
-    // Ước tính số tháng. Dùng số ngày trung bình trong tháng (365.25 / 12 = 30.4375)
-    const estimatedMonths = totalDays / 30.4375;
+    // Ước tính số tháng. Dùng số ngày trung bình trong tháng (30.44)
+    const estimatedMonths = totalDays / 30.44;
 
-    if (estimatedMonths >= 11.5) { // Dùng 11.5 thay vì 12 để account cho sai số nhỏ (ví dụ 11.9x vẫn tính là 12 tháng)
+    if (estimatedMonths >= 11.5) { 
         return 'month'; // Từ ~12 tháng trở lên -> xem theo tháng
     }
-    if (estimatedMonths > 2.2) { // Dùng 1.5 thay vì 2 để account cho sai số nhỏ (ví dụ 1.9x vẫn tính là 2 tháng)
-        return 'week';  // Từ ~2 tháng đến dưới ~12 tháng -> xem theo tuần
+    if (estimatedMonths >= 1.5) { 
+        return 'week';  // Từ ~1.5 tháng (45 ngày) -> xem theo tuần
     }
-    return 'day';       // Dưới ~2 tháng -> xem theo ngày
+    return 'day';       // Dưới ~45 ngày -> xem theo ngày
 };
 
 /**
@@ -50,21 +55,20 @@ export const processChartData = (dailyData, chartDateRange, preCalculatedType = 
         return { aggregatedData: [], aggregationType: 'day' };
     }
 
-    const { range } = chartDateRange; // Chỉ cần range
+    const { range, type } = chartDateRange; 
     const [startDate, endDate] = range;
     
     // Nếu Backend đã tính sẵn, dùng luôn type đó. Nếu không, tự tính.
-    const aggregationType = preCalculatedType || determineAggregation(range);
+    const aggregationType = preCalculatedType || determineAggregation(range, type);
 
     // Nếu dữ liệu rỗng (do lọc không ra kết quả), trả về rỗng ngay
     if (dailyData.length === 0) {
         return { aggregatedData: [], aggregationType };
     }
 
-    // [OPTIMIZATION] Nếu Backend đã tính sẵn (preCalculatedType có giá trị và != day)
+    // [OPTIMIZATION] Nếu Backend đã tính sẵn và khớp với yêu cầu (không phải 'day' mặc định khi Frontend muốn gộp sâu hơn)
     // Hoặc logic tự động quyết định là 'day' -> Không cần loop gom nhóm
-    if ((preCalculatedType && preCalculatedType !== 'day') || aggregationType === 'day') {
-        // console.log(`[Processor] Using pre-calculated data for '${aggregationType}'`);
+    if ((preCalculatedType && preCalculatedType === aggregationType) || aggregationType === 'day') {
         return { aggregatedData: dailyData, aggregationType };
     }
     

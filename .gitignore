@@ -12,3 +12,4 @@ __pycache__/
 .DS_Store
 .dockerignore
 .envpostgres_data/
+postgres_data

@@ -17,6 +17,7 @@ const MarketingPage = lazy(() => import('./pages/MarketingPage'));
 const OperationPage = lazy(() => import('./pages/OperationPage'));
 const CustomerPage = lazy(() => import('./pages/CustomerPage'));
 const SearchPage = lazy(() => import('./pages/SearchPage'));
+const AuthPage = lazy(() => import('./pages/AuthPage'));
 
 const PageLoader = () => (
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', width: '100%' }}>
@@ -33,6 +34,7 @@ function App() {
                     {/* 3. Bọc Routes bằng Suspense */}
                     <Suspense fallback={<PageLoader />}>
                         <Routes>
+                            <Route path="/login" element={<AuthPage />} />
                             <Route path="/" element={<BrandLobby />} />
                             <Route element={<DashboardLayout />}>
                                 <Route path="/dashboard/:brandIdentifier" element={<DashboardPage />} />

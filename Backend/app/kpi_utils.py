@@ -231,6 +231,7 @@ def merge_location_lists(lists_of_locations: List[List[Dict]]) -> List[Dict]:
                     'latitude': item.get('latitude'),
                     'longitude': item.get('longitude'),
                     'metrics': defaultdict(lambda: {"orders": 0, "revenue": 0}),
+                    'districts': defaultdict(lambda: {"orders": 0, "revenue": 0}),
                     # Legacy fields aggregation
                     'orders': 0, 'revenue': 0 
                 }
@@ -241,8 +242,15 @@ def merge_location_lists(lists_of_locations: List[List[Dict]]) -> List[Dict]:
                 for status, val in item_metrics.items():
                     province_map[province]['metrics'][status]['orders'] += val.get('orders', 0)
                     province_map[province]['metrics'][status]['revenue'] += val.get('revenue', 0)
+
+            # 2. Merge Districts (Format Mới cho Drill-down)
+            item_districts = item.get('districts')
+            if item_districts and isinstance(item_districts, dict):
+                for district, val in item_districts.items():
+                    province_map[province]['districts'][district]['orders'] += val.get('orders', 0)
+                    province_map[province]['districts'][district]['revenue'] += val.get('revenue', 0)
             
-            # 2. Merge Legacy Fields (Cho dữ liệu cũ chưa có metrics)
+            # 3. Merge Legacy Fields (Cho dữ liệu cũ chưa có metrics)
             province_map[province]['orders'] += (item.get('orders') or 0)
             province_map[province]['revenue'] += (item.get('revenue') or 0)
             
@@ -254,7 +262,9 @@ def merge_location_lists(lists_of_locations: List[List[Dict]]) -> List[Dict]:
     for province, data in province_map.items():
         # Clean up defaultdict
         metrics_clean = {k: dict(v) for k, v in data["metrics"].items()}
+        districts_clean = {k: dict(v) for k, v in data["districts"].items()}
         data["metrics"] = metrics_clean
+        data["districts"] = districts_clean
         results.append(data)
 
     results.sort(key=lambda x: x['orders'], reverse=True)
@@ -760,21 +770,30 @@ def _calculate_location_distribution(
                 "longitude": coords[0], # Vị trí 0 trong centroids là Longitude
                 "orders": 0,
                 "revenue": 0,
-                "metrics": defaultdict(lambda: {"orders": 0, "revenue": 0})
+                "metrics": defaultdict(lambda: {"orders": 0, "revenue": 0}),
+                "districts": defaultdict(lambda: {"orders": 0, "revenue": 0})
             }
 
-        # 6. Cộng dồn số liệu tổng quát và chi tiết theo status
+        # 6. Cộng dồn số liệu tổng quát và chi tiết theo status và district
         stats = province_stats[normalized_province]
         stats["orders"] += 1
         stats["revenue"] += revenue
         stats["metrics"][status_cat]["orders"] += 1
         stats["metrics"][status_cat]["revenue"] += revenue
 
+        # Thêm thông tin district (nếu có)
+        raw_district = details.get('district')
+        if raw_district:
+            # Có thể thêm chuẩn hóa district ở đây nếu cần, hiện tại giữ nguyên bản
+            stats["districts"][raw_district]["orders"] += 1
+            stats["districts"][raw_district]["revenue"] += revenue
+
     # 7. Chuyển đổi sang danh sách và định dạng lại kết quả
     results = []
     for prov, data in province_stats.items():
         # Làm sạch defaultdict sang dict thường để lưu JSONB
         data["metrics"] = {k: dict(v) for k, v in data["metrics"].items()}
+        data["districts"] = {k: dict(v) for k, v in data["districts"].items()}
         results.append(data)
 
     # Sắp xếp theo thứ tự tỉnh có nhiều đơn nhất

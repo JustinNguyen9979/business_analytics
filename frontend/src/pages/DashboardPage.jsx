@@ -43,8 +43,9 @@ function DashboardPage() {
     // Tạo state tổng để truyền xuống con
     const globalFilterState = useMemo(() => ({
         dateRange: globalDateFilter.filter.range,
-        dateLabel: globalDateFilter.buttonProps.children
-    }), [globalDateFilter.filter.range, globalDateFilter.buttonProps.children]);
+        dateLabel: globalDateFilter.buttonProps.children,
+        dateType: globalDateFilter.filter.type
+    }), [globalDateFilter.filter.range, globalDateFilter.buttonProps.children, globalDateFilter.filter.type]);
 
     // 2. TẠO CÁC BỘ LỌC CON (LOCAL FILTERS) - KẾ THỪA TỪ CHA
     const kpiFilterControl = useChartFilter(globalFilterState);
@@ -56,17 +57,17 @@ function DashboardPage() {
     // 3. MAPPING DỮ LIỆU CHO HOOK FETCH DATA
     // Lưu ý: useChartFilter trả về trực tiếp dateRange, ta cần map về format { range: ... } để useDashboardData hiểu
     const filtersForHook = useMemo (() => ({
-        kpi: { range: kpiFilterControl.dateRange, type: 'custom' },
-        lineChart: { range: lineChartFilterControl.dateRange, type: 'custom' },
-        donut: { range: donutFilterControl.dateRange, type: 'custom' },
-        topProducts: { range: topProductsFilterControl.dateRange, type: 'custom' },
-        map: { range: mapFilterControl.dateRange, type: 'custom' },
+        kpi: { range: kpiFilterControl.dateRange, type: kpiFilterControl.dateType },
+        lineChart: { range: lineChartFilterControl.dateRange, type: lineChartFilterControl.dateType },
+        donut: { range: donutFilterControl.dateRange, type: donutFilterControl.dateType },
+        topProducts: { range: topProductsFilterControl.dateRange, type: topProductsFilterControl.dateType },
+        map: { range: mapFilterControl.dateRange, type: mapFilterControl.dateType },
     }), [
-        kpiFilterControl.dateRange,
-        lineChartFilterControl.dateRange,
-        donutFilterControl.dateRange,
-        topProductsFilterControl.dateRange,
-        mapFilterControl.dateRange,
+        kpiFilterControl.dateRange, kpiFilterControl.dateType,
+        lineChartFilterControl.dateRange, lineChartFilterControl.dateType,
+        donutFilterControl.dateRange, donutFilterControl.dateType,
+        topProductsFilterControl.dateRange, topProductsFilterControl.dateType,
+        mapFilterControl.dateRange, mapFilterControl.dateType,
     ]);
 
     const dashboardState = useDashboardData(brandSlug, filtersForHook)

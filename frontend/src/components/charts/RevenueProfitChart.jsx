@@ -85,7 +85,7 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
     };
 
     // 3. CUSTOM TOOLTIP
-    const CustomTooltip = ({ active, payload, label }) => {
+    const CustomTooltip = ({ active, payload }) => {
         if (active && payload && payload.length) {
             // Lấy label từ payload
             const rawLabel = payload[0].payload.originalDate || payload[0].payload[xKey];
@@ -104,7 +104,8 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                     borderRadius: 2, 
                     p: 2, 
                     boxShadow: theme.shadows[4],
-                    minWidth: 200
+                    minWidth: 200,
+                    zIndex: 1000
                 }}>
                     <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 700, color: theme.palette.text.primary, borderBottom: `1px solid ${theme.palette.divider}`, pb: 1 }}>
                         {dateLabel}
@@ -113,10 +114,14 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                         // Bỏ qua các dòng ẩn (nếu có)
                         if (entry.value === undefined || entry.value === null) return null;
                         
-                        const isComparison = entry.dataKey.endsWith('_prev');
+                        const isComparison = entry.dataKey.toString().endsWith('_prev');
                         const baseKey = isComparison ? entry.dataKey.replace('_prev', '') : entry.dataKey;
                         const seriesConfig = series.find(s => (s.key || s.dataKey) === baseKey);
-                        const name = seriesConfig ? (seriesConfig.name || seriesConfig.label) : entry.name;
+                        
+                        let name = seriesConfig ? (seriesConfig.name || seriesConfig.label) : entry.name;
+                        if (isComparison && !name.includes('Kỳ trước')) {
+                            name += ' (Kỳ trước)';
+                        }
                         
                         return (
                             <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1, gap: 2 }}>
@@ -124,14 +129,14 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                                     <Box sx={{ 
                                         width: 12, height: 4, 
                                         borderRadius: 1, 
-                                        bgcolor: entry.color,
+                                        bgcolor: entry.color || entry.stroke,
                                         opacity: isComparison ? 0.6 : 1 
                                     }} />
                                     <Typography variant="body2" sx={{ color: isComparison ? theme.palette.text.secondary : theme.palette.text.primary, fontStyle: isComparison ? 'italic' : 'normal' }}>
-                                        {name} {isComparison ? '(Kỳ trước)' : ''}:
+                                        {name}:
                                     </Typography>
                                 </Box>
-                                <Typography variant="body2" sx={{ fontWeight: 600, color: entry.color }}>
+                                <Typography variant="body2" sx={{ fontWeight: 600, color: entry.color || entry.stroke }}>
                                     {entry.value.toLocaleString()}{unit}
                                 </Typography>
                             </Box>
@@ -170,7 +175,7 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                             textAnchor: 'end'
                         }}
                         height={45} // Giảm từ 60 xuống 45
-                        interval={0}
+                        interval={aggregationType === 'month' ? 0 : 'preserveStartEnd'}
                     />
                     
                     <YAxis 
@@ -185,7 +190,7 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                     />
                     
                     {!hideTooltip && (
-                        <Tooltip content={<CustomTooltip />} cursor={{ stroke: theme.palette.divider, strokeWidth: 1, strokeDasharray: '4 4' }} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ stroke: theme.palette.divider, strokeWidth: 1, strokeDasharray: '4 4' }} isAnimationActive={false} />
                     )}
                     
                     <Legend 
@@ -194,7 +199,7 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                         iconType="plainline"
                         iconSize={14}
                         wrapperStyle={{ paddingTop: '10px' }} // Giảm từ 20px xuống 10px
-                        formatter={(value, entry) => {
+                        formatter={(value) => {
                             return <span style={{ color: theme.palette.text.primary, marginRight: 15, fontSize: '11px' }}>{value}</span>;
                         }}
                     />
@@ -217,7 +222,8 @@ function RevenueProfitChart({ data, comparisonData, series = [], aggregationType
                                         strokeDasharray="4 4"
                                         opacity={0.6}
                                         dot={false}
-                                        activeDot={false}
+                                        activeDot={{ r: 4, strokeWidth: 0 }}
+                                        connectNulls
                                     />
                                 )}
                                 

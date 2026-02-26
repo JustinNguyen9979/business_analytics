@@ -44,7 +44,7 @@ def clone_brand(db, brand_id: int):
         count += 1
         new_name = f"{original.name} - Copy {count}"
         
-    return brand.create(db, obj_in=BrandCreate(name=new_name))
+    return brand.create(db, obj_in=BrandCreate(name=new_name), owner_id=original.owner_id)
 
 def recalculate_brand_data_sync(db, brand_id: int):
     """

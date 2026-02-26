@@ -324,11 +324,36 @@ class SearchNotFoundResponse(MessageResponse):
 
 
 class TaskStatusResponse(BaseModel):
-
     """Phản hồi trạng thái xử lý của task"""
-
     status: str
-
     data: Optional[Any] = None
-
     error: Optional[str] = None
+
+from models import UserRole
+
+# --- USER & AUTH ---
+class UserBase(BaseModel):
+    username: str
+    email: str
+    full_name: Optional[str] = None
+    role: Optional[UserRole] = UserRole.VIEWER
+
+class UserCreate(UserBase):
+    password: str
+
+class User(UserBase, ORMBase):
+    id: str
+    is_active: bool
+    created_at: datetime.datetime
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+    role: Optional[str] = None
+
+class UserLogin(BaseModel):
+    username: str
+    password: str

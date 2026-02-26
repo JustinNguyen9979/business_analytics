@@ -25,9 +25,9 @@ class CRUDBrand(CRUDBase[Brand, BrandCreate, BrandBase]):
     def get_by_name(self, db: Session, *, name: str) -> Optional[Brand]:
         return db.query(self.model).filter(self.model.name == name).first()
 
-    def create(self, db: Session, *, obj_in: BrandCreate) -> Optional[Brand]:
+    def create(self, db: Session, *, obj_in: BrandCreate, owner_id: str) -> Optional[Brand]:
         """
-        Override hàm create để tự động sinh slug duy nhất.
+        Override hàm create để tự động sinh slug duy nhất và gán owner_id.
         """
         clean_name = obj_in.name.strip()
         # Check trùng tên (Case insensitive)
@@ -42,7 +42,7 @@ class CRUDBrand(CRUDBase[Brand, BrandCreate, BrandBase]):
             unique_slug = f"{base_slug}-{counter}"
             counter += 1
 
-        db_obj = self.model(name=clean_name, slug=unique_slug)
+        db_obj = self.model(name=clean_name, slug=unique_slug, owner_id=owner_id)
         db.add(db_obj)
         db.commit()
         db.refresh(db_obj)

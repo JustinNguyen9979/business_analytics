@@ -1,6 +1,4 @@
-# FILE: Backend/app/main.py
-
-import json, crud, models, schemas, standard_parser
+import json, crud, models, schemas, standard_parser, secrets, string
 from services.search_service import search_service
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Response, status, Query, Body, Request
 from fastapi.middleware.gzip import GZipMiddleware
@@ -9,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Union
 from database import SessionLocal, engine
-from datetime import date
+from datetime import date, timedelta
 import pandas as pd
 import io
 from openpyxl.styles import Font, PatternFill, Alignment
@@ -19,11 +17,16 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from limiter import limiter
+from auth_utils import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
 
 app = FastAPI(
     # title="CEO Dashboard API by Julice",
     default_response_class=ORJSONResponse 
 )
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 app.state.limiter = limiter
 app.add_middleware(SlowAPIMiddleware)
@@ -41,53 +44,163 @@ def get_db():
     finally: 
         db.close()
 
-def get_brand_from_slug(brand_slug: str, db: Session = Depends(get_db)):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Không thể xác thực thông tin đăng nhập",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = schemas.TokenData(username=username, role=payload.get("role"))
+    except JWTError:
+        raise credentials_exception
+    
+    user = db.query(models.User).filter(models.User.username == token_data.username).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
+class RoleChecker:
+    def __init__(self, allowed_roles: List[models.UserRole]):
+        self.allowed_roles = allowed_roles
+
+    def __call__(self, user: models.User = Depends(get_current_user)):
+        if user.role not in self.allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Bạn không có quyền thực hiện hành động này"
+            )
+        return user
+
+# ==============================================================================
+# === 0. AUTHENTICATION ENDPOINTS (SIGNUP / LOGIN) ===
+# ==============================================================================
+
+@app.post("/api/auth/signup", response_model=schemas.User, status_code=status.HTTP_201_CREATED)
+def signup(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
+    """Đăng ký tài khoản mới - Luôn gán role ADMIN và tạo ID ngẫu nhiên"""
+    # Kiểm tra username tồn tại
+    user = db.query(models.User).filter(models.User.username == user_in.username).first()
+    if user:
+        raise HTTPException(status_code=400, detail="Username đã tồn tại.")
+    
+    # Kiểm tra email tồn tại
+    user = db.query(models.User).filter(models.User.email == user_in.email).first()
+    if user:
+        raise HTTPException(status_code=400, detail="Email đã được sử dụng.")
+    
+    # Tạo mã định danh ngẫu nhiên (12 ký tự)
+    alphabet = string.ascii_letters + string.digits
+    random_id = ''.join(secrets.choice(alphabet) for _ in range(12))
+    
+    # Tạo user mới với role ADMIN
+    hashed_password = get_password_hash(user_in.password)
+    db_user = models.User(
+        id=random_id, # Sử dụng ID ngẫu nhiên
+        username=user_in.username,
+        email=user_in.email,
+        full_name=user_in.full_name,
+        hashed_password=hashed_password,
+        role=models.UserRole.ADMIN 
+    )
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+@app.post("/api/auth/login", response_model=schemas.Token)
+def login(form_data: schemas.UserLogin, db: Session = Depends(get_db)): 
+    """Đăng nhập và nhận Token"""
+    user = db.query(models.User).filter(models.User.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Tài khoản hoặc mật khẩu không chính xác.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+def get_brand_from_slug(brand_slug: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Lấy brand từ slug và kiểm tra quyền sở hữu"""
     db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
+    
+    # Kiểm tra quyền sở hữu (Security check)
+    if db_brand.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Bạn không có quyền truy cập thương hiệu này."
+        )
     return db_brand
 
 # ==============================================================================
 # === 1. ENDPOINTS QUẢN LÝ THƯƠNG HIỆU (BRAND MANAGEMENT) ===
 # ==============================================================================
 
-@app.get("/", response_model=schemas.MessageResponse)
+@app.get("/api/", response_model=schemas.MessageResponse)
 def read_root(): 
     return {"message": "Chào mừng đến với CEO Dashboard API!"}
 
-@app.get("/brands/", response_model=List[schemas.BrandInfo])
-def read_brands(db: Session = Depends(get_db)): 
-    return crud.get_all_brands(db)
+@app.get("/api/brands/", response_model=List[schemas.BrandInfo])
+def read_brands(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)): 
+    """Lấy danh sách các brand thuộc sở hữu của user hiện tại"""
+    return db.query(models.Brand).filter(models.Brand.owner_id == current_user.id).all()
 
-@app.post("/brands/", response_model=schemas.BrandInfo)
-def create_brand_api(brand: schemas.BrandCreate, db: Session = Depends(get_db)):
-    new_brand = crud.create_brand(db=db, obj_in=brand)
-    if not new_brand:
-         raise HTTPException(status_code=400, detail="Brand này đã tồn tại.")
+@app.post("/api/brands/", response_model=schemas.BrandInfo)
+def create_brand_api(brand: schemas.BrandCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    """Tạo brand mới gắn với user hiện tại"""
+    # Kiểm tra tên trùng
+    existing = db.query(models.Brand).filter(models.Brand.name == brand.name).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Brand này đã tồn tại.")
+        
+    new_brand = crud.create_brand(db=db, obj_in=brand, owner_id=current_user.id)
     return new_brand
 
-@app.put("/brands/{brand_id}", response_model=schemas.BrandInfo)
-def update_brand_api(brand_id: int, brand_update: schemas.BrandCreate, db: Session = Depends(get_db)):
+@app.put("/api/brands/{brand_id}", response_model=schemas.BrandInfo)
+def update_brand_api(brand_id: int, brand_update: schemas.BrandCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # Kiểm tra quyền sở hữu
+    db_brand = db.query(models.Brand).filter(models.Brand.id == brand_id, models.Brand.owner_id == current_user.id).first()
+    if not db_brand:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền chỉnh sửa thương hiệu này.")
+        
     updated_brand = crud.update_brand_name(db, brand_id=brand_id, new_name=brand_update.name)
     if not updated_brand:
         raise HTTPException(status_code=400, detail="Không thể đổi tên. Tên Brand mới đã bị trùng.")
     return updated_brand
 
-@app.delete("/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_brand_api(brand_id: int, db: Session = Depends(get_db)):
+@app.delete("/api/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_brand_api(brand_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # Kiểm tra quyền sở hữu
+    db_brand = db.query(models.Brand).filter(models.Brand.id == brand_id, models.Brand.owner_id == current_user.id).first()
+    if not db_brand:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền xóa thương hiệu này.")
+        
     deleted_brand = crud.delete_brand_by_id(db, brand_id=brand_id)
     if not deleted_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand để xóa.")
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-@app.post("/brands/{brand_id}/clone", response_model=schemas.BrandInfo)
-def clone_brand_api(brand_id: int, db: Session = Depends(get_db)):
+@app.post("/api/brands/{brand_id}/clone", response_model=schemas.BrandInfo)
+def clone_brand_api(brand_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    # Kiểm tra quyền sở hữu
+    db_brand = db.query(models.Brand).filter(models.Brand.id == brand_id, models.Brand.owner_id == current_user.id).first()
+    if not db_brand:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền nhân bản thương hiệu này.")
+        
     cloned = crud.clone_brand(db, brand_id=brand_id)
     if not cloned:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand để nhân bản.")
     return cloned
 
-@app.post("/brands/{brand_slug}/trigger-recalculation", status_code=status.HTTP_202_ACCEPTED, response_model=schemas.MessageResponse)
+@app.post("/api/brands/{brand_slug}/trigger-recalculation", status_code=status.HTTP_202_ACCEPTED, response_model=schemas.MessageResponse)
 @limiter.limit("5/minute")
 def trigger_recalculation_api(request: Request, brand: models.Brand = Depends(get_brand_from_slug)):
     """
@@ -102,7 +215,7 @@ def trigger_recalculation_api(request: Request, brand: models.Brand = Depends(ge
 # === 2. ENDPOINTS XỬ LÝ DỮ LIỆU (DATA PROCESSING) ===
 # ==============================================================================
 
-@app.post("/brands/{brand_slug}/upload-standard-file", status_code=status.HTTP_202_ACCEPTED, response_model=schemas.MessageResponse)
+@app.post("/api/brands/{brand_slug}/upload-standard-file", status_code=status.HTTP_202_ACCEPTED, response_model=schemas.MessageResponse)
 @limiter.limit("5/minute")
 async def upload_standard_file(
     request: Request,
@@ -148,7 +261,7 @@ async def upload_standard_file(
         
     return {"message": "Upload và xử lý dữ liệu thành công!"}
 
-@app.post("/brands/{brand_slug}/recalculate-and-wait", status_code=status.HTTP_200_OK, response_model=schemas.MessageResponse)
+@app.post("/api/brands/{brand_slug}/recalculate-and-wait", status_code=status.HTTP_200_OK, response_model=schemas.MessageResponse)
 @limiter.limit("3/minute")
 def recalculate_and_wait(request: Request, brand: models.Brand = Depends(get_brand_from_slug)):
     """
@@ -171,12 +284,12 @@ class DateRangePayload(BaseModel):
     start_date: date
     end_date: date
 
-@app.get("/brands/{brand_slug}/sources", response_model=List[str])
+@app.get("/api/brands/{brand_slug}/sources", response_model=List[str])
 def get_brand_sources(brand: models.Brand = Depends(get_brand_from_slug), db: Session = Depends(get_db)):
     """Lấy danh sách tất cả các 'source' duy nhất cho một brand."""
     return crud.get_sources_for_brand(db, brand.id)
 
-@app.post("/brands/{brand_slug}/delete-data-in-range", status_code=status.HTTP_200_OK, response_model=schemas.DeleteDataResponse)
+@app.post("/api/brands/{brand_slug}/delete-data-in-range", status_code=status.HTTP_200_OK, response_model=schemas.DeleteDataResponse)
 @limiter.limit("5/minute")
 def delete_data_in_range(
     request: Request,
@@ -223,20 +336,24 @@ def generate_cache_key(brand_id: int, request_type: str, params: Dict[str, Any])
     param_string = ":".join(f"{k}={v}" for k, v in sorted(params.items()))
     return f"data_req:{brand_id}:{request_type}:{param_string}"
 
-@app.post("/data-requests", status_code=status.HTTP_202_ACCEPTED, response_model=schemas.TaskResponse)
+@app.post("/api/data-requests", status_code=status.HTTP_202_ACCEPTED, response_model=schemas.TaskResponse)
 @limiter.limit("60/minute")
 def request_data_processing(
     request: Request,
     request_body: schemas.DataRequest, # Sử dụng Pydantic model để xác thực payload
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Endpoint chính: Nhận yêu cầu (dùng SLUG), kiểm tra cache, hoặc giao việc cho worker.
     """
-    # 1. Lấy brand_id từ slug để đảm bảo bảo mật
+    # 1. Lấy brand và kiểm tra quyền sở hữu
     db_brand = crud.get_brand_by_slug(db, slug=request_body.brand_slug)
     if not db_brand:
         raise HTTPException(status_code=404, detail=f"Brand slug '{request_body.brand_slug}' không tồn tại.")
+    
+    if db_brand.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền truy cập dữ liệu của thương hiệu này.")
     
     brand_id = db_brand.id
     request_type = request_body.request_type
@@ -266,12 +383,30 @@ def request_data_processing(
     # Trả về task_id để frontend có thể "hỏi thăm"
     return {"task_id": task.id, "status": "PROCESSING", "cache_key": cache_key}
 
-@app.get("/data-requests/status/{cache_key}", response_model=schemas.TaskStatusResponse)
-def get_request_status(cache_key: str):
+@app.get("/api/data-requests/status/{cache_key}", response_model=schemas.TaskStatusResponse)
+def get_request_status(
+    cache_key: str, 
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Endpoint để Frontend "hỏi thăm" xem dữ liệu đã được xử lý xong chưa.
-    Nó chỉ cần kiểm tra sự tồn tại của cache key.
+    Nó kiểm tra cache và quyền truy cập dựa trên brand_id trong cache_key.
     """
+    # Parse brand_id từ cache_key (định dạng: data_req:brand_id:request_type:params)
+    try:
+        parts = cache_key.split(":")
+        if len(parts) < 3:
+            raise ValueError("Invalid cache key format")
+        brand_id = int(parts[1])
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=400, detail="Cache key không hợp lệ.")
+
+    # Kiểm tra quyền sở hữu brand
+    db_brand = db.query(models.Brand).filter(models.Brand.id == brand_id).first()
+    if not db_brand or db_brand.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Bạn không có quyền xem dữ liệu này.")
+
     cached_result = redis_client.get(cache_key)
     
     if cached_result:
@@ -286,14 +421,14 @@ def get_request_status(cache_key: str):
         # Vẫn đang xử lý
         return {"status": "PROCESSING"}
 
-@app.post("/brands/{brand_slug}/recalculate", status_code=status.HTTP_200_OK, response_model=schemas.RecalculationResponse)
+@app.post("/api/brands/{brand_slug}/recalculate", status_code=status.HTTP_200_OK, response_model=schemas.RecalculationResponse)
 @limiter.limit("5/minute")
 def recalculate_brand_data(request: Request, brand: models.Brand = Depends(get_brand_from_slug), db: Session = Depends(get_db)):
     """Tính toán lại toàn bộ dữ liệu của một brand một cách đồng bộ."""
     result = crud.recalculate_brand_data_sync(db, brand_id=brand.id)
     return result
 
-@app.get("/brands/{brand_slug}/download-sample-file")
+@app.get("/api/brands/{brand_slug}/download-sample-file")
 def download_sample_file(brand: models.Brand = Depends(get_brand_from_slug)):
     """Tạo và trả về file Excel mẫu với định dạng chuyên nghiệp: màu sắc và kích thước cột."""
     output = io.BytesIO()
@@ -409,7 +544,7 @@ def download_sample_file(brand: models.Brand = Depends(get_brand_from_slug)):
 # === 3. ENDPOINTS LẤY DỮ LIỆU CHO DASHBOARD (DATA RETRIEVAL) ===
 # ==============================================================================
 
-@app.get("/brands/{brand_slug}/customer-map-distribution", response_model=List[schemas.CustomerMapDistributionItem])
+@app.get("/api/brands/{brand_slug}/customer-map-distribution", response_model=List[schemas.CustomerMapDistributionItem])
 def read_customer_map_distribution(
     start_date: date,
     end_date: date,
@@ -429,7 +564,7 @@ def read_customer_map_distribution(
         # Trả về list rỗng thay vì lỗi 500 để tránh crash UI
         return []
 
-@app.get("/brands/{brand_slug}", response_model=schemas.BrandWithKpis)
+@app.get("/api/brands/{brand_slug}", response_model=schemas.BrandWithKpis)
 def read_brand_kpis(
     start_date: date, 
     end_date: date, 
@@ -447,7 +582,7 @@ def read_brand_kpis(
     # Chỉ tính lại khi có hành động cụ thể (Upload/Delete).
     return db_brand
 
-@app.get("/brands/{brand_slug}/daily-kpis", response_model=schemas.DailyKpiResponse)
+@app.get("/api/brands/{brand_slug}/daily-kpis", response_model=schemas.DailyKpiResponse)
 def read_brand_daily_kpis(
     start_date: date, 
     end_date: date, 
@@ -459,7 +594,7 @@ def read_brand_daily_kpis(
     daily_data = crud.get_daily_kpis_for_range(db, brand.id, start_date, end_date, source_list=source)
     return {"data": daily_data}
 
-@app.get("/brands/{brand_slug}/top-products", response_model=List[schemas.TopProduct])
+@app.get("/api/brands/{brand_slug}/top-products", response_model=List[schemas.TopProduct])
 def read_top_products(
     start_date: date,
     end_date: date,
@@ -477,7 +612,7 @@ def read_top_products(
         raise HTTPException(status_code=500, detail="Lỗi server khi xử lý yêu cầu.")
 
 
-@app.get("/brands/{brand_slug}/kpis/operation", response_model=schemas.OperationKpisResponse)
+@app.get("/api/brands/{brand_slug}/kpis/operation", response_model=schemas.OperationKpisResponse)
 @limiter.limit("30/minute")
 def get_operation_kpis (
     request: Request,
@@ -512,7 +647,7 @@ def get_operation_kpis (
     # Convert kết quả dict thành Pydantic model response
     return operation_kpis
 
-@app.get("/brands/{brand_slug}/kpis/customer", response_model=schemas.CustomerKpisResponse)
+@app.get("/api/brands/{brand_slug}/kpis/customer", response_model=schemas.CustomerKpisResponse)
 @limiter.limit("30/minute")
 def get_customer_kpis (
     request: Request,
@@ -538,7 +673,7 @@ def get_customer_kpis (
     )
     return customer_kpis
 
-@app.get("/brands/{brand_slug}/customers", response_model=List[schemas.CustomerAnalyticsItem])
+@app.get("/api/brands/{brand_slug}/customers", response_model=List[schemas.CustomerAnalyticsItem])
 @limiter.limit("30/minute")
 def get_top_customers(
     request: Request,
@@ -573,7 +708,7 @@ def get_top_customers(
     # Kết quả trả về là List[CustomerAnalyticsItem]
     return result.data
 
-@app.get("/brands/{brand_slug}/search", response_model=Union[schemas.GlobalSearchResult, schemas.SearchNotFoundResponse])
+@app.get("/api/brands/{brand_slug}/search", response_model=Union[schemas.GlobalSearchResult, schemas.SearchNotFoundResponse])
 def search_anything(
     brand_slug: str,
     q: str = Query(..., min_length=1),
@@ -593,7 +728,7 @@ def search_anything(
     
     return result
 
-@app.get("/brands/{brand_slug}/search-suggestions", response_model=List[schemas.SearchSuggestionItem])
+@app.get("/api/brands/{brand_slug}/search-suggestions", response_model=List[schemas.SearchSuggestionItem])
 def get_search_suggestions(
     brand_slug: str,
     q: str = Query(..., min_length=2),
@@ -608,7 +743,7 @@ def get_search_suggestions(
     
     return search_service.suggest_entities(db, db_brand.id, q)
 
-@app.put("/brands/{brand_slug}/customers/{customer_identifier}", response_model=schemas.CustomerDetailResponse)
+@app.put("/api/brands/{brand_slug}/customers/{customer_identifier}", response_model=schemas.CustomerDetailResponse)
 def update_customer_api(
     brand_slug: str,
     customer_identifier: str,

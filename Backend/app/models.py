@@ -1,7 +1,13 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float, Index, UniqueConstraint, DateTime, Boolean, func, Text
+from sqlalchemy import Column, Integer, String, ForeignKey, Date, Float, Index, UniqueConstraint, DateTime, Boolean, func, Text, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import JSONB 
+import enum
 from database import Base
+
+class UserRole(str, enum.Enum):
+    ADMIN = "admin"
+    MANAGER = "manager"
+    VIEWER = "viewer"
 
 # ==========================================
 # MIXINS (Lớp dùng chung để tránh lặp code)
@@ -70,12 +76,25 @@ class JsonBreakdownMixin:
 # MODELS
 # ==========================================
 
+class User(Base):
+    __tablename__ = "users"
+    id = Column(String, primary_key=True, index=True) # Dùng chuỗi ngẫu nhiên làm ID
+    username = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    full_name = Column(String, nullable=True)
+    role = Column(Enum(UserRole), default=UserRole.VIEWER, nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=func.now())
+
 class Brand(Base):
     __tablename__ = "brands"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
     slug = Column(String, unique=True, index=True)
+    owner_id = Column(String, ForeignKey("users.id"), index=True, nullable=True) # Map với User ID là String
 
+    owner = relationship("User", backref="brands")
     products = relationship("Product", back_populates="owner_brand", cascade="all, delete-orphan")
     orders = relationship("Order", back_populates="owner_brand", cascade="all, delete-orphan")
     revenues = relationship("Revenue", back_populates="owner_brand", cascade="all, delete-orphan")

@@ -25,6 +25,7 @@ import TuneIcon from '@mui/icons-material/Tune';
 import GroupIcon from '@mui/icons-material/Group';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import ManageSearchIcon from '@mui/icons-material/ManageSearch';
+import LogoutIcon from '@mui/icons-material/Logout';
 
 // --- Components & Services ---
 import SingleImportDialog from '../components/import/SingleImportDialog';
@@ -79,6 +80,11 @@ function LayoutWithBrandContext() {
             setIsRecalculating(false); // Chỉ tắt loading khi có lỗi, nếu thành công thì trang sẽ reload
         }
         // Không cần khối finally nữa vì nếu thành công, trang sẽ được tải lại
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        navigate('/login');
     };
 
     const handleUploadComplete = async () => {
@@ -193,9 +199,9 @@ function LayoutWithBrandContext() {
                                 </ListItemButton>
                             </ListItem>
                             <ListItem disablePadding>
-                                <ListItemButton sx={{ minHeight: 48 }}>
-                                    <ListItemIcon><SettingsIcon /></ListItemIcon>
-                                    <ListItemText primary="Cài đặt" sx={{ opacity: isSidebarOpen ? 1 : 0 }} />
+                                <ListItemButton onClick={handleLogout} sx={{ minHeight: 48 }}>
+                                    <ListItemIcon sx={{ color: 'error.main' }}><LogoutIcon /></ListItemIcon>
+                                    <ListItemText primary="Đăng xuất" sx={{ opacity: isSidebarOpen ? 1 : 0, color: 'error.main' }} />
                                 </ListItemButton>
                             </ListItem>
                         </List>

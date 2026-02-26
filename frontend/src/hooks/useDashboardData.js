@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { fetchAsyncData, fetchCustomerMap } from '../services/api';
 import dayjs from 'dayjs';
-import { processChartData } from '../utils/chartDataProcessor';
+import { processChartData, determineAggregation } from '../utils/chartDataProcessor';
 
 /**
  * TÍNH TOÁN KHOẢNG THỜI GIAN SO SÁNH THÔNG MINH - ĐÃ SỬA LỖI
@@ -168,17 +168,18 @@ export const useDashboardData = (brandSlug, filters) => {
 
                             // --- XỬ LÝ 2: GỌI API BÌNH THƯỜNG ---
 
+                        const interval = determineAggregation(filter.range, filter.type);
                         const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
 
                         try {
 
-                            // ĐÃ SỬA: Truyền thêm filter.source vào params
+                            // ĐÃ SỬA: Truyền thêm filter.source và interval vào params
 
                             const [currentRes, previousRes] = await Promise.all([
 
-                                fetchAsyncData('daily_kpis_chart', brandSlug, filter.range, { source: filter.source }, controller.signal),
+                                fetchAsyncData('daily_kpis_chart', brandSlug, filter.range, { source: filter.source, interval }, controller.signal),
 
-                                fetchAsyncData('daily_kpis_chart', brandSlug, prevRange, { source: filter.source }, controller.signal)
+                                fetchAsyncData('daily_kpis_chart', brandSlug, prevRange, { source: filter.source, interval }, controller.signal)
 
                             ]);
 

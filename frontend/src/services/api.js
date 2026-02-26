@@ -10,6 +10,20 @@ const apiClient = axios.create({
     }
 });
 
+// Thêm interceptor để đính kèm token vào header Authorization
+apiClient.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
 export const fetchCustomerMap = async (brandSlug, startDate, endDate, status = [], sources = [], signal) => {
     try {
         const params = { start_date: startDate, end_date: endDate };
@@ -442,8 +456,27 @@ export const updateCustomerAPI = async (brandSlug, customerIdentifier, updateDat
             updateData
         );
         return response.data;
-    } catch (error) {
-        console.error(`Error updating customer ${customerIdentifier} for brand ${brandSlug}:`, error);
-        throw error;
-    }
-};
+        } catch (error) {
+            console.error(`Error updating customer ${customerIdentifier} for brand ${brandSlug}:`, error);
+            throw error;
+        }
+    };
+    
+    export const signupAPI = async (userData) => {
+        try {
+            const response = await apiClient.post('/auth/signup', userData);
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
+    };
+    
+    export const loginAPI = async (credentials) => {
+        try {
+            const response = await apiClient.post('/auth/login', credentials);
+            return response.data;
+        } catch (error) {
+            throw error;
+        }
+    };
+    

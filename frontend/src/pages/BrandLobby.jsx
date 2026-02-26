@@ -2,10 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Container, Typography, Box, CircularProgress, Alert, Grid, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button } from '@mui/material';
+import { Container, Typography, Box, CircularProgress, Alert, Grid, Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button, IconButton, Tooltip } from '@mui/material';
 import { getAllBrands, createBrand, deleteBrand, updateBrand, cloneBrand } from '../services/api';
 import BrandCard from '../components/brand/BrandCard';
 import CreateBrandCard from '../components/brand/CreateBrandCard';
+import LogoutIcon from '@mui/icons-material/Logout';
 
 function BrandLobby() {
     const [brands, setBrands] = useState([]);
@@ -16,6 +17,11 @@ function BrandLobby() {
     const [selectedBrand, setSelectedBrand] = useState(null);
     const [newName, setNewName] = useState('');
     const [renameError, setRenameError] = useState('');
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        navigate('/login');
+    };
 
     const fetchBrands = async () => {
         try {
@@ -123,6 +129,27 @@ function BrandLobby() {
                     zIndex: 1
                 }}
             >
+                {/* Logout Button */}
+                <Box sx={{ position: 'fixed', top: 24, right: 24, zIndex: 100 }}>
+                    <Tooltip title="Đăng xuất">
+                        <IconButton 
+                            onClick={handleLogout}
+                            sx={{ 
+                                bgcolor: 'rgba(244, 67, 54, 0.1)', 
+                                color: 'error.main',
+                                border: '1px solid rgba(244, 67, 54, 0.2)',
+                                backdropFilter: 'blur(10px)',
+                                '&:hover': {
+                                    bgcolor: 'error.main',
+                                    color: '#fff'
+                                }
+                            }}
+                        >
+                            <LogoutIcon />
+                        </IconButton>
+                    </Tooltip>
+                </Box>
+
                 <Box sx={{ textAlign: 'center', mb: 8 }}>
                     <Typography variant="h3" component="h1" gutterBottom>Business Analytics</Typography>
                     <Typography variant="h5" component="h2" color="text.secondary">Quản lý Danh mục Thương hiệu</Typography>
