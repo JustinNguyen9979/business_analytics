@@ -5,19 +5,20 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import DateRangeFilterMenu from '../common/DateRangeFilterMenu';
 import LoadingOverlay from '../common/LoadingOverlay';
 import ChartPlaceholder from '../common/ChartPlaceholder';
+import { T, AccentBar } from '../../theme/designSystem';
 
 const ChartSkeleton = () => (
     <Skeleton 
         variant="rectangular" 
         width="100%" 
         height="100%" 
-        sx={{ borderRadius: 2, bgcolor: 'rgba(255, 255, 255, 0.05)' }} 
+        sx={{ borderRadius: T.radiusMd, bgcolor: 'rgba(255, 255, 255, 0.03)' }} 
     />
 );
 
 /**
  * DashboardBox - Hộp chứa nội dung chuẩn cho Dashboard.
- * Tái sử dụng Paper variant="glass" từ theme.
+ * Tái sử dụng class glass-card từ global.css.
  */
 const DashboardBox = ({ 
     title, 
@@ -30,34 +31,63 @@ const DashboardBox = ({
     hasData = true,
     filterControl = null,
     placeholderTitle = '',
-    contentSx = {}
+    contentSx = {},
+    className = ''
 }) => {
     const theme = useTheme();
 
     return (
-        <Paper 
-            variant="glass" 
+        <Box 
+            className={`glass-card ${className}`}
             sx={{ 
                 position: 'relative',
                 overflow: 'hidden',
                 flex: minWidth === 'auto' ? '1 1 auto' : `1 1 ${minWidth}`, 
-                p: 2, 
+                p: 3, 
                 height: height, 
                 display: 'flex', 
                 flexDirection: 'column',
-                transition: 'all 0.3s ease',
+                transition: 'all 0.4s var(--ease-smooth)',
+                borderRadius: T.radiusLg,
+                // Hiệu ứng Glassmorphism mạnh hơn
+                backdropFilter: 'blur(30px) saturate(150%)',
+                WebkitBackdropFilter: 'blur(30px) saturate(150%)',
+                boxShadow: `
+                    0 20px 50px -12px rgba(0, 0, 0, 0.8), 
+                    inset 0 1px 1px rgba(255, 255, 255, 0.03),
+                    0 0 0 1px rgba(255, 255, 255, 0.02)
+                `,
+                border: `1px solid ${T.border}`, 
                 '&:hover': {
-                    borderColor: theme.palette.primary.main,
-                    boxShadow: `0 0 20px ${theme.palette.primary.main}30`,
+                    borderColor: `${T.primary}80`, 
+                    transform: 'translateY(-6px)',
+                    boxShadow: `
+                        0 30px 60px -15px rgba(0, 0, 0, 0.9), 
+                        0 0 30px ${T.primary}15,
+                        inset 0 0 15px ${T.border}
+                    `,
                 },
                 ...sx 
             }}
         >
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, px: 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 {title && (
-                    <Typography variant="h6" sx={{ fontWeight: 600 }} noWrap>
-                        {title}
-                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <AccentBar height={20} />
+                        <Typography 
+                            variant="h6" 
+                            sx={{ 
+                                fontWeight: 700, 
+                                fontFamily: T.fontDisplay,
+                                fontSize: '1rem',
+                                color: T.textPrimary,
+                                letterSpacing: '0.5px'
+                            }} 
+                            noWrap
+                        >
+                            {title}
+                        </Typography>
+                    </Box>
                 )}
                 
                 <Box display="flex" gap={1} alignItems="center">
@@ -68,7 +98,19 @@ const DashboardBox = ({
                                 size="small" 
                                 startIcon={<CalendarMonthIcon />} 
                                 onClick={filterControl.openDateMenu}
-                                sx={{ borderRadius: 1.5 }}
+                                sx={{ 
+                                    borderRadius: T.radiusSm,
+                                    borderColor: T.border,
+                                    color: T.textSecond,
+                                    fontSize: '0.75rem',
+                                    height: 32,
+                                    px: 1.5,
+                                    '&:hover': {
+                                        borderColor: T.primary,
+                                        color: T.primary,
+                                        backgroundColor: T.primaryDim
+                                    }
+                                }}
                             >
                                 {filterControl.dateLabel}
                             </Button>
@@ -85,7 +127,7 @@ const DashboardBox = ({
                 ) : (
                     hasData ? (
                         <>
-                            {loading && <LoadingOverlay borderRadius={2} />}
+                            {loading && <LoadingOverlay borderRadius={T.radiusMd} />}
                             {children}
                         </>
                     ) : (
@@ -93,7 +135,7 @@ const DashboardBox = ({
                     )
                 )}
             </Box>
-        </Paper>
+        </Box>
     );
 };
 

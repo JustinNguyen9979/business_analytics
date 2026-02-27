@@ -36,6 +36,11 @@ import { useLayout } from '../context/LayoutContext';
 import { useNotification } from '../context/NotificationContext';
 import { BrandProvider, useBrand } from '../context/BrandContext';
 
+// --- Shared design system ---
+import { 
+    Noise, AmbientOrbs, GridOverlay, ScanLine, T 
+} from '../theme/designSystem';
+
 // --- Styled Components ---
 import { 
     Drawer, AppBar, DrawerHeader, SidebarToggle 
@@ -114,8 +119,14 @@ function LayoutWithBrandContext() {
     ];
 
     return (
-        <Box sx={{ display: 'flex' }}>
+        <Box sx={{ display: 'flex', minHeight: '100vh', position: 'relative' }}>
             <CssBaseline />
+
+            {/* Background Layers */}
+            <Noise />
+            <AmbientOrbs />
+            <GridOverlay />
+            <ScanLine />
 
             <Drawer variant="permanent" open={isSidebarOpen}>
                 <SidebarToggle onClick={() => setIsSidebarOpen(!isSidebarOpen)} size="small">

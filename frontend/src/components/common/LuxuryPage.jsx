@@ -3,7 +3,7 @@
 import React from 'react';
 import { Box, CssBaseline } from '@mui/material';
 import { Noise, AmbientOrbs, GridOverlay, ScanLine } from './BackgroundLayers';
-import { T } from '../../theme/tokens';
+import { T, fadeUp } from '../../theme/designSystem';
 
 /**
  * LuxuryPage Component
@@ -42,7 +42,7 @@ const LuxuryPage = ({ children, sx = {}, hideScanLine = false, overflow = "auto"
             zIndex: 1, 
             flex: 1,
             width: "100%",
-            animation: `${T.anim.fadeUp} 0.6s ease-out forwards`,
+            animation: `${fadeUp} 0.6s ease-out forwards`,
           }}
         >
           {children}
@@ -51,5 +51,6 @@ const LuxuryPage = ({ children, sx = {}, hideScanLine = false, overflow = "auto"
     </>
   );
 };
+
 
 export default LuxuryPage;

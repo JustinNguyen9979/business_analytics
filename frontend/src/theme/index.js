@@ -364,10 +364,6 @@ const theme = createTheme({
                 },
                 body: {
                     backgroundColor: PALETTE.background.default,
-                    backgroundImage: `
-                        radial-gradient(circle at 15% 50%, rgba(0, 229, 255, 0.08), transparent 25%), 
-                        radial-gradient(circle at 85% 30%, rgba(41, 121, 255, 0.08), transparent 25%)
-                    `, // Tạo hiệu ứng nền không gian mờ ảo
                     backgroundAttachment: 'fixed',
                 },
                 // Animation sóng (Ripple) cho bản đồ

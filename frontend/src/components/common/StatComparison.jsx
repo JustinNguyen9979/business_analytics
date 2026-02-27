@@ -2,12 +2,10 @@ import React from 'react';
 import { Box, Typography, Tooltip } from '@mui/material';
 import ArrowDropUpIcon from '@mui/icons-material/ArrowDropUp';
 import ArrowDropDownIcon from '@mui/icons-material/ArrowDropDown';
-import { useTheme } from '@mui/material/styles';
 import { formatCurrency, formatNumber } from '../../utils/formatters';
+import { T } from '../../theme/designSystem';
 
 const StatComparison = ({ value, previousValue, format, direction = 'up' }) => {
-    const theme = useTheme();
-
     if (typeof previousValue !== 'number') {
         return null;
     }
@@ -20,9 +18,9 @@ const StatComparison = ({ value, previousValue, format, direction = 'up' }) => {
     const sxProps = { display: 'flex', alignItems: 'center', ml: 0.5 };
 
     if (previous === 0 && currentValue > 0) {
-        let color = direction === 'up' ? theme.palette.success.main : theme.palette.error.main;
+        let color = direction === 'up' ? T.success : T.error;
         let Icon = direction === 'up' ? ArrowDropUpIcon : ArrowDropDownIcon;
-        return ( <Box sx={{ ...sxProps, color }}> <Icon sx={{ fontSize: '1rem' }} /> <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1 }}>Mới</Typography> </Box> );
+        return ( <Box sx={{ ...sxProps, color }}> <Icon sx={{ fontSize: '1.2rem' }} /> <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1, fontFamily: T.fontMono }}>NEW</Typography> </Box> );
     }
 
     if (previous === 0) return null;
@@ -37,20 +35,21 @@ const StatComparison = ({ value, previousValue, format, direction = 'up' }) => {
     } else { // direction === 'down'
         isGoodChange = percentageChange <= 0; // Giảm là tốt
     }
-    const color = isGoodChange ? theme.palette.success.main : theme.palette.error.main;
+    const color = isGoodChange ? T.success : T.error;
     // ===================================
     
     const Icon = percentageChange >= 0 ? ArrowDropUpIcon : ArrowDropDownIcon;
-    const previousDisplay = format === 'currency' ? formatCurrency(previous) : format === 'percent' ? `${previous.toFixed(2)}%` : formatNumber(previous);
+    const previousDisplay = format === 'currency' ? formatCurrency(previous) : format === 'percent' ? `${(previous * 100).toFixed(2)}%` : formatNumber(previous);
 
     return (
         <Tooltip title={`Kỳ trước: ${previousDisplay}`} placement="top">
-            <Box sx={{ ...sxProps, color }}>
-                <Icon sx={{ fontSize: '1rem' }} />
-                <Typography variant="caption" sx={{ fontWeight: 600, lineHeight: 1 }}>{Math.abs(percentageChange).toFixed(2)}%</Typography>
+            <Box sx={{ ...sxProps, color, filter: `drop-shadow(0 0 4px ${color}40)` }}>
+                <Icon sx={{ fontSize: '1.2rem' }} />
+                <Typography variant="caption" sx={{ fontWeight: 700, lineHeight: 1, fontFamily: T.fontMono }}>{Math.abs(percentageChange).toFixed(1)}%</Typography>
             </Box>
         </Tooltip>
     );
 };
 
 export default StatComparison;
+

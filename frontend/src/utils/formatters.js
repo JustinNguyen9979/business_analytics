@@ -19,9 +19,9 @@ export const formatDate = (date) => {
 export const formatCurrency = (value) => {
     // Thêm kiểm tra an toàn để tránh lỗi
     if (typeof value !== 'number' || !isFinite(value)) {
-        return '0 đ';
+        return '0đ';
     }
-    return Math.round(value).toLocaleString('vi-VN') + ' đ';
+    return Math.round(value).toLocaleString('vi-VN') + 'đ';
 };
 
 /**

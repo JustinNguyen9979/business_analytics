@@ -6,6 +6,7 @@ import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import LazyLoader from '../components/common/LazyLoader'; 
 import { useOperationPageLogic } from '../hooks/useOperationPageLogic';
 import { useTheme } from '@mui/material/styles';
+import { fadeUp } from '../theme/designSystem';
 
 // UI Components
 import DashboardBox from '../components/ui/DashboardBox';
@@ -545,7 +546,7 @@ function OperationPage() {
     } = useOperationPageLogic();
 
     return (
-        <Box sx={{ px: 4, py: 3 }}>
+        <Box sx={{ px: 4, py: 3, animation: `${fadeUp} 0.6s ease-out forwards` }}>
             {/* --- HEADER --- */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                 <Typography variant="h4" fontWeight="bold">Báo cáo Vận hành</Typography>

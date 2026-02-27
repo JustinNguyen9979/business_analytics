@@ -16,6 +16,7 @@ import DashboardBox from '../components/ui/DashboardBox';
 
 import { useCostBreakdown } from '../hooks/useCostBreakdown';
 import LazyLoader from '../components/common/LazyLoader';
+import { ShimmerText, EyebrowLabel, T, AccentBar, fadeUp } from '../theme/designSystem';
 
 const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
 const DonutChart = lazy(() => import('../components/charts/DonutChart'));
@@ -28,10 +29,10 @@ function DashboardPage() {
     const { isSidebarOpen } = useLayout();
 
     const lineChartSeries = useMemo(() => [
-        { key: 'net_revenue', name: 'Doanh thu ròng', color: theme.palette.primary.main},
-        { key: 'profit', name: 'Lợi nhuận', color: '#28a545'},
-        { key: 'total_cost', name: 'Tổng chi phí', color: '#cdb832ff'},
-    ], [theme.palette.primary.main]);
+        { key: 'net_revenue', name: 'Doanh thu ròng', color: T.primary },
+        { key: 'profit', name: 'Lợi nhuận', color: T.success },
+        { key: 'total_cost', name: 'Tổng chi phí', color: T.gold },
+    ], []);
 
     // 1. TẠO BỘ LỌC TỔNG (GLOBAL FILTER) - CHA
     const globalDateFilter = useDateFilter({
@@ -55,7 +56,6 @@ function DashboardPage() {
     const mapFilterControl = useChartFilter(globalFilterState);
 
     // 3. MAPPING DỮ LIỆU CHO HOOK FETCH DATA
-    // Lưu ý: useChartFilter trả về trực tiếp dateRange, ta cần map về format { range: ... } để useDashboardData hiểu
     const filtersForHook = useMemo (() => ({
         kpi: { range: kpiFilterControl.dateRange, type: kpiFilterControl.dateType },
         lineChart: { range: lineChartFilterControl.dateRange, type: lineChartFilterControl.dateType },
@@ -82,84 +82,94 @@ function DashboardPage() {
         return () => clearTimeout(timer);
     }, [isSidebarOpen]);
 
-    const anyError = Object.values(dashboardState).find(s => s.error);
-
     // Chuẩn bị dữ liệu cho Donut Chart
     const donutChartData = useCostBreakdown(donut.data);
 
     // Optimize: Dùng useCallback để hàm không bị tạo mới mỗi lần render, tránh re-render chart con
     const getTopProductColor = useCallback((index) => {
-        return index < 3 ? theme.palette.warning.main : theme.palette.primary.main;
-    }, [theme.palette.warning.main, theme.palette.primary.main]);
+        return index < 3 ? T.warning : T.primary;
+    }, []);
 
     // Bảng màu cho Map Status (Đồng bộ với OperationPage)
     const statusColors = useMemo(() => ({
-        all: '#FF5252',
-        completed: theme.palette.success.main,
+        all: T.error,
+        completed: T.success,
         cancelled: '#C62828',
-        bomb: theme.palette.warning.main,
+        bomb: T.warning,
         refunded: '#9c27b0'
-    }), [theme]);
+    }), []);
 
     return (
-        <Box sx={{ px: 4, py: 3 }} >
+        <Box 
+            sx={{ 
+                px: 4, 
+                py: 3, 
+                position: 'relative', 
+                zIndex: 1, 
+                animation: `${fadeUp} 0.6s ease-out forwards` 
+            }}
+        >
             {/* --- HEADER: TIÊU ĐỀ & BỘ LỌC TỔNG --- */}
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
-                <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-                    {brandName ? `Báo cáo Kinh doanh: ${brandName}` : 'Đang tải...'}
-                </Typography>
-                
-                <Box>
-                    <Button 
-                        variant="outlined" 
-                        startIcon={<CalendarMonthIcon />} 
-                        {...globalDateFilter.buttonProps}
-                        sx={{ borderRadius: 2, height: 40, px: 3 }}
-                    >
-                         {globalDateFilter.buttonProps.children}
-                    </Button>
-                    <DateRangeFilterMenu {...globalDateFilter.menuProps} />
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 4 }}>
+                    <Box>
+                        <Typography variant="h3" sx={{ fontWeight: 800, fontFamily: T.fontDisplay, mt: 1 }}>
+                            <ShimmerText>
+                                {brandName ? `Báo cáo: ${brandName}` : 'Đang tải...'}
+                            </ShimmerText>
+                        </Typography>
+                    </Box>
+                    
+                    <Box sx={{ mt: 5 }}>
+                        <Button 
+                            variant="outlined" 
+                            startIcon={<CalendarMonthIcon />} 
+                            {...globalDateFilter.buttonProps}
+                            sx={{ 
+                                borderRadius: T.radiusMd, 
+                                height: 44, 
+                                px: 3,
+                                backgroundColor: 'rgba(255,255,255,0.03)',
+                                borderColor: T.border,
+                                color: T.textPrimary,
+                                '&:hover': {
+                                    borderColor: T.primary,
+                                    backgroundColor: 'rgba(45, 212, 191, 0.05)',
+                                }
+                            }}
+                        >
+                             {globalDateFilter.buttonProps.children}
+                        </Button>
+                        <DateRangeFilterMenu {...globalDateFilter.menuProps} />
+                    </Box>
                 </Box>
-            </Box>
-            
-            <LazyLoader height={200} offset="0px">
-                <DashboardBox
-                    title="Chỉ số Hiệu suất Tổng thể"
-                    filterControl={kpiFilterControl}
-                    loading={kpi.loading}
-                    hasData={!!kpi.data.current}
-                    height="auto"
-                    sx={{ mb: 4, p: 3 }}
-                >
-                    {kpi.data.current && (
-                        <Box sx={{ 
-                            display: 'grid',
-                            gridTemplateColumns: {
-                                xs: '1fr',
-                                md: 'repeat(2, 1fr)',
-                                lg: 'repeat(4, 1fr)',
-                            }
-                        }}>
-                            {kpiGroups.map((group, groupIndex) => (
-                                <Box 
-                                    key={group.groupTitle} 
-                                    sx={{ 
-                                        p: 2, 
-                                        borderRight: { 
-                                            lg: groupIndex < 3 ? `1px solid ${theme.palette.divider}` : 'none',
-                                            md: groupIndex % 2 === 0 ? `1px solid ${theme.palette.divider}` : 'none',
-                                        }, 
-                                        borderBottom: { 
-                                            xs: groupIndex < kpiGroups.length - 1 ? `1px solid ${theme.palette.divider}` : 'none',
-                                            md: groupIndex < 2 ? `1px solid ${theme.palette.divider}` : 'none',
-                                            lg: 'none'
-                                        } 
-                                    }}
-                                >
-                                    <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 2, fontWeight: 600, fontSize: '0.875rem', textAlign: 'center' }}>
-                                        {group.groupTitle}
-                                    </Typography>
-                                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 3, textAlign: 'left' }}>
+                
+                <Box sx={{ 
+                    display: 'grid', 
+                    gap: 3, 
+                    gridTemplateColumns: {
+                        xs: '1fr',
+                        sm: 'repeat(2, 1fr)',
+                    },
+                    mb: 4
+                }}>
+                    {kpiGroups.map((group, groupIndex) => (
+                        <LazyLoader key={group.groupTitle} height={200} offset="0px">
+                            <DashboardBox
+                                title={group.groupTitle}
+                                filterControl={kpiFilterControl}
+                                loading={kpi.loading}
+                                hasData={!!kpi.data.current}
+                                height="auto"
+                                sx={{ height: '100%' }}
+                                className={`anim-stagger-in delay-${groupIndex + 1}`}
+                            >
+                                {kpi.data.current && (
+                                    <Box sx={{ 
+                                        display: 'grid', 
+                                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+                                        gap: 3, 
+                                        textAlign: 'left' 
+                                    }}>
                                         {group.items.map((kpiItem) => (
                                             <StatItem 
                                                 key={kpiItem.key} 
@@ -172,110 +182,113 @@ function DashboardPage() {
                                             />
                                         ))} 
                                     </Box>
-                                </Box>
-                            ))}
-                        </Box>
-                    )}
-                </DashboardBox>
-            </LazyLoader>
-
-            <LazyLoader height={750}>
-                <DashboardBox
-                    title="Biểu đồ Doanh thu ròng & Lợi nhuận"
-                    filterControl={lineChartFilterControl}
-                    loading={lineChart.loading}
-                    hasData={!!(lineChart.data.current && lineChart.data.current.length > 0)}
-                    height={750}
-                    sx={{ mb: 4 }}
-                    contentSx={{ pt: 1, pb: 3 }}
-                >
-                    <Suspense fallback={<Skeleton variant="rectangular" width="100%" height="100%" />}>
-                        <RevenueProfitChart 
-                            data={lineChart.data.current} 
-                            comparisonData={lineChart.data.previous}
-                            series={lineChartSeries}
-                            isLoading={lineChart.loading}
-                            chartRevision={chartRevision}
-                            aggregationType={lineChart.data.aggregationType}
-                            selectedDateRange={lineChartFilterControl.dateRange}
-                        />
-                    </Suspense>
-                </DashboardBox>
-            </LazyLoader>
-
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 4, mb: 4 }}>
-                <Box sx={{ width: { xs: '100%', md: 'calc(50% - 16px)' } }}>
-                    <Stack spacing={4}>
-                        <LazyLoader height={400}>
-                            <DashboardBox
-                                title="Phân bổ Chi phí"
-                                filterControl={donutFilterControl}
-                                loading={donut.loading}
-                                hasData={!!donut.data}
-                                height={400}
-                            >
-                                <Suspense fallback={<Skeleton variant="circular" width={300} height={300} sx={{ m: 'auto' }} />}>
-                                    <DonutChart 
-                                        data={donutChartData} 
-                                        centerLabel="TỔNG"
-                                        centerValue={donut.data?.total_cost}
-                                        unit="đ"
-                                        formatType="currency"
-                                        height="100%"
-                                    />
-                                </Suspense>
+                                )}
                             </DashboardBox>
                         </LazyLoader>
+                    ))}
+                </Box>
 
-                        <LazyLoader height={600}>
+                <LazyLoader height={750}>
+                    <DashboardBox
+                        title="Biểu đồ Doanh thu ròng & Lợi nhuận"
+                        filterControl={lineChartFilterControl}
+                        loading={lineChart.loading}
+                        hasData={!!(lineChart.data.current && lineChart.data.current.length > 0)}
+                        height={750}
+                        sx={{ mb: 5 }}
+                        contentSx={{ pt: 1, pb: 3 }}
+                        className="anim-stagger-in delay-2"
+                    >
+                        <Suspense fallback={<Skeleton variant="rectangular" width="100%" height="100%" />}>
+                            <RevenueProfitChart 
+                                data={lineChart.data.current} 
+                                comparisonData={lineChart.data.previous}
+                                series={lineChartSeries}
+                                isLoading={lineChart.loading}
+                                chartRevision={chartRevision}
+                                aggregationType={lineChart.data.aggregationType}
+                                selectedDateRange={lineChartFilterControl.dateRange}
+                            />
+                        </Suspense>
+                    </DashboardBox>
+                </LazyLoader>
+
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 5, mb: 5 }}>
+                    <Box sx={{ width: { xs: '100%', md: 'calc(50% - 25px)' } }}>
+                        <Stack spacing={5}>
+                            <LazyLoader height={400}>
+                                <DashboardBox
+                                    title="Phân bổ Chi phí"
+                                    filterControl={donutFilterControl}
+                                    loading={donut.loading}
+                                    hasData={!!donut.data}
+                                    height={400}
+                                    className="anim-stagger-in delay-3"
+                                >
+                                    <Suspense fallback={<Skeleton variant="circular" width={300} height={300} sx={{ m: 'auto' }} />}>
+                                        <DonutChart 
+                                            data={donutChartData} 
+                                            centerLabel="TỔNG"
+                                            centerValue={donut.data?.total_cost}
+                                            unit="đ"
+                                            formatType="currency"
+                                            height="100%"
+                                        />
+                                    </Suspense>
+                                </DashboardBox>
+                            </LazyLoader>
+
+                            <LazyLoader height={600}>
+                                <DashboardBox
+                                    title="Top SKU bán chạy"
+                                    filterControl={topProductsFilterControl}
+                                    loading={topProducts.loading}
+                                    hasData={!!topProducts.data}
+                                    height={600}
+                                    className="anim-stagger-in delay-4"
+                                >
+                                    <Suspense fallback={<Skeleton variant="rectangular" width="100%" height="100%" />}>
+                                        <HorizontalBarChart 
+                                            data={topProducts.data} 
+                                            dataKey="total_quantity"
+                                            labelKey="name"
+                                            subLabelKey="sku"
+                                            unit=" sp"
+                                            height="100%"
+                                            color={getTopProductColor}
+                                        />
+                                    </Suspense>
+                                </DashboardBox>
+                            </LazyLoader>
+                        </Stack>
+                    </Box>
+
+                    <Box sx={{ width: { xs: '100%', md: 'calc(50% - 25px)' }, display: 'flex', flexDirection: 'column' }}>
+                        <LazyLoader height={600} sx={{ flex: 1, height: '100%', mb: 0 }}>
                             <DashboardBox
-                                title="Top SKU bán chạy"
-                                filterControl={topProductsFilterControl}
-                                loading={topProducts.loading}
-                                hasData={!!topProducts.data}
-                                height={600}
+                                title="Phân bổ Khách hàng"
+                                filterControl={mapFilterControl}
+                                loading={map.loading}
+                                hasData={map.data && map.data.length > 0}
+                                height="100%"
+                                sx={{ minHeight: { xs: 500, md: 'auto' }, height: '100%' }}
+                                className="anim-stagger-in delay-5"
                             >
                                 <Suspense fallback={<Skeleton variant="rectangular" width="100%" height="100%" />}>
-                                    <HorizontalBarChart 
-                                        data={topProducts.data} 
-                                        dataKey="total_quantity"
-                                        labelKey="name"
-                                        subLabelKey="sku"
-                                        unit=" sp"
-                                        height="100%"
-                                        color={getTopProductColor}
+                                    <GeoMapChart 
+                                        data={map.data} 
+                                        valueKey="orders" 
+                                        labelKey="province" 
+                                        unitLabel="đơn"
+                                        statusColors={statusColors}
+                                        statusFilter={['all']}
                                     />
                                 </Suspense>
                             </DashboardBox>
                         </LazyLoader>
-                    </Stack>
-                </Box>
-
-                <Box sx={{ width: { xs: '100%', md: 'calc(50% - 16px)' }, display: 'flex', flexDirection: 'column' }}>
-                    <LazyLoader height={600} sx={{ flex: 1, height: '100%', mb: 0 }}>
-                        <DashboardBox
-                            title="Phân bổ Khách hàng"
-                            filterControl={mapFilterControl}
-                            loading={map.loading}
-                            hasData={map.data && map.data.length > 0}
-                            height="100%"
-                            sx={{ minHeight: { xs: 500, md: 'auto' }, height: '100%' }}
-                        >
-                            <Suspense fallback={<Skeleton variant="rectangular" width="100%" height="100%" />}>
-                                <GeoMapChart 
-                                    data={map.data} 
-                                    valueKey="orders" 
-                                    labelKey="province" 
-                                    unitLabel="đơn"
-                                    statusColors={statusColors}
-                                    statusFilter={['all']}
-                                />
-                            </Suspense>
-                        </DashboardBox>
-                    </LazyLoader>
+                    </Box>
                 </Box>
             </Box>
-        </Box>
     );
 }
 

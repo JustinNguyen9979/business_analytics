@@ -41,6 +41,7 @@ function BrandLobby() {
   const [dialogs, setDialogs]           = useState({ rename: false, delete: false });
   const [selectedBrand, setSelected]    = useState(null);
   const [newName, setNewName]           = useState("");
+  const [confirmDeleteName, setConfirmDeleteName] = useState("");
   const [renameError, setRenameError]   = useState("");
 
   /* ── Data fetching ── */
@@ -69,10 +70,15 @@ function BrandLobby() {
     setDialogs({ ...dialogs, rename: true });
   };
   const openDeleteDialog = brand => {
-    setSelected(brand); setDialogs({ ...dialogs, delete: true });
+    setSelected(brand); 
+    setConfirmDeleteName("");
+    setDialogs({ ...dialogs, delete: true });
   };
   const closeDialogs = () => {
-    setDialogs({ rename: false, delete: false }); setSelected(null); setRenameError("");
+    setDialogs({ rename: false, delete: false }); 
+    setSelected(null); 
+    setRenameError("");
+    setConfirmDeleteName("");
   };
 
   const handleRenameSubmit = async () => {
@@ -285,7 +291,8 @@ function BrandLobby() {
           <Button onClick={closeDialogs} sx={{
             fontFamily: T.fontBody, fontWeight: 600, textTransform: "none",
             color: T.textMuted, borderRadius: "10px",
-            "&:hover": { color: T.textPrimary, bgcolor: "rgba(255,255,255,0.04)" },
+            transition: "all 0.2s ease",
+            "&:hover": { color: T.primary, bgcolor: "transparent" },
           }}>
             Hủy bỏ
           </Button>
@@ -308,7 +315,14 @@ function BrandLobby() {
       <Dialog
         open={dialogs.delete} onClose={closeDialogs}
         maxWidth="xs" fullWidth
-        PaperProps={{ sx: { ...dialogPaperSx, border: `1px solid rgba(248, 113, 113, 0.15)` } }}
+        PaperProps={{ 
+          sx: { 
+            ...dialogPaperSx, 
+            border: `1px solid rgba(248, 113, 113, 0.15)`,
+            width: 'calc(100% + 5px)',
+            maxWidth: '465px'
+          } 
+        }}
         BackdropProps={{ sx: dialogBackdropSx }}
       >
         <DialogTitle sx={{ px: 3, pt: 3, pb: 2, borderBottom: `1px solid rgba(248, 113, 113, 0.12)` }}>
@@ -322,7 +336,7 @@ function BrandLobby() {
         </DialogTitle>
 
         <DialogContent sx={{ px: 3, py: 3 }}>
-          <Typography sx={{ fontFamily: T.fontBody, color: T.textSecond, fontSize: "0.9rem", lineHeight: 1.7 }}>
+          <Typography sx={{ fontFamily: T.fontBody, color: T.textSecond, fontSize: "0.9rem", lineHeight: 1.7, mb: 2 }}>
             Bạn có chắc chắn muốn xóa thương hiệu{" "}
             <Box component="span" sx={{
               fontWeight: 700, color: T.textPrimary,
@@ -332,38 +346,95 @@ function BrandLobby() {
             }}>
               "{selectedBrand?.name}"
             </Box>
-            ?
+            ? Toàn bộ dữ liệu sẽ bị <Box component="span" sx={{ color: T.error, fontWeight: 800 }}>XÓA VĨNH VIỄN</Box> và không thể khôi phục.
           </Typography>
 
           <Box sx={{
-            mt: 2.5, p: "12px 16px", borderRadius: "10px",
-            bgcolor: T.warningDim, border: `1px solid rgba(245, 158, 11, 0.25)`,
-            display: "flex", gap: 1.5, alignItems: "flex-start",
+            mb: 3, p: "12px 16px", borderRadius: "10px",
+            bgcolor: T.errorDim, border: `1px solid rgba(248, 113, 113, 0.2)`,
+            display: "flex", gap: 1.5, alignItems: "center",
           }}>
-            <Typography sx={{ color: T.gold, fontSize: "0.85rem", lineHeight: 1 }}>⚠</Typography>
-            <Typography sx={{ fontFamily: T.fontBody, color: T.gold, fontSize: "0.82rem", lineHeight: 1.5 }}>
-              Hành động này không thể hoàn tác. Toàn bộ dữ liệu liên quan sẽ bị xóa vĩnh viễn.
+            <Typography sx={{ color: T.error, fontSize: "1.2rem", lineHeight: 1, display: "flex" }}>⚠</Typography>
+            <Typography sx={{ fontFamily: T.fontBody, color: T.error, fontSize: "0.82rem", lineHeight: 1.5 }}>
+              Vui lòng nhập chính xác tên thương hiệu để xác nhận.
             </Typography>
           </Box>
+
+          <StyledInput
+            fullWidth
+            variant="outlined"
+            placeholder={`Nhập "${selectedBrand?.name}" để xóa...`}
+            value={confirmDeleteName}
+            onChange={(e) => setConfirmDeleteName(e.target.value)}
+            onKeyPress={(e) => {
+                if (e.key === "Enter" && confirmDeleteName === selectedBrand?.name) {
+                    handleDeleteSubmit();
+                }
+            }}
+            sx={{
+                "& .MuiOutlinedInput-root": {
+                    backgroundColor: "rgba(248, 113, 113, 0.03)",
+                    "&.Mui-focused": {
+                        backgroundColor: "rgba(248, 113, 113, 0.06)",
+                        boxShadow: `0 0 0 3px rgba(248, 113, 113, 0.1)`,
+                        "& fieldset": { borderColor: T.error },
+                    },
+                }
+            }}
+          />
         </DialogContent>
 
         <DialogActions sx={{ px: 3, pb: 3, gap: 1.5 }}>
           <Button onClick={closeDialogs} sx={{
             fontFamily: T.fontBody, fontWeight: 600, textTransform: "none",
             color: T.textMuted, borderRadius: "10px",
-            "&:hover": { color: T.textPrimary, bgcolor: "rgba(255,255,255,0.04)" },
+            transition: "all 0.2s ease",
+            "&:hover": { color: T.primary, bgcolor: "transparent" },
           }}>
             Hủy bỏ
           </Button>
-          <Button onClick={handleDeleteSubmit} variant="contained" sx={{
-            fontFamily: T.fontBody, fontWeight: 700, textTransform: "none",
-            borderRadius: "10px", px: 3,
-            background: `linear-gradient(135deg, ${T.error}, #dc2626)`,
-            boxShadow: `0 4px 20px rgba(248, 113, 113, 0.25)`,
-            transition: "all 0.2s ease",
-            "&:hover": { boxShadow: `0 6px 28px rgba(248, 113, 113, 0.35)`, transform: "translateY(-1px)" },
-          }}>
-            Xác nhận xóa
+          <Button 
+            onClick={handleDeleteSubmit} 
+            variant="contained" 
+            disabled={confirmDeleteName !== selectedBrand?.name}
+            sx={{
+              fontFamily: T.fontBody, fontWeight: 700, textTransform: "none",
+              borderRadius: "12px", px: 4, py: 1.2,
+              background: confirmDeleteName === selectedBrand?.name 
+                ? `linear-gradient(135deg, #f43f5e 0%, #881337 100%)` 
+                : "rgba(255,255,255,0.05)",
+              color: confirmDeleteName === selectedBrand?.name ? "#fff" : "rgba(255,255,255,0.2)",
+              boxShadow: confirmDeleteName === selectedBrand?.name 
+                ? `0 8px 25px -5px rgba(244, 63, 94, 0.5), inset 0 1px 0 rgba(255,255,255,0.2)` 
+                : "none",
+              transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
+              position: 'relative',
+              overflow: 'hidden',
+              "&:hover": { 
+                  background: `linear-gradient(135deg, #fb7185 0%, #9f1239 100%)`,
+                  boxShadow: `0 12px 30px -5px rgba(244, 63, 94, 0.6), inset 0 1px 0 rgba(255,255,255,0.3)`, 
+                  transform: "translateY(-2px)",
+              },
+              "&.Mui-disabled": {
+                  background: "rgba(255,255,255,0.03)",
+                  color: "rgba(255,255,255,0.1)",
+                  border: "1px solid rgba(255,255,255,0.05)"
+              },
+              // Hiệu ứng loé sáng nhẹ (Shine)
+              "&::after": {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0, left: '-100%',
+                  width: '100%', height: '100%',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)',
+                  transition: '0.5s',
+              },
+              "&:hover::after": {
+                  left: '100%',
+              }
+            }}
+          >
+            Xác nhận xóa vĩnh viễn
           </Button>
         </DialogActions>
       </Dialog>

@@ -5,6 +5,7 @@ import { Card, Box, TextField, Paper, Typography, Avatar, TableRow, Tooltip, Ico
 import React, { useState } from 'react';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import { fadeUp } from '../theme/designSystem';
 
 // --- LAYOUT CONSTANTS ---
 export const drawerWidth = 240;
@@ -150,6 +151,7 @@ export const MainContainer = styled(Box)(({ theme }) => ({
     padding: theme.spacing(3, 4), // Tăng padding chút cho thoáng
     display: 'flex',
     flexDirection: 'column',
+    animation: `${fadeUp} 0.6s ease-out forwards`,
 }));
 
 export const SearchHeader = styled(Box, {

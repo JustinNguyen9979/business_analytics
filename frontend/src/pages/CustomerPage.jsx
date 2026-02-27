@@ -14,6 +14,7 @@ import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import LazyLoader from '../components/common/LazyLoader';
 import CustomerTable from '../components/customer/CustomerTable';
 import StatComparison from '../components/common/StatComparison'; // Import StatComparison
+import { fadeUp } from '../theme/designSystem';
 
 // Import Chart Controls (Tái sử dụng logic từ Operation)
 import ChartSettingsPanel from '../components/charts/controls/ChartSettingsPanel';
@@ -318,7 +319,7 @@ function CustomerPage() {
     } = useCustomerPageLogic();
 
     return (
-        <Box sx={{ px: 4, py: 3 }}>
+        <Box sx={{ px: 4, py: 3, animation: `${fadeUp} 0.6s ease-out forwards` }}>
             {/* --- HEADER --- */}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                 <Typography variant="h4" fontWeight="bold">Báo cáo Khách hàng</Typography>
