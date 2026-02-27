@@ -16,6 +16,7 @@ export const dateShortcuts = [
 
 export const kpiGroups = [
         {
+            key: 'finance',
             groupTitle: 'Tài chính',
             items: [
                 { key: 'gmv', title: 'GMV', format: 'currency', tooltipText: 'Gross Merchandise Value - Tổng giá trị hàng hóa đã bán (chưa trừ chi phí).' },
@@ -30,6 +31,7 @@ export const kpiGroups = [
             ]
         },
         {
+            key: 'marketing',
             groupTitle: 'Marketing',
             items: [
                 { key: 'ad_spend', title: 'CHI PHÍ ADS', format: 'currency' },
@@ -47,6 +49,7 @@ export const kpiGroups = [
             ]
         },
         {
+            key: 'operations',
             groupTitle: 'Vận hành',
             items: [
                 { key: 'total_orders', title: 'TỔNG ĐƠN', format: 'number' },
@@ -62,6 +65,7 @@ export const kpiGroups = [
             ]
         },
         {
+            key: 'customers',
             groupTitle: 'Khách hàng',
             items: [
                 { key: 'total_customers', title: 'TỔNG KHÁCH', format: 'number' },

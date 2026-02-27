@@ -73,7 +73,6 @@ const DashboardBox = ({
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 {title && (
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                        <AccentBar height={20} />
                         <Typography 
                             variant="h6" 
                             sx={{ 

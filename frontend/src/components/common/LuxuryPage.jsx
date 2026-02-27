@@ -32,9 +32,6 @@ const LuxuryPage = ({ children, sx = {}, hideScanLine = false, overflow = "auto"
         <AmbientOrbs />
         <GridOverlay />
         
-        {/* Optional Scan Line Effect */}
-        {!hideScanLine && <ScanLine />}
-
         {/* Page Content */}
         <Box 
           sx={{ 

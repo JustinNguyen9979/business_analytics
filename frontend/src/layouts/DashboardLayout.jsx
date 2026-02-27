@@ -126,7 +126,6 @@ function LayoutWithBrandContext() {
             <Noise />
             <AmbientOrbs />
             <GridOverlay />
-            <ScanLine />
 
             <Drawer variant="permanent" open={isSidebarOpen}>
                 <SidebarToggle onClick={() => setIsSidebarOpen(!isSidebarOpen)} size="small">

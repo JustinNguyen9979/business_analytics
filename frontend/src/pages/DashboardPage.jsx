@@ -49,7 +49,11 @@ function DashboardPage() {
     }), [globalDateFilter.filter.range, globalDateFilter.buttonProps.children, globalDateFilter.filter.type]);
 
     // 2. TẠO CÁC BỘ LỌC CON (LOCAL FILTERS) - KẾ THỪA TỪ CHA
-    const kpiFilterControl = useChartFilter(globalFilterState);
+    const financeFilterControl = useChartFilter(globalFilterState);
+    const marketingFilterControl = useChartFilter(globalFilterState);
+    const operationsFilterControl = useChartFilter(globalFilterState);
+    const customersFilterControl = useChartFilter(globalFilterState);
+
     const lineChartFilterControl = useChartFilter(globalFilterState);
     const donutFilterControl = useChartFilter(globalFilterState);
     const topProductsFilterControl = useChartFilter(globalFilterState);
@@ -57,13 +61,19 @@ function DashboardPage() {
 
     // 3. MAPPING DỮ LIỆU CHO HOOK FETCH DATA
     const filtersForHook = useMemo (() => ({
-        kpi: { range: kpiFilterControl.dateRange, type: kpiFilterControl.dateType },
+        finance: { range: financeFilterControl.dateRange, type: financeFilterControl.dateType },
+        marketing: { range: marketingFilterControl.dateRange, type: marketingFilterControl.dateType },
+        operations: { range: operationsFilterControl.dateRange, type: operationsFilterControl.dateType },
+        customers: { range: customersFilterControl.dateRange, type: customersFilterControl.dateType },
         lineChart: { range: lineChartFilterControl.dateRange, type: lineChartFilterControl.dateType },
         donut: { range: donutFilterControl.dateRange, type: donutFilterControl.dateType },
         topProducts: { range: topProductsFilterControl.dateRange, type: topProductsFilterControl.dateType },
         map: { range: mapFilterControl.dateRange, type: mapFilterControl.dateType },
     }), [
-        kpiFilterControl.dateRange, kpiFilterControl.dateType,
+        financeFilterControl.dateRange, financeFilterControl.dateType,
+        marketingFilterControl.dateRange, marketingFilterControl.dateType,
+        operationsFilterControl.dateRange, operationsFilterControl.dateType,
+        customersFilterControl.dateRange, customersFilterControl.dateType,
         lineChartFilterControl.dateRange, lineChartFilterControl.dateType,
         donutFilterControl.dateRange, donutFilterControl.dateType,
         topProductsFilterControl.dateRange, topProductsFilterControl.dateType,
@@ -72,7 +82,7 @@ function DashboardPage() {
 
     const dashboardState = useDashboardData(brandSlug, filtersForHook)
 
-    const { kpi, lineChart, donut, topProducts, map } = dashboardState;
+    const { finance, marketing, operations, customers, lineChart, donut, topProducts, map } = dashboardState;
 
     // --- STATE QUẢN LÝ UI ---
     const [chartRevision, setChartRevision] = useState(0);
@@ -98,6 +108,14 @@ function DashboardPage() {
         bomb: T.warning,
         refunded: '#9c27b0'
     }), []);
+
+    // Helper mapping filter controls to groups
+    const kpiFilterControls = useMemo(() => ({
+        finance: financeFilterControl,
+        marketing: marketingFilterControl,
+        operations: operationsFilterControl,
+        customers: customersFilterControl
+    }), [financeFilterControl, marketingFilterControl, operationsFilterControl, customersFilterControl]);
 
     return (
         <Box 
@@ -152,40 +170,45 @@ function DashboardPage() {
                     },
                     mb: 4
                 }}>
-                    {kpiGroups.map((group, groupIndex) => (
-                        <LazyLoader key={group.groupTitle} height={200} offset="0px">
-                            <DashboardBox
-                                title={group.groupTitle}
-                                filterControl={kpiFilterControl}
-                                loading={kpi.loading}
-                                hasData={!!kpi.data.current}
-                                height="auto"
-                                sx={{ height: '100%' }}
-                                className={`anim-stagger-in delay-${groupIndex + 1}`}
-                            >
-                                {kpi.data.current && (
-                                    <Box sx={{ 
-                                        display: 'grid', 
-                                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
-                                        gap: 3, 
-                                        textAlign: 'left' 
-                                    }}>
-                                        {group.items.map((kpiItem) => (
-                                            <StatItem 
-                                                key={kpiItem.key} 
-                                                value={kpi.data.current[kpiItem.key]} 
-                                                previousValue={kpi.data.previous?.[kpiItem.key]}
-                                                {...(() => {
-                                                    const { key, ...rest } = kpiItem;
-                                                    return rest;
-                                                })()}
-                                            />
-                                        ))} 
-                                    </Box>
-                                )}
-                            </DashboardBox>
-                        </LazyLoader>
-                    ))}
+                    {kpiGroups.map((group, groupIndex) => {
+                        const filterControl = kpiFilterControls[group.key];
+                        const groupState = dashboardState[group.key];
+
+                        return (
+                            <LazyLoader key={group.groupTitle} height={200} offset="0px">
+                                <DashboardBox
+                                    title={group.groupTitle}
+                                    filterControl={filterControl}
+                                    loading={groupState.loading}
+                                    hasData={!!groupState.data.current}
+                                    height="auto"
+                                    sx={{ height: '100%' }}
+                                    className={`anim-stagger-in delay-${groupIndex + 1}`}
+                                >
+                                    {groupState.data.current && (
+                                        <Box sx={{ 
+                                            display: 'grid', 
+                                            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', 
+                                            gap: 3, 
+                                            textAlign: 'left' 
+                                        }}>
+                                            {group.items.map((kpiItem) => (
+                                                <StatItem 
+                                                    key={kpiItem.key} 
+                                                    value={groupState.data.current[kpiItem.key]} 
+                                                    previousValue={groupState.data.previous?.[kpiItem.key]}
+                                                    {...(() => {
+                                                        const { key, ...rest } = kpiItem;
+                                                        return rest;
+                                                    })()}
+                                                />
+                                            ))} 
+                                        </Box>
+                                    )}
+                                </DashboardBox>
+                            </LazyLoader>
+                        );
+                    })}
                 </Box>
 
                 <LazyLoader height={750}>

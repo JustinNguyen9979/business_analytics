@@ -84,7 +84,10 @@ const getPreviousPeriod = (startDate, endDate, filterType = 'custom') => {
 export const useDashboardData = (brandSlug, filters) => {
     // <<< THAY ĐỔI 1: Cấu trúc state mới, mỗi khối dữ liệu là một object riêng >>>
     const [state, setState] = useState({
-        kpi: { data: { current: null, previous: null }, loading: true, error: null },
+        finance: { data: { current: null, previous: null }, loading: true, error: null },
+        marketing: { data: { current: null, previous: null }, loading: true, error: null },
+        operations: { data: { current: null, previous: null }, loading: true, error: null },
+        customers: { data: { current: null, previous: null }, loading: true, error: null },
         lineChart: { data: { current: [], previous: [], aggregationType: 'day' }, loading: true, error: null },
         donut: { data: null, loading: true, error: null },
         topProducts: { data: null, loading: true, error: null },
@@ -99,33 +102,39 @@ export const useDashboardData = (brandSlug, filters) => {
         }));
     };
 
-    // <<< THAY ĐỔI 2: useEffect riêng cho KPI >>>
-    useEffect(() => {
-        const filter = filters.kpi;
-        if (!brandSlug || !filter || !filter.range) return;
+    // <<< THAY ĐỔI 2: Helper function cho KPI groups >>>
+    const createKpiEffect = (key, filter) => {
+        useEffect(() => {
+            if (!brandSlug || !filter || !filter.range) return;
 
-        const controller = new AbortController();
+            const controller = new AbortController();
 
-        const fetchKpi = async () => {
-            updateState('kpi', { loading: true, error: null });
-            const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
-            try {
-                const [current, previous] = await Promise.all([
-                    fetchAsyncData('kpi_summary', brandSlug, filter.range, {}, controller.signal),
-                    fetchAsyncData('kpi_summary', brandSlug, prevRange, {}, controller.signal)
-                ]);
-                updateState('kpi', { data: { current, previous }, loading: false });
-            } catch (err) {
-                if (!axios.isCancel(err)) {
-                    updateState('kpi', { error: err.message || 'Lỗi tải dữ liệu KPI.', loading: false });
+            const fetchKpi = async () => {
+                updateState(key, { loading: true, error: null });
+                const prevRange = getPreviousPeriod(filter.range[0], filter.range[1], filter.type);
+                try {
+                    const [current, previous] = await Promise.all([
+                        fetchAsyncData('kpi_summary', brandSlug, filter.range, {}, controller.signal),
+                        fetchAsyncData('kpi_summary', brandSlug, prevRange, {}, controller.signal)
+                    ]);
+                    updateState(key, { data: { current, previous }, loading: false });
+                } catch (err) {
+                    if (!axios.isCancel(err)) {
+                        updateState(key, { error: err.message || `Lỗi tải dữ liệu ${key}.`, loading: false });
+                    }
                 }
-            }
-        };
-        
-        fetchKpi();
+            };
+            
+            fetchKpi();
 
-        return () => controller.abort();
-    }, [brandSlug, filters.kpi?.range, filters.kpi?.type]); // Chỉ phụ thuộc vào giá trị range và type
+            return () => controller.abort();
+        }, [brandSlug, filter?.range, filter?.type]);
+    };
+
+    createKpiEffect('finance', filters.finance);
+    createKpiEffect('marketing', filters.marketing);
+    createKpiEffect('operations', filters.operations);
+    createKpiEffect('customers', filters.customers);
 
     // <<< THAY ĐỔI 3: useEffect riêng cho Biểu đồ đường (Line Chart) >>>
     useEffect(() => {
