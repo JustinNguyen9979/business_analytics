@@ -142,7 +142,7 @@ const AuthPage = () => {
       else delete errs.confirmPassword;
     }
     if (field === "name" && !isLogin) {
-      if (!name.trim()) errs.name = "Vui lòng nhập tên doanh nghiệp.";
+      if (!name.trim()) errs.name = "Vui lòng nhập Họ và Tên.";
       else delete errs.name;
     }
     setErrors(errs);
@@ -158,7 +158,7 @@ const AuthPage = () => {
     if (!values.password)                 submitErrors.password = "Vui lòng nhập mật khẩu.";
     else if (!isLogin && !CRITERIA.every(c => c.test(values.password))) submitErrors.password = "Mật khẩu chưa đủ mạnh.";
     if (!isLogin) {
-      if (!values.name.trim()) submitErrors.name = "Vui lòng nhập tên doanh nghiệp.";
+      if (!values.name.trim()) submitErrors.name = "Vui lòng nhập tên Họ và Tên.";
       if (!values.confirmPassword) submitErrors.confirmPassword = "Vui lòng xác nhận mật khẩu.";
       else if (values.confirmPassword !== values.password) submitErrors.confirmPassword = "Mật khẩu không khớp.";
     }
@@ -377,10 +377,10 @@ const AuthPage = () => {
 
             <Box component="form" onSubmit={handleSubmit} noValidate>
 
-              {/* Tên doanh nghiệp — Register only */}
+              {/* Họ và Tên — Register only */}
               {!isLogin && (
                 <FieldWrap error={errors.name}>
-                  <StyledInput fullWidth placeholder="Tên doanh nghiệp" hasError={!!errors.name}
+                  <StyledInput fullWidth placeholder="Họ và Tên" hasError={!!errors.name}
                     value={values.name} onChange={handleChange("name")} onBlur={handleBlur("name")}
                     InputProps={{ startAdornment: <InputAdornment position="start"><PersonOutline /></InputAdornment> }}
                   />

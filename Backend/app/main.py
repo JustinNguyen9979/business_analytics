@@ -616,12 +616,13 @@ def get_operation_kpis (
     end_date: date = Query(..., description="Ngày kết thúc (YYYY-MM-DD)"),
     source: List[str] = Query(None, description="Danh sách nguồn dữ liệu (e.g. shopee, lazada)"),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ): 
     """
     Lấy các chỉ số KPI vận hành tổng hợp cho OperationPage.
     Trả về giá trị trung bình trong khoảng thời gian được chọn.
     """
-    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug, owner_id=current_user.id)
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     
@@ -651,11 +652,12 @@ def get_customer_kpis (
     end_date: date = Query(..., description="Ngày kết thúc (YYYY-MM-DD)"),
     source: List[str] = Query(None, description="Danh sách nguồn dữ liệu"),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Lấy các chỉ số KPI khách hàng cho CustomerPage.
     """
-    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug, owner_id=current_user.id)
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
         
@@ -677,12 +679,13 @@ def get_top_customers(
     sort_by: str = Query("total_spent", description="Trường cần sắp xếp: total_spent, total_orders, bomb_orders..."),
     order: str = Query("desc", description="Thứ tự: asc hoặc desc"),
     db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Lấy danh sách Top Khách hàng (Đã chuyển sang tính toán động).
     Mặc định lấy toàn bộ lịch sử (2020 -> 2030) nếu không có bộ lọc ngày.
     """
-    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug, owner_id=current_user.id)
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     
@@ -707,12 +710,13 @@ def get_top_customers(
 def search_anything(
     brand_slug: str,
     q: str = Query(..., min_length=1),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Tìm kiếm thông minh: Đơn hàng, Mã vận đơn, SĐT hoặc Tên khách hàng.
     """
-    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug, owner_id=current_user.id)
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     
@@ -727,12 +731,13 @@ def search_anything(
 def get_search_suggestions(
     brand_slug: str,
     q: str = Query(..., min_length=2),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Gợi ý nhanh khi người dùng nhập vào ô tìm kiếm.
     """
-    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug, owner_id=current_user.id)
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     
@@ -743,12 +748,13 @@ def update_customer_api(
     brand_slug: str,
     customer_identifier: str,
     update_data: schemas.CustomerUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
     """
     Cập nhật thông tin khách hàng (SĐT, Email, Address, Notes).
     """
-    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug, owner_id=current_user.id)
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
         

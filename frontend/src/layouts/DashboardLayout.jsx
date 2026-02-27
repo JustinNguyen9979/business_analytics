@@ -245,8 +245,8 @@ export default function DashboardLayout() {
                     if (currentBrand && currentBrand.slug) {
                         // Chuyển hướng sang URL dùng slug
                         const newPath = window.location.pathname.replace(brandIdentifier, currentBrand.slug);
-                        navigate(newPath, { replace: true }); // Dùng navigate để cập nhật URL
-                        return; // Dừng xử lý tiếp để tránh render với ID cũ
+                        navigate(newPath, { replace: true }); 
+                        return; 
                     }
                 } 
                 
@@ -256,12 +256,15 @@ export default function DashboardLayout() {
                 if (currentBrand) {
                     setBrandInfo({ id: currentBrand.id, name: currentBrand.name, slug: currentBrand.slug, isLoading: false });
                 } else {
-                    // Nếu không tìm thấy brand nào, chuyển hướng về trang chính
+                    // [TỐI ƯU] Không nên navigate ngay lập tức nếu chưa tìm thấy,
+                    // mà chỉ báo lỗi 404 hoặc đẩy về lobby nếu CHẮC CHẮN không có.
+                    console.warn(`Brand với slug '${brandIdentifier}' không tồn tại trong danh sách của user.`);
                     navigate('/');
                 }
             } catch (error) {
                 console.error("Lỗi khi giải quyết định danh brand:", error);
-                navigate('/');
+                // Nếu bị lỗi 401 thì Interceptor ở api.js đã lo việc logout rồi, 
+                // ở đây ta không cần làm gì thêm để tránh bị "giật" UI.
             }
         };
         resolveIdentifier();

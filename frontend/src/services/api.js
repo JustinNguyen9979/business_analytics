@@ -24,6 +24,25 @@ apiClient.interceptors.request.use(
     }
 );
 
+// Thêm interceptor để xử lý response và các lỗi toàn cục (ví dụ: 401)
+apiClient.interceptors.response.use(
+    (response) => {
+        return response;
+    },
+    (error) => {
+        // Nếu server trả về 401 (Unauthorized) - Token hết hạn hoặc không hợp lệ
+        if (error.response && error.response.status === 401) {
+            console.warn("Phiên làm việc hết hạn hoặc không hợp lệ. Đang chuyển hướng về trang Login...");
+            localStorage.removeItem('token');
+            // Chuyển hướng về login bằng window.location để đảm bảo app được reset sạch sẽ
+            if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
 export const fetchCustomerMap = async (brandSlug, startDate, endDate, status = [], sources = [], signal) => {
     try {
         const params = { start_date: startDate, end_date: endDate };

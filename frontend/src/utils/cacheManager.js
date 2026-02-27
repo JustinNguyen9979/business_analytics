@@ -41,9 +41,17 @@ export const clearAllApplicationCaches = async () => {
     try {
         // Chúng ta chỉ xóa các key liên quan đến app này, thay vì clear() toàn bộ
         // để tránh ảnh hưởng đến các ứng dụng khác có thể chạy trên cùng domain.
-        // Tuy nhiên, trong trường hợp này, clear() là cách làm triệt để nhất theo yêu cầu.
-        localStorage.clear();
-        console.log("localStorage đã được xóa.");
+        // QUAN TRỌNG: Không xóa 'token' để tránh bị văng ra trang login.
+        // Cũng không xóa cấu hình cá nhân như 'sidebarOpenState' và 'customPlatforms_'.
+        const keysToKeep = ['token', 'sidebarOpenState'];
+        
+        Object.keys(localStorage).forEach(key => {
+            if (!keysToKeep.includes(key) && !key.startsWith('customPlatforms_')) {
+                localStorage.removeItem(key);
+            }
+        });
+
+        console.log("localStorage đã được dọn dẹp (ngoại trừ token và cấu hình).");
     } catch (error) {
         console.error("Lỗi khi xóa localStorage:", error);
     }
