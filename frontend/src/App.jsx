@@ -1,7 +1,7 @@
 // FILE: frontend/src/App.jsx
 
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, CssBaseline, Box, CircularProgress } from '@mui/material';
 import theme from './theme'; 
 import { LayoutProvider } from './context/LayoutContext';
@@ -25,18 +25,52 @@ const PageLoader = () => (
     </Box>
 );
 
+// --- 1. ProtectedRoute: Chỉ cho phép truy cập nếu có Token ---
+const ProtectedRoute = ({ children }) => {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        // Nếu không có token, đẩy về trang login và lưu lại đường dẫn hiện tại (nếu cần)
+        return <Navigate to="/login" replace />;
+    }
+    return children;
+};
+
+// --- 2. PublicRoute: Nếu đã có Token thì không cho vào trang Login nữa ---
+const PublicRoute = ({ children }) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+        return <Navigate to="/" replace />;
+    }
+    return children;
+};
+
 function App() {
     return (
         <ThemeProvider theme={theme}>
             <CssBaseline />
             <NotificationProvider>
                 <LayoutProvider>
-                    {/* 3. Bọc Routes bằng Suspense */}
                     <Suspense fallback={<PageLoader />}>
                         <Routes>
-                            <Route path="/login" element={<AuthPage />} />
-                            <Route path="/" element={<BrandLobby />} />
-                            <Route element={<DashboardLayout />}>
+                            {/* Route công khai: Login */}
+                            <Route path="/login" element={
+                                <PublicRoute>
+                                    <AuthPage />
+                                </PublicRoute>
+                            } />
+
+                            {/* Các Route cần bảo vệ */}
+                            <Route path="/" element={
+                                <ProtectedRoute>
+                                    <BrandLobby />
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route element={
+                                <ProtectedRoute>
+                                    <DashboardLayout />
+                                </ProtectedRoute>
+                            }>
                                 <Route path="/dashboard/:brandIdentifier" element={<DashboardPage />} />
                                 <Route path="/dashboard/:brandIdentifier/finance" element={<FinancePage />} />
                                 <Route path="/dashboard/:brandIdentifier/marketing" element={<MarketingPage />} />
@@ -44,6 +78,9 @@ function App() {
                                 <Route path="/dashboard/:brandIdentifier/customer" element={<CustomerPage />} />
                                 <Route path="/dashboard/:brandIdentifier/search" element={<SearchPage />} />
                             </Route>
+
+                            {/* Fallback: Về trang chủ */}
+                            <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
                     </Suspense>
                 </LayoutProvider>

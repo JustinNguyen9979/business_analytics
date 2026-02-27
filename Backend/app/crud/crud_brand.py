@@ -19,26 +19,35 @@ def slugify(value: str) -> str:
     return re.sub(r'[-\s]+', '-', value)
 
 class CRUDBrand(CRUDBase[Brand, BrandCreate, BrandBase]):
-    def get_by_slug(self, db: Session, *, slug: str) -> Optional[Brand]:
-        return db.query(self.model).filter(self.model.slug == slug).first()
+    def get_by_slug(self, db: Session, *, slug: str, owner_id: str) -> Optional[Brand]:
+        return db.query(self.model).filter(
+            self.model.slug == slug,
+            self.model.owner_id == owner_id
+        ).first()
 
-    def get_by_name(self, db: Session, *, name: str) -> Optional[Brand]:
-        return db.query(self.model).filter(self.model.name == name).first()
+    def get_by_name(self, db: Session, *, name: str, owner_id: str) -> Optional[Brand]:
+        return db.query(self.model).filter(
+            func.lower(self.model.name) == func.lower(name),
+            self.model.owner_id == owner_id
+        ).first()
 
     def create(self, db: Session, *, obj_in: BrandCreate, owner_id: str) -> Optional[Brand]:
         """
-        Override hàm create để tự động sinh slug duy nhất và gán owner_id.
+        Override hàm create để tự động sinh slug duy nhất (theo owner) và gán owner_id.
         """
         clean_name = obj_in.name.strip()
-        # Check trùng tên (Case insensitive)
-        if db.query(self.model).filter(func.lower(self.model.name) == func.lower(clean_name)).first():
+        # Check trùng tên của CÙNG 1 USER
+        if self.get_by_name(db, name=clean_name, owner_id=owner_id):
             return None
         
-        # Logic tạo slug duy nhất
+        # Logic tạo slug duy nhất THEO USER
         base_slug = slugify(clean_name)
         unique_slug = base_slug
         counter = 1
-        while db.query(self.model).filter(self.model.slug == unique_slug).first():
+        while db.query(self.model).filter(
+            self.model.slug == unique_slug, 
+            self.model.owner_id == owner_id
+        ).first():
             unique_slug = f"{base_slug}-{counter}"
             counter += 1
 
@@ -48,30 +57,35 @@ class CRUDBrand(CRUDBase[Brand, BrandCreate, BrandBase]):
         db.refresh(db_obj)
         return db_obj
     
-    def update_name(self, db: Session, *, brand_id: int, new_name: str) -> Optional[Brand]:
+    def update_name(self, db: Session, *, brand_id: int, new_name: str, owner_id: str) -> Optional[Brand]:
         """
-        Cập nhật tên và regenerate slug.
+        Cập nhật tên và regenerate slug (theo owner).
         """
         db_brand = self.get(db, id=brand_id)
-        if not db_brand:
+        if not db_brand or db_brand.owner_id != owner_id:
             return None
 
         clean_new_name = new_name.strip()
-        # Check trùng tên với brand KHÁC
+        # Check trùng tên với brand KHÁC của CÙNG 1 USER
         existing_brand = db.query(self.model).filter(
             func.lower(self.model.name) == func.lower(clean_new_name),
-            self.model.id != brand_id
+            self.model.id != brand_id,
+            self.model.owner_id == owner_id
         ).first()
         if existing_brand:
             return None
 
         db_brand.name = clean_new_name
         
-        # Regenerate slug
+        # Regenerate slug (theo owner)
         base_slug = slugify(clean_new_name)
         unique_slug = base_slug
         counter = 1
-        while db.query(self.model).filter(self.model.slug == unique_slug, self.model.id != brand_id).first():
+        while db.query(self.model).filter(
+            self.model.slug == unique_slug, 
+            self.model.id != brand_id,
+            self.model.owner_id == owner_id
+        ).first():
             unique_slug = f"{base_slug}-{counter}"
             counter += 1
         db_brand.slug = unique_slug

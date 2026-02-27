@@ -29,7 +29,7 @@ def delete_brand_by_id(db, brand_id: int):
 
 def clone_brand(db, brand_id: int):
     """
-    Hàm nhân bản Brand (Logic đơn giản: Copy tên + ' - Copy')
+    Hàm nhân bản Brand (Logic: Copy tên + ' - Copy', scoped theo owner)
     """
     original = brand.get(db, id=brand_id)
     if not original:
@@ -37,14 +37,15 @@ def clone_brand(db, brand_id: int):
     
     from schemas import BrandCreate
     new_name = f"{original.name} - Copy"
+    owner_id = original.owner_id
     
-    # Xử lý trùng tên đơn giản
+    # Xử lý trùng tên (CHỈ check của cùng 1 owner)
     count = 1
-    while brand.get_by_name(db, name=new_name):
+    while brand.get_by_name(db, name=new_name, owner_id=owner_id):
         count += 1
         new_name = f"{original.name} - Copy {count}"
         
-    return brand.create(db, obj_in=BrandCreate(name=new_name), owner_id=original.owner_id)
+    return brand.create(db, obj_in=BrandCreate(name=new_name), owner_id=owner_id)
 
 def recalculate_brand_data_sync(db, brand_id: int):
     """

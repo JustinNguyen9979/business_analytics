@@ -90,8 +90,8 @@ class User(Base):
 class Brand(Base):
     __tablename__ = "brands"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
-    slug = Column(String, unique=True, index=True)
+    name = Column(String, index=True)
+    slug = Column(String, index=True)
     owner_id = Column(String, ForeignKey("users.id"), index=True, nullable=True) # Map với User ID là String
 
     owner = relationship("User", backref="brands")
@@ -105,6 +105,11 @@ class Brand(Base):
     import_logs = relationship("ImportLog", back_populates="owner_brand", cascade="all, delete-orphan")
     
     customers = relationship("Customer", back_populates="owner_brand", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        UniqueConstraint('name', 'owner_id', name='uq_brand_name_owner'),
+        UniqueConstraint('slug', 'owner_id', name='uq_brand_slug_owner'),
+    )
 
 class Product(Base):
     __tablename__ = "products"

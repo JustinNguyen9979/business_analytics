@@ -128,16 +128,11 @@ def login(form_data: schemas.UserLogin, db: Session = Depends(get_db)):
 
 def get_brand_from_slug(brand_slug: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     """Lấy brand từ slug và kiểm tra quyền sở hữu"""
-    db_brand = crud.get_brand_by_slug(db, slug=brand_slug)
+    # [TỐI ƯU] Tìm thẳng theo slug + owner_id để đảm bảo lấy đúng brand của user
+    db_brand = crud.get_brand_by_slug(db, slug=brand_slug, owner_id=current_user.id)
     if not db_brand:
         raise HTTPException(status_code=404, detail="Không tìm thấy Brand.")
     
-    # Kiểm tra quyền sở hữu (Security check)
-    if db_brand.owner_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Bạn không có quyền truy cập thương hiệu này."
-        )
     return db_brand
 
 # ==============================================================================
@@ -156,10 +151,13 @@ def read_brands(db: Session = Depends(get_db), current_user: models.User = Depen
 @app.post("/api/brands/", response_model=schemas.BrandInfo)
 def create_brand_api(brand: schemas.BrandCreate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     """Tạo brand mới gắn với user hiện tại"""
-    # Kiểm tra tên trùng
-    existing = db.query(models.Brand).filter(models.Brand.name == brand.name).first()
+    # [TỐI ƯU] Kiểm tra tên trùng trong phạm vi sở hữu của user
+    existing = db.query(models.Brand).filter(
+        models.Brand.name == brand.name,
+        models.Brand.owner_id == current_user.id
+    ).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Brand này đã tồn tại.")
+        raise HTTPException(status_code=400, detail="Bạn đã có một Brand với tên này rồi.")
         
     new_brand = crud.create_brand(db=db, obj_in=brand, owner_id=current_user.id)
     return new_brand
@@ -171,9 +169,9 @@ def update_brand_api(brand_id: int, brand_update: schemas.BrandCreate, db: Sessi
     if not db_brand:
         raise HTTPException(status_code=403, detail="Bạn không có quyền chỉnh sửa thương hiệu này.")
         
-    updated_brand = crud.update_brand_name(db, brand_id=brand_id, new_name=brand_update.name)
+    updated_brand = crud.update_brand_name(db, brand_id=brand_id, new_name=brand_update.name, owner_id=current_user.id)
     if not updated_brand:
-        raise HTTPException(status_code=400, detail="Không thể đổi tên. Tên Brand mới đã bị trùng.")
+        raise HTTPException(status_code=400, detail="Không thể đổi tên. Tên Brand mới đã bị trùng trong danh sách của bạn.")
     return updated_brand
 
 @app.delete("/api/brands/{brand_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -347,13 +345,10 @@ def request_data_processing(
     """
     Endpoint chính: Nhận yêu cầu (dùng SLUG), kiểm tra cache, hoặc giao việc cho worker.
     """
-    # 1. Lấy brand và kiểm tra quyền sở hữu
-    db_brand = crud.get_brand_by_slug(db, slug=request_body.brand_slug)
+    # 1. Lấy brand và kiểm tra quyền sở hữu (TỐI ƯU)
+    db_brand = crud.get_brand_by_slug(db, slug=request_body.brand_slug, owner_id=current_user.id)
     if not db_brand:
-        raise HTTPException(status_code=404, detail=f"Brand slug '{request_body.brand_slug}' không tồn tại.")
-    
-    if db_brand.owner_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Bạn không có quyền truy cập dữ liệu của thương hiệu này.")
+        raise HTTPException(status_code=404, detail=f"Brand slug '{request_body.brand_slug}' không tồn tại hoặc bạn không có quyền truy cập.")
     
     brand_id = db_brand.id
     request_type = request_body.request_type
