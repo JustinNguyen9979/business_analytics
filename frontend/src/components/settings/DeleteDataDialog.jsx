@@ -11,6 +11,7 @@ import DateRangeFilterMenu from '../common/DateRangeFilterMenu';
 import { dateShortcuts } from '../../config/dashboardConfig';
 import { getSourcesForBrand, deleteDataInRange } from '../../services/api';
 import { useNotification } from '../../context/NotificationContext';
+import { filterButtonSx, T } from '../../theme/designSystem';
 
 const getCustomPlatforms = (brandSlug) => {
     if (!brandSlug) return [];
@@ -121,7 +122,10 @@ function DeleteDataDialog({ open, onClose, brandSlug, brandName }) {
         }
     };
 
-    const isConfirmEnabled = confirmationText === expectedConfirmationText && dateRange !== null && !!expectedConfirmationText;
+    const isConfirmEnabled = 
+        confirmationText.trim().toLowerCase() === expectedConfirmationText.toLowerCase() && 
+        dateRange !== null && 
+        !!expectedConfirmationText;
 
     const deletionTargetText = selectedSource === 'all'
         ? `tất cả các nguồn dữ liệu của brand ${brandName || '...'}`
@@ -168,20 +172,38 @@ function DeleteDataDialog({ open, onClose, brandSlug, brandName }) {
                                 variant="outlined"
                                 startIcon={<CalendarMonthIcon />}
                                 onClick={handleOpenFilter}
-                                sx={{ flexGrow: 1, color: 'text.primary', borderColor: 'rgba(255,255,255,0.3)' }}
+                                sx={{ ...filterButtonSx, flexGrow: 1 }}
                             >
                                 {dateLabel}
                             </Button>
                             
-                            <FormControl sx={{ width: 300, flexShrink: 0 }}>
-                                <InputLabel id="source-select-label">Nguồn Dữ liệu</InputLabel>
+                            <FormControl sx={{ width: 300, flexShrink: 0 }} size="small">
+                                <InputLabel id="source-select-label" sx={{ 
+                                    color: 'text.secondary', 
+                                    '&.Mui-focused': { color: T.primary } 
+                                }}>
+                                    Nguồn Dữ liệu
+                                </InputLabel>
                                 <Select
                                     labelId="source-select-label"
                                     value={selectedSource}
                                     label="Nguồn Dữ liệu"
                                     onChange={(e) => setSelectedSource(e.target.value)}
                                     sx={{
+                                        height: 44, // Đồng bộ với filterButtonSx
+                                        borderRadius: T.radiusMd, // Đồng bộ bo góc
                                         color: 'text.primary',
+                                        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                                        '& .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: T.border,
+                                        },
+                                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: T.primary,
+                                        },
+                                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                                            borderColor: T.primary,
+                                            borderWidth: '1px'
+                                        },
                                         '.MuiSelect-icon': { color: 'text.secondary' },
                                     }}
                                 >
@@ -247,8 +269,27 @@ function DeleteDataDialog({ open, onClose, brandSlug, brandName }) {
                 </Box>
             </DialogContent>
             
-            <DialogActions>
-                <Button onClick={onClose} color="inherit">
+            <DialogActions sx={{ px: 3, pb: 3 }}>
+                <Button 
+                    onClick={onClose} 
+                    sx={{ 
+                        color: 'text.secondary',
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        px: 3,
+                        transition: 'all 0.3s ease',
+                        border: '1px solid transparent',
+                        '&:hover': {
+                            color: T.primary,
+                            backgroundColor: 'rgba(45, 212, 191, 0.05)',
+                            borderColor: 'transparent',
+                            // Thêm hiệu ứng phát sáng cho chữ
+                            textShadow: `0 0 10px ${T.primary}80`,
+                            // Thêm hiệu ứng phát sáng lan tỏa xung quanh (glow)
+                            boxShadow: `0 0 15px ${T.primary}10`,
+                        }
+                    }}
+                >
                     Hủy
                 </Button>
                 <Button

@@ -24,7 +24,7 @@ export const T = {
   borderHover: "rgba(255, 255, 255, 0.12)",
 
   // Brand colors
-  primary:     "#2dd4bf",                       // Teal
+  primary:     "#00E5FF",                       // Teal
   primaryDim:  "rgba(45, 212, 191, 0.12)",
   primaryGlow: "rgba(45, 212, 191, 0.30)",
   accent:      "#818cf8",                       // Indigo
@@ -341,11 +341,48 @@ export const EyebrowLabel = ({ children }) => (
       bgcolor: T.primary, boxShadow: `0 0 8px ${T.primary}`,
       animation: `${pulseFade} 2s infinite`,
     }} />
-    <Typography sx={{
-      fontFamily: T.fontMono, fontSize: "0.62rem",
-      color: T.primary, letterSpacing: "2px", textTransform: "uppercase",
-    }}>
-      {children}
-    </Typography>
-  </Box>
-);
+        <Typography sx={{
+          fontFamily: T.fontMono, fontSize: "0.62rem",
+          color: T.primary, letterSpacing: "2px", textTransform: "uppercase",
+        }}>
+          {children}
+        </Typography>
+      </Box>
+    );
+    
+    /** Standard Filter Button Style — dùng cho bộ lọc tổng ở đầu trang */
+    export const filterButtonSx = {
+      borderRadius: T.radiusMd,
+      height: 44,
+      px: 3,
+      backgroundColor: "rgba(255, 255, 255, 0.03)",
+      borderColor: T.border,
+      color: T.textPrimary,
+      textTransform: "none",
+      fontFamily: T.fontBody,
+      fontWeight: 500,
+      transition: "all 0.3s var(--ease-smooth)",
+      "& .MuiButton-startIcon": {
+        color: T.primary,
+        transition: "transform 0.3s ease",
+      },
+      "&:hover": {
+        borderColor: T.primary,
+        backgroundColor: "rgba(45, 212, 191, 0.08)",
+        color: T.primary,
+        boxShadow: `0 0 20px ${T.primary}15`,
+        "& .MuiButton-startIcon": {
+          transform: "scale(1.1)",
+        },
+      },
+    };
+    
+    /** Small Filter Button Style — dùng cho bộ lọc trong các DashboardBox */
+    export const smallFilterButtonSx = {
+      ...filterButtonSx,
+      height: 32,
+      px: 1.5,
+      borderRadius: T.radiusSm,
+      fontSize: "0.75rem",
+    };
+    

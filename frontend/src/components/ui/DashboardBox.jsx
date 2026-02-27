@@ -5,7 +5,7 @@ import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import DateRangeFilterMenu from '../common/DateRangeFilterMenu';
 import LoadingOverlay from '../common/LoadingOverlay';
 import ChartPlaceholder from '../common/ChartPlaceholder';
-import { T, AccentBar } from '../../theme/designSystem';
+import { T, AccentBar, smallFilterButtonSx } from '../../theme/designSystem';
 
 const ChartSkeleton = () => (
     <Skeleton 
@@ -97,19 +97,7 @@ const DashboardBox = ({
                                 size="small" 
                                 startIcon={<CalendarMonthIcon />} 
                                 onClick={filterControl.openDateMenu}
-                                sx={{ 
-                                    borderRadius: T.radiusSm,
-                                    borderColor: T.border,
-                                    color: T.textSecond,
-                                    fontSize: '0.75rem',
-                                    height: 32,
-                                    px: 1.5,
-                                    '&:hover': {
-                                        borderColor: T.primary,
-                                        color: T.primary,
-                                        backgroundColor: T.primaryDim
-                                    }
-                                }}
+                                sx={smallFilterButtonSx}
                             >
                                 {filterControl.dateLabel}
                             </Button>

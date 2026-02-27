@@ -16,7 +16,7 @@ import DashboardBox from '../components/ui/DashboardBox';
 
 import { useCostBreakdown } from '../hooks/useCostBreakdown';
 import LazyLoader from '../components/common/LazyLoader';
-import { ShimmerText, EyebrowLabel, T, AccentBar, fadeUp } from '../theme/designSystem';
+import { ShimmerText, EyebrowLabel, T, AccentBar, fadeUp, filterButtonSx } from '../theme/designSystem';
 
 const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
 const DonutChart = lazy(() => import('../components/charts/DonutChart'));
@@ -142,18 +142,7 @@ function DashboardPage() {
                             variant="outlined" 
                             startIcon={<CalendarMonthIcon />} 
                             {...globalDateFilter.buttonProps}
-                            sx={{ 
-                                borderRadius: T.radiusMd, 
-                                height: 44, 
-                                px: 3,
-                                backgroundColor: 'rgba(255,255,255,0.03)',
-                                borderColor: T.border,
-                                color: T.textPrimary,
-                                '&:hover': {
-                                    borderColor: T.primary,
-                                    backgroundColor: 'rgba(45, 212, 191, 0.05)',
-                                }
-                            }}
+                            sx={filterButtonSx}
                         >
                              {globalDateFilter.buttonProps.children}
                         </Button>

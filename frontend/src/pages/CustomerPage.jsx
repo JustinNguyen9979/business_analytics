@@ -14,7 +14,7 @@ import DateRangeFilterMenu from '../components/common/DateRangeFilterMenu';
 import LazyLoader from '../components/common/LazyLoader';
 import CustomerTable from '../components/customer/CustomerTable';
 import StatComparison from '../components/common/StatComparison'; // Import StatComparison
-import { fadeUp } from '../theme/designSystem';
+import { fadeUp, filterButtonSx, smallFilterButtonSx } from '../theme/designSystem';
 
 // Import Chart Controls (Tái sử dụng logic từ Operation)
 import ChartSettingsPanel from '../components/charts/controls/ChartSettingsPanel';
@@ -119,7 +119,7 @@ const CustomerBoxControl = React.memo(({ filter, sourceOptions, title, hideSourc
                 <Button 
                     variant="outlined" size="small" startIcon={<CalendarMonthIcon />} 
                     onClick={filter.openDateMenu}
-                    sx={{ borderRadius: 2, height: 36.5, minWidth: 110, whiteSpace: 'nowrap' }}
+                    sx={smallFilterButtonSx}
                 >
                     {filter.dateLabel}
                 </Button>
@@ -324,7 +324,7 @@ function CustomerPage() {
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
                 <Typography variant="h4" fontWeight="bold">Báo cáo Khách hàng</Typography>
                 <Box>
-                    <Button variant="outlined" startIcon={<CalendarMonthIcon />} onClick={handleOpenFilter} sx={{ borderRadius: 2 }}>
+                    <Button variant="outlined" startIcon={<CalendarMonthIcon />} onClick={handleOpenFilter} sx={filterButtonSx}>
                         {dateLabel}
                     </Button>
                     <DateRangeFilterMenu

@@ -288,6 +288,7 @@ def get_brand_sources(brand: models.Brand = Depends(get_brand_from_slug), db: Se
     return crud.get_sources_for_brand(db, brand.id)
 
 @app.post("/api/brands/{brand_slug}/delete-data-in-range", status_code=status.HTTP_200_OK, response_model=schemas.DeleteDataResponse)
+@app.post("/api/brands/{brand_slug}/delete-data", response_model=schemas.DeleteDataResponse)
 @limiter.limit("5/minute")
 def delete_data_in_range(
     request: Request,
@@ -306,6 +307,10 @@ def delete_data_in_range(
             db, brand.id, payload.start_date, payload.end_date, source
         )
         
+        # Đảm bảo trả về mảng rỗng nếu fully_deleted_sources là None
+        if fully_deleted_sources is None:
+            fully_deleted_sources = []
+            
         # Kích hoạt tính toán lại dữ liệu trong nền (Chỉ tính các ngày bị ảnh hưởng)
         from datetime import timedelta
         

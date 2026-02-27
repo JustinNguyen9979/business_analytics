@@ -16,7 +16,7 @@ import LoadingOverlay from '../components/common/LoadingOverlay';
 import SectionTitle from '../components/ui/SectionTitle';
 import DashboardBox from '../components/ui/DashboardBox';
 import LazyLoader from '../components/common/LazyLoader';
-import { fadeUp } from '../theme/designSystem';
+import { fadeUp, filterButtonSx } from '../theme/designSystem';
 
 const RevenueProfitChart = lazy(() => import('../components/charts/RevenueProfitChart'));
 const SourceDistributionChart = lazy(() => import('../components/charts/SourceDistributionChart'));
@@ -78,11 +78,7 @@ function FinancePage() {
                         variant="outlined"
                         startIcon={<CalendarMonthIcon />}
                         onClick={handleOpenFilter}
-                        sx={{ 
-                            color: theme.palette.primary.main, 
-                            borderColor: theme.palette.primary.main, 
-                            borderRadius: 2
-                         }}
+                        sx={filterButtonSx}
                     >
                         {dateLabel}
                     </Button>
