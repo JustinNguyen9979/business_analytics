@@ -5,7 +5,7 @@
 //   src/styles/global.css      — CSS thuần, Google Fonts, resets
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Typography, Box, Grid,
@@ -31,6 +31,24 @@ import BrandCard from "../components/brand/BrandCard";
 import CreateBrandCard from "../components/brand/CreateBrandCard";
 
 /* =========================================================
+   CONSTANTS & DATA
+========================================================= */
+const INSIGHTS = [
+  "Nếu thấy biên lợi nhuận tụt ở hơn 2 thương hiệu, hãy xem lại chiến lược discount trong 30 ngày qua.",
+  "Tỷ lệ khách hàng quay lại đang có xu hướng giảm, hãy kiểm tra lại các chương trình chăm sóc khách hàng thân thiết.",
+  "Chi phí quảng cáo (ADS) đang tăng cao nhưng tỷ lệ chuyển đổi không đổi, có thể tệp đối tượng đang bị bão hòa.",
+  "Khi 1 thương hiệu liên tục vượt target 3 tháng, có lẽ đã đến lúc tăng ngân sách marketing cho nó.",
+  "Không phải brand nào cũng cần bán nhiều hơn. Một số chỉ cần bán đúng hơn.",
+  "Dữ liệu không nói dối, nhưng cũng không tự kể chuyện – AnalyticsPRO là người phiên dịch.",
+  "Bạn có chắc thương hiệu mang lại nhiều doanh thu nhất cũng là thương hiệu sinh lời tốt nhất?",
+  "Nếu phải cắt 1 thương hiệu khỏi portfolio hôm nay, bạn sẽ chọn cái nào?",
+  "Hôm nay các thương hiệu của bạn đang đi đúng quỹ đạo, nhưng biên lợi nhuận bắt đầu mỏng dần.",
+  "Bức tranh doanh thu ổn định, điều đáng chú ý nằm ở tốc độ xoay vòng hàng tồn.",
+  "Sản phẩm chủ lực đang bị cạnh tranh về giá, cân nhắc tối ưu lại chi phí vận hành để giữ biên lợi nhuận.",
+  "Dữ liệu cho thấy khung giờ từ 20h - 22h có lượng truy cập cao nhất, hãy tập trung ngân sách marketing vào khung giờ này."
+];
+
+/* =========================================================
    MAIN COMPONENT
 ========================================================= */
 function BrandLobby() {
@@ -43,6 +61,8 @@ function BrandLobby() {
   const [newName, setNewName]           = useState("");
   const [confirmDeleteName, setConfirmDeleteName] = useState("");
   const [renameError, setRenameError]   = useState("");
+
+  const randomInsight = useMemo(() => INSIGHTS[Math.floor(Math.random() * INSIGHTS.length)], []);
 
   /* ── Data fetching ── */
   const fetchBrands = async () => {
@@ -229,30 +249,40 @@ function BrandLobby() {
           </Grid>
         </Grid>
 
-        {/* Stats footer */}
-        {brands.length > 0 && (
+        {/* Random Insights Footer */}
+        <Box sx={{
+          mt: 12, textAlign: "center", maxWidth: 700, mx: "auto",
+          animation: `${fadeUp} 0.8s ease-out 0.5s both`,
+        }}>
           <Box sx={{
-            mt: 10, display: "flex", justifyContent: "center", gap: 4, flexWrap: "wrap",
-            animation: `${fadeUp} 0.6s ease-out 0.4s both`,
+            px: 4, py: 2.5, borderRadius: T.radiusLg,
+            border: `1px solid ${T.primary}15`,
+            bgcolor: "rgba(255,255,255,0.02)",
+            backdropFilter: "blur(10px)",
+            position: "relative", overflow: "hidden",
           }}>
-            {[
-              { label: "Tổng thương hiệu", value: brands.length,               color: T.primary },
-              { label: "Đang hoạt động",   value: brands.length,               color: T.success },
-              { label: "Cập nhật hôm nay", value: Math.min(brands.length, 3),  color: T.accent  },
-            ].map(({ label, value, color }) => (
-              <Box key={label} sx={{
-                px: 3, py: 2, borderRadius: "14px",
-                border: `1px solid ${T.border}`,
-                bgcolor: "rgba(255,255,255,0.02)",
-                backdropFilter: "blur(10px)",
-                textAlign: "center", minWidth: 140,
-              }}>
-                <Typography sx={{ fontFamily: T.fontDisplay, fontWeight: 700, fontSize: "1.6rem", color, lineHeight: 1 }}>{value}</Typography>
-                <Typography sx={{ fontFamily: T.fontMono, fontSize: "0.6rem", color: T.textMuted, mt: 0.5, letterSpacing: "1px", textTransform: "uppercase" }}>{label}</Typography>
-              </Box>
-            ))}
+            {/* Trang trí góc */}
+            <Box sx={{ position: "absolute", top: 0, left: 0, width: 20, height: 20, borderLeft: `2px solid ${T.primary}40`, borderTop: `2px solid ${T.primary}40`, borderRadius: "4px 0 0 0" }} />
+            <Box sx={{ position: "absolute", bottom: 0, right: 0, width: 20, height: 20, borderRight: `2px solid ${T.primary}40`, borderBottom: `2px solid ${T.primary}40`, borderRadius: "0 0 4px 0" }} />
+
+            <Typography sx={{
+              fontFamily: T.fontMono, fontSize: "0.6rem", color: T.primary,
+              letterSpacing: "2px", mb: 1.5, textTransform: "uppercase", opacity: 0.8,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 1
+            }}>
+              <Box sx={{ width: 4, height: 4, borderRadius: "50%", bgcolor: T.primary }} />
+              AI Insight Daily
+              <Box sx={{ width: 4, height: 4, borderRadius: "50%", bgcolor: T.primary }} />
+            </Typography>
+            
+            <Typography sx={{
+              fontFamily: T.fontBody, color: T.textSecond, fontSize: "0.85rem",
+              lineHeight: 1.6, fontStyle: "italic",
+            }}>
+              "{randomInsight}"
+            </Typography>
           </Box>
-        )}
+        </Box>
       </Box>
 
       {/* ══════════════════════════════════════════
