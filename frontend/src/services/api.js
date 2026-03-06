@@ -43,6 +43,18 @@ apiClient.interceptors.response.use(
     }
 );
 
+export const downloadSampleFile = async (brandSlug) => {
+    try {
+        const response = await apiClient.get(`/brands/${brandSlug}/download-sample-file`, {
+            responseType: 'blob', // Nhận dữ liệu nhị phân
+        });
+        return response.data;
+    } catch (error) {
+        console.error(`Error downloading sample file for brand ${brandSlug}:`, error);
+        throw error;
+    }
+};
+
 export const fetchCustomerMap = async (brandSlug, startDate, endDate, status = [], sources = [], signal) => {
     try {
         const params = { start_date: startDate, end_date: endDate };

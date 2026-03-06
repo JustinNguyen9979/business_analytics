@@ -9,7 +9,7 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import DownloadIcon from '@mui/icons-material/Download';
 import FileDropzone from './FileDropzone';
 import { useNotification } from '../../context/NotificationContext';
-import { uploadStandardFile } from '../../services/api';
+import { uploadStandardFile, downloadSampleFile } from '../../services/api';
 
 const MAX_SOURCE_LENGTH = 20;
 const DEFAULT_PLATFORMS = [ { key: 'shopee', name: 'Shopee' }, { key: 'tiktok', name: 'TikTok Shop' }];
@@ -94,6 +94,23 @@ function SingleImportDialog({ open, onClose, onUploadComplete, brandSlug }) {
         setCustomSource('');
         setCustomSourceError('');
         setIsSelectOpen(false); // Đóng Select sau khi thêm thành công
+    };
+
+    const handleDownloadSample = async () => {
+        if (!brandSlug) return;
+        try {
+            const blob = await downloadSampleFile(brandSlug);
+            const url = window.URL.createObjectURL(new Blob([blob]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `template_import_${brandSlug}.xlsx`);
+            document.body.appendChild(link);
+            link.click();
+            link.parentNode.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            showNotification('Không thể tải file mẫu. Vui lòng thử lại.', 'error');
+        }
     };
 
     const handleConfirmOverwrite = () => {
@@ -255,8 +272,7 @@ function SingleImportDialog({ open, onClose, onUploadComplete, brandSlug }) {
 
                 <DialogActions>
                     <Button 
-                        href={`/api/brands/${brandSlug}/download-sample-file`} 
-                        download 
+                        onClick={handleDownloadSample}
                         startIcon={<DownloadIcon />} 
                         color="inherit" 
                         size="small" 
