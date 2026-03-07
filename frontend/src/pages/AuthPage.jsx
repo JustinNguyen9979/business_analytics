@@ -87,6 +87,19 @@ const CRITERIA = [
 const STRENGTH_COLORS = ["#334155", T.error, "#f97316", T.gold, T.primary, T.success];
 const STRENGTH_LABELS = ["", "Rất yếu", "Yếu", "Trung bình", "Tốt", "Mạnh"];
 
+const getRetryAfterSeconds = (err) => {
+  const headerValue =
+    err?.response?.headers?.["retry-after"] ??
+    err?.response?.headers?.["Retry-After"];
+  const parsed = Number.parseInt(headerValue, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+};
+
+const toRetryAfterMinutes = (seconds) => {
+  const safeSeconds = Number.isFinite(seconds) && seconds > 0 ? seconds : 60;
+  return Math.max(1, Math.ceil(safeSeconds / 60));
+};
+
 /* =========================================================
    MAIN COMPONENT
 ========================================================= */
@@ -177,7 +190,17 @@ const AuthPage = () => {
     if (isLogin) {
       loginAPI({ username: payload.username, password: payload.password })
         .then(res => { localStorage.setItem("token", res.access_token); navigate("/"); })
-        .catch(err => setApiError(err.response?.data?.detail || "Đăng nhập thất bại. Vui lòng kiểm tra lại."))
+        .catch(err => {
+          if (err?.response?.status === 429) {
+            const retryAfter = getRetryAfterSeconds(err);
+            const retryAfterMinutes = toRetryAfterMinutes(retryAfter);
+            setApiError(
+              `Bạn đã đăng nhập sai thông tin đăng nhập quá số lần quy định, hãy thử lại sau ${retryAfterMinutes} phút.`
+            );
+            return;
+          }
+          setApiError(err.response?.data?.detail || "Đăng nhập thất bại. Vui lòng kiểm tra lại.");
+        })
         .finally(() => setLoading(false));
     } else {
       signupAPI(payload)
@@ -244,7 +267,7 @@ const AuthPage = () => {
               </Box>
             </Typography>
             <Typography sx={{ color: T.textSecond, fontFamily: T.fontBody, fontSize: "0.95rem", maxWidth: 440, mx: "auto", lineHeight: 1.7 }}>
-              Theo dõi hiệu suất thời gian thực, phân tích xu hướng và đưa ra quyết định dựa trên dữ liệu chính xác.
+              Báo cáo đa chiều kết hợp AI Insight — hỗ trợ chủ doanh nghiệp nắm bắt tình hình kinh doanh mọi lúc.
             </Typography>
           </Box>
 

@@ -18,6 +18,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from limiter import limiter
 from auth_utils import get_password_hash, verify_password, create_access_token, SECRET_KEY, ALGORITHM
+from login_security import login_security_manager
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 
@@ -113,16 +114,22 @@ def signup(user_in: schemas.UserCreate, db: Session = Depends(get_db)):
     return db_user
 
 @app.post("/api/auth/login", response_model=schemas.Token)
-def login(form_data: schemas.UserLogin, db: Session = Depends(get_db)): 
+def login(form_data: schemas.UserLogin, request: Request, db: Session = Depends(get_db)): 
     """Đăng nhập và nhận Token"""
-    user = db.query(models.User).filter(models.User.username == form_data.username).first()
+    normalized_username = login_security_manager.normalize_username(form_data.username)
+    client_ip = login_security_manager.get_client_ip(request)
+    login_security_manager.ensure_not_locked(normalized_username, client_ip)
+
+    user = db.query(models.User).filter(models.User.username == form_data.username.strip()).first()
     if not user or not verify_password(form_data.password, user.hashed_password):
+        login_security_manager.register_failed_attempt(normalized_username, client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tài khoản hoặc mật khẩu không chính xác.",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    login_security_manager.register_success(normalized_username)
     access_token = create_access_token(data={"sub": user.username, "role": user.role.value})
     return {"access_token": access_token, "token_type": "bearer"}
 
