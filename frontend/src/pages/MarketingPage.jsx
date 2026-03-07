@@ -19,7 +19,6 @@ import {
     TrackChanges as TrackChangesIcon,
     Bolt as BoltIcon,
     SmartToy as SmartToyIcon,
-    Memory as MemoryIcon,
     Radar as RadarIcon,
 } from '@mui/icons-material';
 
@@ -379,11 +378,8 @@ function MarketingPage() {
         <Box sx={{ px: 4, py: 3, animation: `${fadeUp} 0.6s ease-out forwards` }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
                 <Box>
-                    <Typography variant="overline" sx={{ color: 'primary.main', letterSpacing: 2, fontWeight: 700 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
                         MARKETING INTELLIGENCE
-                    </Typography>
-                    <Typography variant="h4" sx={{ fontWeight: 800 }}>
-                        Trung tâm Điều phối
                     </Typography>
                 </Box>
 
@@ -430,7 +426,6 @@ function MarketingPage() {
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <Box sx={{ width: 9, height: 9, borderRadius: '50%', bgcolor: '#00e676', boxShadow: '0 0 10px #00e676' }} />
                                     <Chip size="small" icon={<SmartToyIcon />} label="Bộ phân tích AI v1" color="primary" />
-                                    <Chip size="small" icon={<MemoryIcon />} label="Thời gian thực" variant="outlined" />
                                 </Box>
                                 <Chip size="small" variant="outlined" label={`${anomalyAlerts.length} tín hiệu`} />
                             </Box>
