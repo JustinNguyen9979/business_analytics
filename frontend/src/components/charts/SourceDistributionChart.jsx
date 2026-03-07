@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import { useTheme } from '@mui/material/styles';
 import { Box, Typography } from '@mui/material';
-import { formatCurrency, formatPercentage } from '../../utils/formatters';
+import { formatCurrency, formatNumber, formatPercentage } from '../../utils/formatters';
 
 // BỘ MÀU CUSTOM (30 màu)
 const BASE_COLORS = [
@@ -19,6 +19,16 @@ const BASE_COLORS = [
 
 function SourceDistributionChart({ data, dataKey, title, format }) {
     const theme = useTheme();
+
+    const formatValue = (value) => {
+        if (format === 'percent') return formatPercentage(value);
+        if (format === 'number') return formatNumber(value);
+        if (format === 'ratio') {
+            if (typeof value !== 'number' || !isFinite(value)) return '0.00';
+            return value.toFixed(2);
+        }
+        return formatCurrency(value);
+    };
 
     // 1. CHUẨN BỊ DỮ LIỆU
     const { chartData, isPlaceholder } = useMemo(() => {
@@ -66,7 +76,7 @@ function SourceDistributionChart({ data, dataKey, title, format }) {
                     </Typography>
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
                         <Typography variant="body2">
-                            {format === 'percent' ? formatPercentage(value) : formatCurrency(value)}
+                            {formatValue(value)}
                         </Typography>
                         {format !== 'percent' && (
                             <Typography variant="caption" sx={{ color: '#ccc' }}>

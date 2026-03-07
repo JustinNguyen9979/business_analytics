@@ -52,6 +52,7 @@ services:
       - "80:5173" # Ánh xạ cổng 80 của máy anh vào 5173 của Vite
       - "24678:24678" # Port cho Vite HMR (giữ nguyên để hot reload hoạt động)
     environment:
+      - VITE_API_PROXY_TARGET=http://backend:8000
       - WEBHOOK_URL=${WEBHOOK_URL}
     restart: unless-stopped
     depends_on:
